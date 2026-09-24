@@ -1,0 +1,18 @@
+# Build artifacts
+/build/
+/cmake-build-*/
+.DS_Store
+*.swp
+*~
+
+# Xcode / IDE files
+xcuserdata/
+DerivedData/
+.vscode/
+.idea/
+
+# Binary artifacts
+*.o
+*.a
+*.dylib
+*.app
