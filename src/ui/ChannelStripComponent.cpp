@@ -75,6 +75,22 @@ ChannelStripComponent::~ChannelStripComponent()
 void ChannelStripComponent::timerCallback()
 {
     vuMeter.setLevels(strip.meterPeakLeft.load(), strip.meterPeakRight.load());
+
+    // Sincronización visual en tiempo real de faders y perillas (MIDI / Automix / Shortcuts)
+    if (!volumeFader.isMouseButtonDown())
+        volumeFader.setValue(strip.volumeFader.load(), juce::dontSendNotification);
+
+    if (!highKnob.isMouseButtonDown())
+        highKnob.setValue(strip.eqHigh.load(), juce::dontSendNotification);
+
+    if (!midKnob.isMouseButtonDown())
+        midKnob.setValue(strip.eqMid.load(), juce::dontSendNotification);
+
+    if (!lowKnob.isMouseButtonDown())
+        lowKnob.setValue(strip.eqLow.load(), juce::dontSendNotification);
+
+    if (!filterKnob.isMouseButtonDown())
+        filterKnob.setValue(strip.filterKnob.load(), juce::dontSendNotification);
 }
 
 void ChannelStripComponent::paint(juce::Graphics& g)

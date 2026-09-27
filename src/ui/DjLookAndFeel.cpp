@@ -12,6 +12,27 @@ DjLookAndFeel::~DjLookAndFeel()
 {
 }
 
+juce::Slider::SliderLayout DjLookAndFeel::getSliderLayout(juce::Slider& slider)
+{
+    auto style = slider.getSliderStyle();
+    if (style == juce::Slider::LinearHorizontal)
+    {
+        juce::Slider::SliderLayout layout;
+        // 16px lateral margin for 28px width knob (14px half-width + 2px margin)
+        layout.sliderBounds = slider.getLocalBounds().reduced(16, 0);
+        return layout;
+    }
+    else if (style == juce::Slider::LinearVertical)
+    {
+        juce::Slider::SliderLayout layout;
+        // 12px vertical margin for 18px height knob (9px half-height + 3px margin)
+        layout.sliderBounds = slider.getLocalBounds().reduced(0, 12);
+        return layout;
+    }
+
+    return juce::LookAndFeel_V4::getSliderLayout(slider);
+}
+
 void DjLookAndFeel::drawLinearSlider(juce::Graphics& g, int x, int y, int width, int height,
                                      float sliderPos, float /*minSliderPos*/, float /*maxSliderPos*/,
                                      juce::Slider::SliderStyle style, juce::Slider& /*slider*/)
@@ -20,8 +41,8 @@ void DjLookAndFeel::drawLinearSlider(juce::Graphics& g, int x, int y, int width,
     {
         float trackW = 6.0f;
         float trackX = (float)x + ((float)width - trackW) * 0.5f;
-        float trackY = (float)y + 6.0f;
-        float trackH = (float)height - 12.0f;
+        float trackY = (float)y;
+        float trackH = (float)height;
 
         // Recessed track
         g.setColour(juce::Colour::fromRGB(12, 14, 18));
@@ -62,9 +83,9 @@ void DjLookAndFeel::drawLinearSlider(juce::Graphics& g, int x, int y, int width,
     else if (style == juce::Slider::LinearHorizontal)
     {
         float trackH = 6.0f;
-        float trackX = (float)x + 6.0f;
+        float trackX = (float)x;
         float trackY = (float)y + ((float)height - trackH) * 0.5f;
-        float trackW = (float)width - 12.0f;
+        float trackW = (float)width;
 
         // Recessed track
         g.setColour(juce::Colour::fromRGB(9, 10, 13));
