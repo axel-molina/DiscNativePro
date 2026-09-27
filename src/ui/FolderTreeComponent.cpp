@@ -259,6 +259,62 @@ void FolderTreeComponent::expandFolder(const juce::String& folderPath)
     }
 }
 
+void FolderTreeComponent::navigateFolders(int delta)
+{
+    if (flatRows.empty()) return;
+    int currentIndex = -1;
+    for (size_t i = 0; i < flatRows.size(); ++i)
+    {
+        if (flatRows[i].fullPath == selectedFolder)
+        {
+            currentIndex = static_cast<int>(i);
+            break;
+        }
+    }
+    if (currentIndex == -1)
+        currentIndex = 0;
+    else
+        currentIndex = juce::jlimit(0, static_cast<int>(flatRows.size()) - 1, currentIndex + delta);
+
+    setSelectedFolder(flatRows[static_cast<size_t>(currentIndex)].fullPath);
+    if (onSelectFolder)
+        onSelectFolder(selectedFolder);
+
+    // Scroll viewport to ensure selected folder is visible
+    if (treeView != nullptr)
+    {
+        int rowY = currentIndex * treeView->getRowHeight();
+        viewport.setViewPosition(viewport.getViewPositionX(), juce::jmax(0, rowY - 50));
+    }
+}
+
+bool FolderTreeComponent::toggleExpandCurrentFolder()
+{
+    for (const auto& row : flatRows)
+    {
+        if (row.fullPath == selectedFolder)
+        {
+            if (row.hasChildren)
+            {
+                if (expandedFolders.count(row.fullPath) > 0)
+                    expandedFolders.erase(row.fullPath);
+                else
+                    expandedFolders.insert(row.fullPath);
+
+                rebuildFlatRows();
+                if (treeView != nullptr)
+                {
+                    treeView->setSize(viewport.getWidth(), treeView->getTotalContentHeight());
+                    treeView->repaint();
+                }
+                return true;
+            }
+            break;
+        }
+    }
+    return false;
+}
+
 void FolderTreeComponent::updateTree(const std::vector<TrackItem>& tracks)
 {
     rootNodes.clear();

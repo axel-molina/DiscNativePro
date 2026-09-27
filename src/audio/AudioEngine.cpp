@@ -18,12 +18,23 @@ bool AudioEngine::initialise()
     // Start background disk streaming thread (priority normal for smooth file prefetching)
     diskReaderThread.startThread(juce::Thread::Priority::normal);
 
-    // Initialise audio device manager with 0 inputs, 2 stereo outputs (CoreAudio on macOS)
-    auto err = deviceManager.initialiseWithDefaultDevices(0, 2);
+    // Initialise audio device manager with 0 inputs, up to 4 outputs (Master Ch 1-2, Phones Ch 3-4)
+    auto err = deviceManager.initialiseWithDefaultDevices(0, 4);
     if (!err.isEmpty())
     {
         DBG("Audio device error: " << err);
         return false;
+    }
+
+    // Ensure all available physical output channels (up to 4) are activated
+    auto setup = deviceManager.getAudioDeviceSetup();
+    if (auto* currentDev = deviceManager.getCurrentAudioDevice())
+    {
+        auto outNames = currentDev->getOutputChannelNames();
+        int numAvail = outNames.size();
+        currentNumOutputChannels.store(numAvail);
+        setup.outputChannels.setRange(0, juce::jmin(4, numAvail), true);
+        deviceManager.setAudioDeviceSetup(setup, true);
     }
 
     deviceManager.addAudioCallback(this);
@@ -70,11 +81,13 @@ void AudioEngine::audioDeviceAboutToStart(juce::AudioIODevice* device)
 
     currentSampleRate = device->getCurrentSampleRate();
     currentBlockSize = device->getCurrentBufferSizeSamples();
+    currentNumOutputChannels.store(device->getActiveOutputChannels().countNumberOfSetBits());
 
     // Preallocate buffers for zero runtime heap allocation (real-time safe)
     deck1Buffer.setSize(2, currentBlockSize, false, true, true);
     deck2Buffer.setSize(2, currentBlockSize, false, true, true);
     masterBuffer.setSize(2, currentBlockSize, false, true, true);
+    cueBuffer.setSize(2, currentBlockSize, false, true, true);
 
     deck1.prepareToPlay(currentBlockSize, currentSampleRate);
     deck2.prepareToPlay(currentBlockSize, currentSampleRate);
@@ -102,6 +115,7 @@ void AudioEngine::audioDeviceIOCallbackWithContext(const float* const* /*inputCh
     // Ensure our internal buffers match current block samples
     deck1Buffer.clear(0, numSamples);
     deck2Buffer.clear(0, numSamples);
+    cueBuffer.clear(0, numSamples);
 
     // 1. Fetch audio from streaming deck sources
     juce::AudioSourceChannelInfo d1Info(&deck1Buffer, 0, numSamples);
@@ -110,24 +124,57 @@ void AudioEngine::audioDeviceIOCallbackWithContext(const float* const* /*inputCh
     juce::AudioSourceChannelInfo d2Info(&deck2Buffer, 0, numSamples);
     deck2.getNextAudioBlock(d2Info);
 
-    // 2. Process DSP: Channel EQ, Color Filters, Channel Faders, Crossfader, Master Gain & Meters
-    djMixer.process(deck1Buffer, deck2Buffer, masterBuffer, numSamples);
+    // 2. Process DSP: Channel EQ, Color Filters, Channel Faders, Crossfader, Master Gain, Cue Preescucha & Meters
+    djMixer.process(deck1Buffer, deck2Buffer, masterBuffer, cueBuffer, numSamples);
 
     // 3. Push to master recorder (lock-free, zero allocation)
     audioRecorder.pushAudioBlock(masterBuffer, numSamples);
 
     // 4. Write to physical audio output (DAC / CoreAudio)
-    for (int ch = 0; ch < numOutputChannels; ++ch)
+    int masterPair = masterChannelPair.load(); // 0 = Ch 1-2, 1 = Ch 3-4
+    int cuePair = cueChannelPair.load();       // 0 = Ch 1-2, 1 = Ch 3-4
+
+    if (numOutputChannels >= 4)
     {
-        if (ch < 2)
+        for (int ch = 0; ch < numOutputChannels; ++ch)
         {
             auto* out = outputChannelData[ch];
-            const auto* src = masterBuffer.getReadPointer(ch);
-            std::memcpy(out, src, sizeof(float) * (size_t)numSamples);
+            if (ch == masterPair * 2)
+            {
+                std::memcpy(out, masterBuffer.getReadPointer(0), sizeof(float) * (size_t)numSamples);
+            }
+            else if (ch == masterPair * 2 + 1)
+            {
+                std::memcpy(out, masterBuffer.getReadPointer(1), sizeof(float) * (size_t)numSamples);
+            }
+            else if (ch == cuePair * 2)
+            {
+                std::memcpy(out, cueBuffer.getReadPointer(0), sizeof(float) * (size_t)numSamples);
+            }
+            else if (ch == cuePair * 2 + 1)
+            {
+                std::memcpy(out, cueBuffer.getReadPointer(1), sizeof(float) * (size_t)numSamples);
+            }
+            else
+            {
+                std::memset(out, 0, sizeof(float) * (size_t)numSamples);
+            }
         }
-        else
+    }
+    else
+    {
+        for (int ch = 0; ch < numOutputChannels; ++ch)
         {
-            std::memset(outputChannelData[ch], 0, sizeof(float) * (size_t)numSamples);
+            if (ch < 2)
+            {
+                auto* out = outputChannelData[ch];
+                const auto* src = masterBuffer.getReadPointer(ch);
+                std::memcpy(out, src, sizeof(float) * (size_t)numSamples);
+            }
+            else
+            {
+                std::memset(outputChannelData[ch], 0, sizeof(float) * (size_t)numSamples);
+            }
         }
     }
 }

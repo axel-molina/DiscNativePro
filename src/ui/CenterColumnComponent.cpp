@@ -15,6 +15,7 @@ CenterColumnComponent::CenterColumnComponent(AudioEngine& engine)
 
     phonesKnob.setRange(0.0, 1.5, 0.01);
     phonesKnob.setValue(1.0);
+    phonesKnob.onValueChange = [this]() { mixer.setPhonesVolume((float)phonesKnob.getValue()); };
     addAndMakeVisible(phonesKnob);
 
     // Middle: Dual Vertical Waveform
@@ -77,6 +78,17 @@ CenterColumnComponent::~CenterColumnComponent()
 void CenterColumnComponent::timerCallback()
 {
     masterMeter.setLevels(mixer.getMasterPeakLeft(), mixer.getMasterPeakRight());
+
+    // Sincronizar perillas MASTER y PHONES con el estado del mezclador (MIDI / Shortcuts)
+    if (!masterKnob.isMouseButtonDown())
+    {
+        masterKnob.setValue(mixer.getMasterVolume(), juce::dontSendNotification);
+    }
+
+    if (!phonesKnob.isMouseButtonDown())
+    {
+        phonesKnob.setValue(mixer.getPhonesVolume(), juce::dontSendNotification);
+    }
 
     // Synchronize crossfader if nudged via shortcuts / MIDI
     if (!crossfader.isMouseButtonDown())

@@ -56,6 +56,7 @@ ChannelStripComponent::ChannelStripComponent(int channelIdx, ChannelStrip& chStr
     cueButton.setClickingTogglesState(true);
     cueButton.onClick = [this]() {
         bool on = cueButton.getToggleState();
+        strip.setCue(on);
         cueButton.setCustomColours(on ? juce::Colour::fromRGB(245, 158, 11) : juce::Colour::fromRGB(24, 26, 34),
                                    on ? juce::Colours::black : juce::Colour::fromRGB(113, 118, 132),
                                    on ? juce::Colours::black : juce::Colour::fromRGB(113, 118, 132),
@@ -75,6 +76,17 @@ ChannelStripComponent::~ChannelStripComponent()
 void ChannelStripComponent::timerCallback()
 {
     vuMeter.setLevels(strip.meterPeakLeft.load(), strip.meterPeakRight.load());
+
+    // Sincronización de botón CUE (Preescucha) con MIDI / Software
+    bool cueOn = strip.isCue();
+    if (cueButton.getToggleState() != cueOn)
+    {
+        cueButton.setToggleState(cueOn, juce::dontSendNotification);
+        cueButton.setCustomColours(cueOn ? juce::Colour::fromRGB(245, 158, 11) : juce::Colour::fromRGB(24, 26, 34),
+                                   cueOn ? juce::Colours::black : juce::Colour::fromRGB(113, 118, 132),
+                                   cueOn ? juce::Colours::black : juce::Colour::fromRGB(113, 118, 132),
+                                   cueOn ? juce::Colour::fromRGB(251, 191, 36) : juce::Colour::fromRGB(38, 43, 56));
+    }
 
     // Sincronización visual en tiempo real de faders y perillas (MIDI / Automix / Shortcuts)
     if (!volumeFader.isMouseButtonDown())

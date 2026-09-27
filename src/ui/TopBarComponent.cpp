@@ -1,4 +1,8 @@
 #include "TopBarComponent.h"
+#if JUCE_MAC
+#include <mach/mach.h>
+#endif
+#include <cmath>
 
 TopBarComponent::TopBarComponent()
 {
@@ -44,6 +48,15 @@ TopBarComponent::TopBarComponent()
     clockLabel.setColour(juce::Label::outlineColourId, juce::Colour::fromRGB(37, 40, 51));
     clockLabel.setJustificationType(juce::Justification::centred);
     addAndMakeVisible(clockLabel);
+
+    updateMemoryUsage();
+    ramLabel.setFont(juce::FontOptions("Menlo", 11.0f, juce::Font::plain));
+    ramLabel.setColour(juce::Label::textColourId, juce::Colour::fromRGB(142, 149, 165));
+    ramLabel.setColour(juce::Label::backgroundColourId, juce::Colour::fromRGB(22, 24, 32));
+    ramLabel.setColour(juce::Label::outlineColourId, juce::Colour::fromRGB(37, 40, 51));
+    ramLabel.setJustificationType(juce::Justification::centred);
+    ramLabel.setTooltip("Consumo de memoria RAM de DiscNativePro en tiempo real");
+    addAndMakeVisible(ramLabel);
 
     layoutBadge.setIcon(LucideIcons::IconType::CircleDot, 12.0f);
     layoutBadge.setText("2 Decks");
@@ -120,9 +133,42 @@ void TopBarComponent::updateClock()
     clockLabel.setText(timeString, juce::dontSendNotification);
 }
 
+double TopBarComponent::getProcessMemoryMB()
+{
+#if JUCE_MAC
+    mach_task_basic_info info;
+    mach_msg_type_number_t count = MACH_TASK_BASIC_INFO_COUNT;
+    if (task_info(mach_task_self(), MACH_TASK_BASIC_INFO, (task_info_t)&info, &count) == KERN_SUCCESS)
+    {
+        return static_cast<double>(info.resident_size) / (1024.0 * 1024.0);
+    }
+#endif
+    return 0.0;
+}
+
+void TopBarComponent::updateMemoryUsage()
+{
+    double memMb = getProcessMemoryMB();
+    if (memMb >= 1024.0)
+    {
+        memoryString = juce::String::formatted("RAM: %.1f GB", memMb / 1024.0);
+    }
+    else if (memMb > 0.0)
+    {
+        memoryString = juce::String::formatted("RAM: %d MB", static_cast<int>(std::round(memMb)));
+    }
+    else
+    {
+        memoryString = "RAM: --";
+    }
+
+    ramLabel.setText(memoryString, juce::dontSendNotification);
+}
+
 void TopBarComponent::timerCallback()
 {
     updateClock();
+    updateMemoryUsage();
 }
 
 void TopBarComponent::paint(juce::Graphics& g)
@@ -163,6 +209,8 @@ void TopBarComponent::resized()
     layoutBadge.setBounds(area.removeFromRight(95).reduced(0, 3));
     area.removeFromRight(6);
     clockLabel.setBounds(area.removeFromRight(80).reduced(0, 3));
+    area.removeFromRight(6);
+    ramLabel.setBounds(area.removeFromRight(95).reduced(0, 3));
 
     // Center Brand Title
     int centerWidth = 140;

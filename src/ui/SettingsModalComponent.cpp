@@ -4,7 +4,7 @@
 SettingsModalComponent::SettingsModalComponent(AudioEngine& engine, MidiManager& midiMgr)
     : audioEngine(engine), midi(midiMgr)
 {
-    setSize(640, 520);
+    setSize(640, 540);
 
     // 1. Close traffic light button
     closeDotButton.setButtonText("");
@@ -41,12 +41,7 @@ SettingsModalComponent::SettingsModalComponent(AudioEngine& engine, MidiManager&
 
     // 3. Setup Tab Contents
     setupGeneralTab();
-
-    // Devices Tab: Embedded AudioDeviceSelectorComponent
-    audioDeviceSelector = std::make_unique<juce::AudioDeviceSelectorComponent>(
-        audioEngine.getDeviceManager(), 0, 0, 2, 2, false, false, true, false);
-    addChildComponent(*audioDeviceSelector);
-
+    setupDevicesTab();
     setupSoundTab();
     setupMidiTab();
     setupStreamingTab();
@@ -153,6 +148,54 @@ void SettingsModalComponent::setupGeneralTab()
     addChildComponent(appInfoLabel);
 }
 
+void SettingsModalComponent::setupDevicesTab()
+{
+    // Embedded AudioDeviceSelectorComponent with up to 4 output channels
+    audioDeviceSelector = std::make_unique<juce::AudioDeviceSelectorComponent>(
+        audioEngine.getDeviceManager(), 0, 0, 2, 4, false, false, true, false);
+    addChildComponent(*audioDeviceSelector);
+
+    // Section: Enrutamiento de Canales de Audio
+    routingSectionLabel.setText(juce::String::fromUTF8("Enrutamiento de Salidas de Audio (Pioneer DDJ / Multi-Canal)"), juce::dontSendNotification);
+    routingSectionLabel.setFont(juce::FontOptions(11.5f, juce::Font::bold));
+    routingSectionLabel.setColour(juce::Label::textColourId, juce::Colour::fromRGB(0, 180, 216));
+    addChildComponent(routingSectionLabel);
+
+    // Master Routing
+    masterRoutingLabel.setText(juce::String::fromUTF8("Salida Master (Altavoces / Club):"), juce::dontSendNotification);
+    masterRoutingLabel.setFont(juce::FontOptions(11.0f, juce::Font::plain));
+    masterRoutingLabel.setColour(juce::Label::textColourId, juce::Colour::fromRGB(160, 165, 180));
+    addChildComponent(masterRoutingLabel);
+
+    masterRoutingCombo.addItem(juce::String::fromUTF8("Canales 1 & 2 (Salida RCA Master DDJ-SB2)"), 1);
+    masterRoutingCombo.addItem(juce::String::fromUTF8("Canales 3 & 4 (Salida Frontal DDJ-SB2)"), 2);
+    masterRoutingCombo.setSelectedId(audioEngine.getMasterChannelPair() == 0 ? 1 : 2, juce::dontSendNotification);
+    masterRoutingCombo.onChange = [this]() {
+        audioEngine.setMasterChannelPair(masterRoutingCombo.getSelectedId() == 1 ? 0 : 1);
+    };
+    addChildComponent(masterRoutingCombo);
+
+    // CUE Routing
+    cueRoutingLabel.setText(juce::String::fromUTF8("Salida Auriculares (Preescucha CUE):"), juce::dontSendNotification);
+    cueRoutingLabel.setFont(juce::FontOptions(11.0f, juce::Font::plain));
+    cueRoutingLabel.setColour(juce::Label::textColourId, juce::Colour::fromRGB(160, 165, 180));
+    addChildComponent(cueRoutingLabel);
+
+    cueRoutingCombo.addItem(juce::String::fromUTF8("Canales 3 & 4 (Jack Frontal Auriculares DDJ-SB2)"), 1);
+    cueRoutingCombo.addItem(juce::String::fromUTF8("Canales 1 & 2 (Salida Compartida Master)"), 2);
+    cueRoutingCombo.setSelectedId(audioEngine.getCueChannelPair() == 1 ? 1 : 2, juce::dontSendNotification);
+    cueRoutingCombo.onChange = [this]() {
+        audioEngine.setCueChannelPair(cueRoutingCombo.getSelectedId() == 1 ? 1 : 0);
+    };
+    addChildComponent(cueRoutingCombo);
+
+    // Status Badge
+    controllerDetectedBadge.setText(juce::String::fromUTF8("● Controladora DJ 4 Canales Detectada (Master: Ch 1-2 • Auriculares: Ch 3-4)"), juce::dontSendNotification);
+    controllerDetectedBadge.setColour(juce::Label::textColourId, juce::Colour::fromRGB(74, 222, 128));
+    controllerDetectedBadge.setFont(juce::FontOptions(10.5f, juce::Font::bold));
+    addChildComponent(controllerDetectedBadge);
+}
+
 void SettingsModalComponent::setupSoundTab()
 {
     // Section 1: Motor de Audio
@@ -235,6 +278,38 @@ void SettingsModalComponent::setupSoundTab()
     masterLimiterToggle.setToggleState(true, juce::dontSendNotification);
     masterLimiterToggle.setColour(juce::ToggleButton::textColourId, juce::Colours::white.withAlpha(0.85f));
     addChildComponent(masterLimiterToggle);
+
+    // Section 4: Monitoreo & Auriculares (CUE)
+    soundSectionPhones.setText(juce::String::fromUTF8("Monitoreo y Auriculares (Preescucha CUE)"), juce::dontSendNotification);
+    soundSectionPhones.setFont(juce::FontOptions(11.5f, juce::Font::bold));
+    soundSectionPhones.setColour(juce::Label::textColourId, juce::Colour::fromRGB(0, 180, 216));
+    addChildComponent(soundSectionPhones);
+
+    cueMixLabel.setText(juce::String::fromUTF8("Mezcla Auriculares (CUE a la izquierda / MASTER a la derecha):"), juce::dontSendNotification);
+    cueMixLabel.setFont(juce::FontOptions(11.0f, juce::Font::plain));
+    cueMixLabel.setColour(juce::Label::textColourId, juce::Colour::fromRGB(160, 165, 180));
+    addChildComponent(cueMixLabel);
+
+    cueMixSlider.setRange(0.0, 1.0, 0.01);
+    cueMixSlider.setValue(audioEngine.getMixer().getCueMix(), juce::dontSendNotification);
+    cueMixSlider.setTextBoxStyle(juce::Slider::NoTextBox, false, 0, 0);
+    cueMixSlider.onValueChange = [this]() {
+        audioEngine.getMixer().setCueMix((float)cueMixSlider.getValue());
+    };
+    addChildComponent(cueMixSlider);
+
+    cueVolumeLabel.setText(juce::String::fromUTF8("Volumen Master de Auriculares:"), juce::dontSendNotification);
+    cueVolumeLabel.setFont(juce::FontOptions(11.0f, juce::Font::plain));
+    cueVolumeLabel.setColour(juce::Label::textColourId, juce::Colour::fromRGB(160, 165, 180));
+    addChildComponent(cueVolumeLabel);
+
+    cueVolumeSlider.setRange(0.0, 1.5, 0.01);
+    cueVolumeSlider.setValue(audioEngine.getMixer().getPhonesVolume(), juce::dontSendNotification);
+    cueVolumeSlider.setTextBoxStyle(juce::Slider::NoTextBox, false, 0, 0);
+    cueVolumeSlider.onValueChange = [this]() {
+        audioEngine.getMixer().setPhonesVolume((float)cueVolumeSlider.getValue());
+    };
+    addChildComponent(cueVolumeSlider);
 }
 
 void SettingsModalComponent::setupMidiTab()
@@ -357,6 +432,26 @@ void SettingsModalComponent::updateTabVisibility()
     bool isDevices = (activeTab == 1);
     if (audioDeviceSelector != nullptr)
         audioDeviceSelector->setVisible(isDevices);
+    routingSectionLabel.setVisible(isDevices);
+    masterRoutingLabel.setVisible(isDevices);
+    masterRoutingCombo.setVisible(isDevices);
+    cueRoutingLabel.setVisible(isDevices);
+    cueRoutingCombo.setVisible(isDevices);
+    controllerDetectedBadge.setVisible(isDevices);
+    if (isDevices)
+    {
+        bool is4Ch = audioEngine.is4ChannelOutputAvailable();
+        if (is4Ch)
+        {
+            controllerDetectedBadge.setText(juce::String::fromUTF8("● Controladora DJ 4 Canales Detectada (Master: Ch 1-2 • Auriculares: Ch 3-4)"), juce::dontSendNotification);
+            controllerDetectedBadge.setColour(juce::Label::textColourId, juce::Colour::fromRGB(74, 222, 128));
+        }
+        else
+        {
+            controllerDetectedBadge.setText(juce::String::fromUTF8("● Dispositivo estéreo (2 canales). Para preescucha independiente selecciona una tarjeta de 4 canales como DDJ-SB2"), juce::dontSendNotification);
+            controllerDetectedBadge.setColour(juce::Label::textColourId, juce::Colour::fromRGB(148, 163, 184));
+        }
+    }
 
     // Sound components (Tab 2)
     bool isSound = (activeTab == 2);
@@ -364,6 +459,11 @@ void SettingsModalComponent::updateTabVisibility()
     sampleRateInfoLabel.setVisible(isSound);
     bufferSizeLabel.setVisible(isSound);
     bufferSizeCombo.setVisible(isSound);
+    soundSectionPhones.setVisible(isSound);
+    cueMixLabel.setVisible(isSound);
+    cueMixSlider.setVisible(isSound);
+    cueVolumeLabel.setVisible(isSound);
+    cueVolumeSlider.setVisible(isSound);
     soundSectionMixer.setVisible(isSound);
     eqModeLabel.setVisible(isSound);
     eqModeCombo.setVisible(isSound);
@@ -683,47 +783,79 @@ void SettingsModalComponent::resized()
     }
 
     // --- Tab 1: Devices Layout (Unconditionally set bounds) ---
-    if (audioDeviceSelector != nullptr)
     {
-        audioDeviceSelector->setBounds(body);
+        auto dArea = body;
+        if (audioDeviceSelector != nullptr)
+        {
+            audioDeviceSelector->setBounds(dArea.removeFromTop(200));
+        }
+        dArea.removeFromTop(8);
+
+        routingSectionLabel.setBounds(dArea.removeFromTop(18));
+        dArea.removeFromTop(4);
+
+        auto mRow = dArea.removeFromTop(24);
+        masterRoutingLabel.setBounds(mRow.removeFromLeft(220));
+        masterRoutingCombo.setBounds(mRow);
+        dArea.removeFromTop(4);
+
+        auto cRow = dArea.removeFromTop(24);
+        cueRoutingLabel.setBounds(cRow.removeFromLeft(220));
+        cueRoutingCombo.setBounds(cRow);
+        dArea.removeFromTop(8);
+
+        controllerDetectedBadge.setBounds(dArea.removeFromTop(20));
     }
 
     // --- Tab 2: Sound Layout (Unconditionally set bounds) ---
     {
         auto sArea = body;
 
-        soundSectionEngine.setBounds(sArea.removeFromTop(20));
+        soundSectionEngine.setBounds(sArea.removeFromTop(18));
+        sArea.removeFromTop(2);
+        sampleRateInfoLabel.setBounds(sArea.removeFromTop(18));
         sArea.removeFromTop(4);
-        sampleRateInfoLabel.setBounds(sArea.removeFromTop(20));
-        sArea.removeFromTop(6);
 
-        auto bRow = sArea.removeFromTop(24);
+        auto bRow = sArea.removeFromTop(22);
         bufferSizeLabel.setBounds(bRow.removeFromLeft(220));
         bufferSizeCombo.setBounds(bRow);
-        sArea.removeFromTop(14);
+        sArea.removeFromTop(8);
 
-        soundSectionMixer.setBounds(sArea.removeFromTop(20));
-        sArea.removeFromTop(6);
+        soundSectionPhones.setBounds(sArea.removeFromTop(18));
+        sArea.removeFromTop(4);
 
-        auto eqRow = sArea.removeFromTop(24);
+        auto cmRow = sArea.removeFromTop(22);
+        cueMixLabel.setBounds(cmRow.removeFromLeft(220));
+        cueMixSlider.setBounds(cmRow);
+        sArea.removeFromTop(4);
+
+        auto cvRow = sArea.removeFromTop(22);
+        cueVolumeLabel.setBounds(cvRow.removeFromLeft(220));
+        cueVolumeSlider.setBounds(cvRow);
+        sArea.removeFromTop(8);
+
+        soundSectionMixer.setBounds(sArea.removeFromTop(18));
+        sArea.removeFromTop(4);
+
+        auto eqRow = sArea.removeFromTop(22);
         eqModeLabel.setBounds(eqRow.removeFromLeft(220));
         eqModeCombo.setBounds(eqRow);
-        sArea.removeFromTop(6);
+        sArea.removeFromTop(4);
 
-        auto cfRow = sArea.removeFromTop(24);
+        auto cfRow = sArea.removeFromTop(22);
         crossfaderCurveLabel.setBounds(cfRow.removeFromLeft(220));
         crossfaderCurveCombo.setBounds(cfRow);
-        sArea.removeFromTop(14);
+        sArea.removeFromTop(8);
 
-        soundSectionMaster.setBounds(sArea.removeFromTop(20));
-        sArea.removeFromTop(6);
+        soundSectionMaster.setBounds(sArea.removeFromTop(18));
+        sArea.removeFromTop(4);
 
-        auto hdRow = sArea.removeFromTop(24);
+        auto hdRow = sArea.removeFromTop(22);
         headroomLabel.setBounds(hdRow.removeFromLeft(220));
         headroomCombo.setBounds(hdRow);
-        sArea.removeFromTop(6);
+        sArea.removeFromTop(4);
 
-        masterLimiterToggle.setBounds(sArea.removeFromTop(24));
+        masterLimiterToggle.setBounds(sArea.removeFromTop(22));
     }
 
     // --- Tab 3: MIDI Layout (Unconditionally set bounds) ---

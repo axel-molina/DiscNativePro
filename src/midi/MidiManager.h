@@ -18,6 +18,7 @@ public:
 
     bool isAnyDeviceConnected() const { return deviceConnected; }
     juce::StringArray getConnectedDeviceNames() const;
+    void sendMidiMessage(const juce::MidiMessage& message);
 
     std::function<void(const juce::String& description)> onMidiActivity;
     std::function<void()> onDevicesChanged;
@@ -26,6 +27,7 @@ private:
     AudioEngine& engine;
     bool deviceConnected { false };
     juce::StringArray connectedDevices;
+    std::unique_ptr<juce::MidiOutput> midiOutput;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(MidiManager)
 };

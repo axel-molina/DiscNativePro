@@ -31,6 +31,12 @@ void ChannelStrip::reset()
 
 void ChannelStrip::process(juce::AudioBuffer<float>& buffer, int numSamples, double sampleRate)
 {
+    juce::AudioBuffer<float> dummy;
+    process(buffer, dummy, numSamples, sampleRate);
+}
+
+void ChannelStrip::process(juce::AudioBuffer<float>& buffer, juce::AudioBuffer<float>& pflBuffer, int numSamples, double sampleRate)
+{
     if (numSamples <= 0 || sampleRate <= 0.0)
         return;
 
@@ -104,11 +110,11 @@ void ChannelStrip::process(juce::AudioBuffer<float>& buffer, int numSamples, dou
         }
     }
 
-    // 3. Apply Channel Gain & Volume Fader
-    float totalChannelGain = gain.load() * volumeFader.load();
-    buffer.applyGain(totalChannelGain);
+    // 3. Apply Trim / Gain (PFL Signal)
+    float channelGain = gain.load();
+    buffer.applyGain(channelGain);
 
-    // 4. Update VU Meters with smooth decay
+    // 4. Update VU Meters with smooth decay (monitoring PFL/Gain level)
     float peakL = buffer.getMagnitude(0, 0, numSamples);
     float peakR = numChannels > 1 ? buffer.getMagnitude(1, 0, numSamples) : peakL;
 
@@ -116,6 +122,19 @@ void ChannelStrip::process(juce::AudioBuffer<float>& buffer, int numSamples, dou
     float prevR = meterPeakRight.load();
     meterPeakLeft.store(peakL > prevL ? peakL : (prevL * 0.92f));
     meterPeakRight.store(peakR > prevR ? peakR : (prevR * 0.92f));
+
+    // 5. If CUE is enabled, accumulate PFL signal into cue output buffer
+    if (cueActive.load() && pflBuffer.getNumChannels() > 0)
+    {
+        int numPflCh = juce::jmin(buffer.getNumChannels(), pflBuffer.getNumChannels());
+        for (int ch = 0; ch < numPflCh; ++ch)
+        {
+            pflBuffer.addFrom(ch, 0, buffer, ch, 0, numSamples);
+        }
+    }
+
+    // 6. Apply Channel Volume Fader for Master Mix
+    buffer.applyGain(volumeFader.load());
 }
 
 DjMixer::DjMixer()
@@ -147,6 +166,8 @@ void DjMixer::reset()
     ch2.reset();
     masterPeakLeft.store(0.0f);
     masterPeakRight.store(0.0f);
+    cuePeakLeft.store(0.0f);
+    cuePeakRight.store(0.0f);
 
     std::fill(delayBufferL.begin(), delayBufferL.end(), 0.0f);
     std::fill(delayBufferR.begin(), delayBufferR.end(), 0.0f);
@@ -159,9 +180,22 @@ void DjMixer::process(juce::AudioBuffer<float>& deck1Buffer,
                       juce::AudioBuffer<float>& masterOutBuffer,
                       int numSamples)
 {
-    // Process individual channel strips
-    ch1.process(deck1Buffer, numSamples, currentSampleRate);
-    ch2.process(deck2Buffer, numSamples, currentSampleRate);
+    juce::AudioBuffer<float> dummyCue;
+    process(deck1Buffer, deck2Buffer, masterOutBuffer, dummyCue, numSamples);
+}
+
+void DjMixer::process(juce::AudioBuffer<float>& deck1Buffer,
+                      juce::AudioBuffer<float>& deck2Buffer,
+                      juce::AudioBuffer<float>& masterOutBuffer,
+                      juce::AudioBuffer<float>& cueOutBuffer,
+                      int numSamples)
+{
+    if (cueOutBuffer.getNumChannels() > 0)
+        cueOutBuffer.clear(0, numSamples);
+
+    // Process individual channel strips (accumulates into cueOutBuffer if PFL CUE is active)
+    ch1.process(deck1Buffer, cueOutBuffer, numSamples, currentSampleRate);
+    ch2.process(deck2Buffer, cueOutBuffer, numSamples, currentSampleRate);
 
     // Crossfader calculation: constant power curve
     float xf = crossfader.load(); // -1.0 to 1.0
@@ -239,4 +273,35 @@ void DjMixer::process(juce::AudioBuffer<float>& deck1Buffer,
     float prevR = masterPeakRight.load();
     masterPeakLeft.store(peakL > prevL ? peakL : (prevL * 0.92f));
     masterPeakRight.store(peakR > prevR ? peakR : (prevR * 0.92f));
+
+    // Process CUE Output (Headphones / Preescucha)
+    if (cueOutBuffer.getNumChannels() > 0)
+    {
+        float mixVal = cueMix.load(); // 0.0 = Pure Cue, 1.0 = Pure Master
+        if (mixVal > 0.001f)
+        {
+            int cueChannels = juce::jmin(cueOutBuffer.getNumChannels(), masterOutBuffer.getNumChannels());
+            for (int ch = 0; ch < cueChannels; ++ch)
+            {
+                auto* cueData = cueOutBuffer.getWritePointer(ch);
+                const auto* mData = masterOutBuffer.getReadPointer(ch);
+                for (int i = 0; i < numSamples; ++i)
+                {
+                    cueData[i] = (cueData[i] * (1.0f - mixVal)) + (mData[i] * mixVal);
+                }
+            }
+        }
+
+        // Apply Headphone Volume
+        float pVol = phonesVolume.load();
+        cueOutBuffer.applyGain(pVol);
+
+        // Update CUE meters
+        float cPeakL = cueOutBuffer.getMagnitude(0, 0, numSamples);
+        float cPeakR = cueOutBuffer.getNumChannels() > 1 ? cueOutBuffer.getMagnitude(1, 0, numSamples) : cPeakL;
+        float prevCL = cuePeakLeft.load();
+        float prevCR = cuePeakRight.load();
+        cuePeakLeft.store(cPeakL > prevCL ? cPeakL : (prevCL * 0.92f));
+        cuePeakRight.store(cPeakR > prevCR ? cPeakR : (prevCR * 0.92f));
+    }
 }

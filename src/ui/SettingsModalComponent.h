@@ -21,6 +21,7 @@ public:
 
 private:
     void setupGeneralTab();
+    void setupDevicesTab();
     void setupSoundTab();
     void setupMidiTab();
     void setupStreamingTab();
@@ -63,6 +64,12 @@ private:
 
     // --- Tab 1: Dispositivos Controls ---
     std::unique_ptr<juce::AudioDeviceSelectorComponent> audioDeviceSelector;
+    juce::Label routingSectionLabel;
+    juce::Label masterRoutingLabel;
+    juce::ComboBox masterRoutingCombo;
+    juce::Label cueRoutingLabel;
+    juce::ComboBox cueRoutingCombo;
+    juce::Label controllerDetectedBadge;
 
     // --- Tab 2: Sonido Controls ---
     juce::Label soundSectionEngine;
@@ -75,6 +82,12 @@ private:
     juce::ComboBox eqModeCombo;
     juce::Label crossfaderCurveLabel;
     juce::ComboBox crossfaderCurveCombo;
+
+    juce::Label soundSectionPhones;
+    juce::Label cueMixLabel;
+    juce::Slider cueMixSlider;
+    juce::Label cueVolumeLabel;
+    juce::Slider cueVolumeSlider;
 
     juce::Label soundSectionMaster;
     juce::Label headroomLabel;

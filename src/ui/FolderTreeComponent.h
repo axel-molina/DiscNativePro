@@ -48,6 +48,8 @@ public:
     void setSelectedFolder(const juce::String& folderPath);
     juce::String getSelectedFolder() const { return selectedFolder; }
     void expandFolder(const juce::String& folderPath);
+    void navigateFolders(int delta);
+    bool toggleExpandCurrentFolder(); // Returns true if it had children and expanded/collapsed, false if leaf folder
 
     std::function<void(const juce::String& folderPath)> onSelectFolder;
     std::function<void()> onAddFolder;

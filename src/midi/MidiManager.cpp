@@ -22,6 +22,7 @@ void MidiManager::shutdown()
     {
         engine.getDeviceManager().removeMidiInputDeviceCallback(dev.identifier, this);
     }
+    midiOutput.reset();
 }
 
 void MidiManager::rescanDevices()
@@ -38,10 +39,31 @@ void MidiManager::rescanDevices()
         connectedDevices.add(dev.name);
     }
 
+    // Connect to corresponding MIDI output port for LED feedback (Pioneer DDJ-SB2, etc.)
+    auto outDevices = juce::MidiOutput::getAvailableDevices();
+    for (const auto& outDev : outDevices)
+    {
+        if (outDev.name.containsIgnoreCase("DDJ") || outDev.name.containsIgnoreCase("Pioneer"))
+        {
+            midiOutput = juce::MidiOutput::openDevice(outDev.identifier);
+            break;
+        }
+    }
+    if (midiOutput == nullptr && !outDevices.isEmpty())
+    {
+        midiOutput = juce::MidiOutput::openDevice(outDevices[0].identifier);
+    }
+
     deviceConnected = !connectedDevices.isEmpty();
 
     if (onDevicesChanged)
         onDevicesChanged();
+}
+
+void MidiManager::sendMidiMessage(const juce::MidiMessage& message)
+{
+    if (midiOutput != nullptr)
+        midiOutput->sendMessageNow(message);
 }
 
 juce::StringArray MidiManager::getConnectedDeviceNames() const
@@ -155,11 +177,14 @@ void MidiManager::handleIncomingMidiMessage(juce::MidiInput* /*source*/, const j
             }
         }
 
-        // 4. Mixer / Master Channel (Pioneer DDJ-SB2 sends Filter on Channel 7)
+        // 4. Mixer / Master Channel (Pioneer DDJ-SB2 sends Filter and Headphones Mix on Channel 7)
         if (ch == 7)
         {
             switch (cc)
             {
+                case 5:  // DDJ-SB2 Headphones Mix (0.0 to 1.5)
+                    engine.getMixer().setPhonesVolume(norm * 1.5f);
+                    return;
                 case 23: // Deck 1 Filter Knob (DDJ-SB2 MSB, -1.0 to +1.0)
                     engine.getMixer().getChannel(0).filterKnob.store((norm * 2.0f) - 1.0f);
                     return;
@@ -174,6 +199,14 @@ void MidiManager::handleIncomingMidiMessage(juce::MidiInput* /*source*/, const j
         // 5. Generic Controller Fallback (when controller transmits all controls on same channel or generic CCs)
         switch (cc)
         {
+            case 14: // Standard Master Volume on DJ controllers
+                engine.getMixer().setMasterVolume(norm * 1.5f);
+                break;
+            case 5:  // Generic Headphone Mix / Volume
+            case 12: // Generic Headphone Volume
+                engine.getMixer().setPhonesVolume(norm * 1.5f);
+                break;
+
             case 19: // Generic Deck 1 Volume Fader
                 engine.getMixer().getChannel(0).volumeFader.store(norm);
                 break;
@@ -229,6 +262,13 @@ void MidiManager::handleIncomingMidiMessage(juce::MidiInput* /*source*/, const j
                 engine.getDeck(0).triggerCue();
                 return;
             }
+            if (note == 84) // Headphone CUE Deck 1 (PFL)
+            {
+                bool newState = !engine.getMixer().getChannel(0).isCue();
+                engine.getMixer().getChannel(0).setCue(newState);
+                sendMidiMessage(juce::MidiMessage::noteOn(1, 84, (juce::uint8)(newState ? 127 : 0)));
+                return;
+            }
             if (note == 88) // Sync Deck 1
             {
                 auto& d1 = engine.getDeck(0);
@@ -258,6 +298,13 @@ void MidiManager::handleIncomingMidiMessage(juce::MidiInput* /*source*/, const j
                 engine.getDeck(1).triggerCue();
                 return;
             }
+            if (note == 84) // Headphone CUE Deck 2 (PFL)
+            {
+                bool newState = !engine.getMixer().getChannel(1).isCue();
+                engine.getMixer().getChannel(1).setCue(newState);
+                sendMidiMessage(juce::MidiMessage::noteOn(2, 84, (juce::uint8)(newState ? 127 : 0)));
+                return;
+            }
             if (note == 88) // Sync Deck 2
             {
                 auto& d1 = engine.getDeck(0);
@@ -282,6 +329,11 @@ void MidiManager::handleIncomingMidiMessage(juce::MidiInput* /*source*/, const j
         else if (note == 12) // Cue Deck 1
         {
             engine.getDeck(0).triggerCue();
+        }
+        else if (note == 84) // Generic Headphone Cue Deck 1
+        {
+            bool newState = !engine.getMixer().getChannel(0).isCue();
+            engine.getMixer().getChannel(0).setCue(newState);
         }
         else if (note == 15) // Play/Pause Deck 2
         {

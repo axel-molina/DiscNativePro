@@ -25,6 +25,8 @@ public:
 
 private:
     void updateClock();
+    void updateMemoryUsage();
+    double getProcessMemoryMB();
 
     // Left buttons
     DjButton recButton;
@@ -35,6 +37,7 @@ private:
     juce::Label brandLabel;
 
     // Right elements
+    juce::Label ramLabel;
     juce::Label clockLabel;
     DjButton layoutBadge;
     DjButton settingsButton;
@@ -43,6 +46,7 @@ private:
     bool isRecording { false };
     double currentRecSeconds { 0.0 };
     juce::String timeString;
+    juce::String memoryString;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(TopBarComponent)
 };

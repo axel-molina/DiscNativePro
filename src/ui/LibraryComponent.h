@@ -64,6 +64,13 @@ public:
     void clearAutomixQueue();
     void setAutomixRunning(bool running);
 
+    // MIDI / Hardware Browser Navigation
+    void navigateBrowser(int delta);
+    void handleBrowseClick();
+    void loadSelectedTrack(int deckIndex);
+    juce::File getSelectedTrackFile() const;
+    bool isFocusOnFolders() const { return isBrowsingFolders; }
+
     enum class LibraryMode { Local, YouTube };
     void setLibraryMode(LibraryMode mode);
     LibraryMode getLibraryMode() const { return currentMode; }
@@ -109,6 +116,9 @@ private:
     std::vector<TrackItem> automixQueue;
     bool automixDropHover { false };
     bool automixRunning { false };
+
+    // Hardware browsing state
+    bool isBrowsingFolders { false };
 
     std::unique_ptr<juce::FileChooser> fileChooser;
 

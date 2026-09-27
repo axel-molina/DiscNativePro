@@ -18,6 +18,11 @@ struct ChannelStrip
     std::atomic<float> meterPeakLeft { 0.0f };
     std::atomic<float> meterPeakRight { 0.0f };
 
+    // Headphone CUE / PFL
+    std::atomic<bool> cueActive { false };
+    void setCue(bool active) { cueActive.store(active); }
+    bool isCue() const       { return cueActive.load(); }
+
     // DSP filters for 2 channels (Left & Right)
     juce::dsp::IIR::Filter<float> lowFilter[2];
     juce::dsp::IIR::Filter<float> midFilter[2];
@@ -27,6 +32,7 @@ struct ChannelStrip
     void prepare(double sampleRate, int blockSize);
     void reset();
     void process(juce::AudioBuffer<float>& buffer, int numSamples, double sampleRate);
+    void process(juce::AudioBuffer<float>& buffer, juce::AudioBuffer<float>& pflBuffer, int numSamples, double sampleRate);
 };
 
 class DjMixer
@@ -38,14 +44,26 @@ public:
     void prepare(double sampleRate, int blockSize);
     void reset();
 
-    // Process both decks into master output buffer
+    // Process both decks into master and cue output buffers
     void process(juce::AudioBuffer<float>& deck1Buffer,
                  juce::AudioBuffer<float>& deck2Buffer,
                  juce::AudioBuffer<float>& masterOutBuffer,
                  int numSamples);
 
+    void process(juce::AudioBuffer<float>& deck1Buffer,
+                 juce::AudioBuffer<float>& deck2Buffer,
+                 juce::AudioBuffer<float>& masterOutBuffer,
+                 juce::AudioBuffer<float>& cueOutBuffer,
+                 int numSamples);
+
     // Channel access
     ChannelStrip& getChannel(int deckIndex) { return deckIndex == 0 ? ch1 : ch2; }
+
+    // CUE / Preescucha controls
+    void setCueActive(int deckIndex, bool active) { getChannel(deckIndex).setCue(active); }
+    bool isCueActive(int deckIndex) const         { return (deckIndex == 0 ? ch1 : ch2).isCue(); }
+    void setCueMix(float mix)                     { cueMix.store(juce::jlimit(0.0f, 1.0f, mix)); }
+    float getCueMix() const                       { return cueMix.load(); }
 
     // Master & Crossfader controls
     void setCrossfader(float value) { crossfader.store(juce::jlimit(-1.0f, 1.0f, value)); }
@@ -54,9 +72,16 @@ public:
     void setMasterVolume(float vol) { masterVolume.store(juce::jlimit(0.0f, 2.0f, vol)); }
     float getMasterVolume() const   { return masterVolume.load(); }
 
+    void setPhonesVolume(float vol) { phonesVolume.store(juce::jlimit(0.0f, 2.0f, vol)); }
+    float getPhonesVolume() const   { return phonesVolume.load(); }
+
     // Master Peak Meter
     float getMasterPeakLeft() const  { return masterPeakLeft.load(); }
     float getMasterPeakRight() const { return masterPeakRight.load(); }
+
+    // Cue Peak Meter
+    float getCuePeakLeft() const     { return cuePeakLeft.load(); }
+    float getCuePeakRight() const    { return cuePeakRight.load(); }
 
     // Master FX controls
     void setFxEnabled(bool enabled)        { fxEnabled.store(enabled); }
@@ -80,9 +105,14 @@ private:
 
     std::atomic<float> crossfader { 0.0f };    // -1.0 = Deck 1 full, 0.0 = Center, +1.0 = Deck 2 full
     std::atomic<float> masterVolume { 1.0f };
+    std::atomic<float> phonesVolume { 1.0f };
 
     std::atomic<float> masterPeakLeft { 0.0f };
     std::atomic<float> masterPeakRight { 0.0f };
+
+    std::atomic<float> cueMix { 0.0f };       // 0.0 = CUE only, 1.0 = Master only
+    std::atomic<float> cuePeakLeft { 0.0f };
+    std::atomic<float> cuePeakRight { 0.0f };
 
     // FX section
     std::atomic<bool> fxEnabled { false };
