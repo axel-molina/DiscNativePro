@@ -37,6 +37,7 @@ public:
     void loadAudioFile(const juce::File& file);
     void loadYouTubeVideo(const struct YouTubeSearchResult& result);
     bool isVideoModeActive() const { return isVideoMode; }
+    bool isVideoPlayingActive() const { return isVideoPlaying; }
     void setVideoVolume(float effectiveVolume);
     void playVideo();
     void pauseVideo();
@@ -50,6 +51,7 @@ private:
     juce::Colour accent;
     bool isDragOver { false };
     bool isVideoMode { false };
+    bool isVideoPlaying { false };
     std::unique_ptr<class YouTubeVideoComponent> videoPlayer;
 
     // Header elements (Matching DiscPro DeckHeader.tsx)

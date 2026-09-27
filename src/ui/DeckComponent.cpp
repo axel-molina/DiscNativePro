@@ -134,15 +134,15 @@ DeckComponent::DeckComponent(int deckNum, DeckPlayer& player, juce::Colour accen
     playButton.onClick = [this]() {
         if (isVideoMode && videoPlayer != nullptr)
         {
-            if (deck.isPlaying())
+            if (isVideoPlaying)
             {
                 videoPlayer->pause();
-                deck.pause();
+                isVideoPlaying = false;
             }
             else
             {
                 videoPlayer->play();
-                deck.play();
+                isVideoPlaying = true;
             }
         }
         else
@@ -166,7 +166,7 @@ DeckComponent::DeckComponent(int deckNum, DeckPlayer& player, juce::Colour accen
         {
             videoPlayer->pause();
             videoPlayer->seekTo(0.0);
-            deck.triggerCue();
+            isVideoPlaying = false;
         }
         else
         {
@@ -254,6 +254,7 @@ void DeckComponent::loadAudioFile(const juce::File& file)
     if (deck.loadFile(file))
     {
         isVideoMode = false;
+        isVideoPlaying = false;
         if (videoPlayer != nullptr)
         {
             videoPlayer->pause();
@@ -360,14 +361,14 @@ void DeckComponent::itemDropped(const SourceDetails& dragSourceDetails)
 void DeckComponent::loadYouTubeVideo(const YouTubeSearchResult& result)
 {
     isVideoMode = true;
+    isVideoPlaying = false;
+    deck.stop();
+
     if (videoPlayer == nullptr)
     {
         videoPlayer = std::make_unique<YouTubeVideoComponent>(deckIndex);
         addAndMakeVisible(*videoPlayer);
     }
-
-    if (deck.isPlaying())
-        deck.pause();
 
     videoPlayer->loadVideo(result.id, result.title);
     videoPlayer->setVisible(true);
@@ -398,7 +399,7 @@ void DeckComponent::playVideo()
     if (isVideoMode && videoPlayer != nullptr)
     {
         videoPlayer->play();
-        deck.play();
+        isVideoPlaying = true;
     }
 }
 
@@ -407,7 +408,7 @@ void DeckComponent::pauseVideo()
     if (isVideoMode && videoPlayer != nullptr)
     {
         videoPlayer->pause();
-        deck.pause();
+        isVideoPlaying = false;
     }
 }
 
@@ -433,7 +434,8 @@ void DeckComponent::updateLabels()
     timeRemainingLabel.setText("-" + juce::String(buf), juce::dontSendNotification);
 
     // Update Play/Cue glowing states
-    if (deck.isPlaying())
+    bool playing = isVideoMode ? isVideoPlaying : deck.isPlaying();
+    if (playing)
     {
         playButton.setIcon(LucideIcons::IconType::Pause, 13.0f);
         playButton.setText("PAUSE");

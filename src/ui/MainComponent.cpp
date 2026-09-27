@@ -224,7 +224,7 @@ bool MainComponent::keyPressed(const juce::KeyPress& key)
     {
         if (deck1.isVideoModeActive())
         {
-            if (audioEngine.getDeck(0).isPlaying())
+            if (deck1.isVideoPlayingActive())
                 deck1.pauseVideo();
             else
                 deck1.playVideo();
@@ -249,7 +249,7 @@ bool MainComponent::keyPressed(const juce::KeyPress& key)
     {
         if (deck2.isVideoModeActive())
         {
-            if (audioEngine.getDeck(1).isPlaying())
+            if (deck2.isVideoPlayingActive())
                 deck2.pauseVideo();
             else
                 deck2.playVideo();
