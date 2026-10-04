@@ -134,6 +134,7 @@ YouTubeSearchResult YouTubeService::getVideoDetails(const juce::String& videoIdO
         }
     }
 
+    result.thumbnailUrl = "https://i.ytimg.com/vi/" + vidId + "/mqdefault.jpg";
     return result;
 }
 
@@ -253,13 +254,13 @@ std::vector<YouTubeSearchResult> YouTubeService::searchPublic(const juce::String
     if (!sectionList.isArray())
         return results;
 
-    for (int s = 0; s < sectionList.size() && results.size() < 30; ++s)
+    for (int s = 0; s < sectionList.size() && results.size() < 20; ++s)
     {
         auto itemSection = sectionList[s]["itemSectionRenderer"]["contents"];
         if (!itemSection.isArray())
             continue;
 
-        for (int i = 0; i < itemSection.size() && results.size() < 30; ++i)
+        for (int i = 0; i < itemSection.size() && results.size() < 20; ++i)
         {
             auto item = itemSection[i];
             if (item.hasProperty("videoRenderer"))
@@ -312,12 +313,8 @@ std::vector<YouTubeSearchResult> YouTubeService::searchPublic(const juce::String
                     res.durationText = "3:00";
                 }
 
-                // Thumbnail
-                auto thumbs = vr["thumbnail"]["thumbnails"];
-                if (thumbs.isArray() && thumbs.size() > 0)
-                    res.thumbnailUrl = thumbs[thumbs.size() - 1]["url"].toString();
-                else
-                    res.thumbnailUrl = "https://i.ytimg.com/vi/" + vidId + "/hqdefault.jpg";
+                // Thumbnail (always clean 16:9 JPEG)
+                res.thumbnailUrl = "https://i.ytimg.com/vi/" + vidId + "/mqdefault.jpg";
 
                 results.push_back(res);
             }
@@ -363,14 +360,7 @@ std::vector<YouTubeSearchResult> YouTubeService::searchOfficialApi(const juce::S
         res.artist = item["snippet"]["channelTitle"].toString();
         res.durationSeconds = 210;
         res.durationText = "3:30";
-
-        auto thumb = item["snippet"]["thumbnails"]["high"]["url"].toString();
-        if (thumb.isEmpty())
-            thumb = item["snippet"]["thumbnails"]["medium"]["url"].toString();
-        if (thumb.isEmpty())
-            thumb = "https://i.ytimg.com/vi/" + vidId + "/hqdefault.jpg";
-
-        res.thumbnailUrl = thumb;
+        res.thumbnailUrl = "https://i.ytimg.com/vi/" + vidId + "/mqdefault.jpg";
         results.push_back(res);
     }
 

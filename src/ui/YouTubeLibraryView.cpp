@@ -27,10 +27,13 @@ namespace
 
         void resized() override
         {
-            auto area = getLocalBounds().reduced(2, 2);
-            btn1.setBounds(area.removeFromLeft(30).reduced(1, 1));
-            area.removeFromLeft(2);
-            btn2.setBounds(area.removeFromLeft(30).reduced(1, 1));
+            auto area = getLocalBounds();
+            int btnH = 28;
+            int btnW = 32;
+            int y = (area.getHeight() - btnH) / 2;
+            int startX = (area.getWidth() - (btnW * 2 + 4)) / 2;
+            btn1.setBounds(startX, y, btnW, btnH);
+            btn2.setBounds(startX + btnW + 4, y, btnW, btnH);
         }
 
     private:
@@ -116,15 +119,15 @@ YouTubeLibraryView::YouTubeLibraryView()
     // 8. Results Table
     table.setModel(this);
     table.setColour(juce::TableListBox::backgroundColourId, juce::Colour::fromRGB(12, 13, 18));
-    table.getHeader().addColumn("#", 1, 38, 30, 48, juce::TableHeaderComponent::notSortable);
-    table.getHeader().addColumn("", 2, 34, 28, 42, juce::TableHeaderComponent::notSortable);
-    table.getHeader().addColumn(juce::String::fromUTF8("TÍTULO DEL VIDEO"), 3, 340, 180, 500);
+    table.getHeader().addColumn("#", 1, 36, 28, 45, juce::TableHeaderComponent::notSortable);
+    table.getHeader().addColumn("VISTA PREVIA", 2, 96, 85, 110, juce::TableHeaderComponent::notSortable);
+    table.getHeader().addColumn(juce::String::fromUTF8("TÍTULO DEL VIDEO"), 3, 360, 180, 600);
     table.getHeader().addColumn("CANAL / ARTISTA", 4, 180, 100, 300);
     table.getHeader().addColumn(juce::String::fromUTF8("DURACIÓN"), 5, 80, 60, 100);
-    table.getHeader().addColumn("CARGAR", 6, 75, 70, 90, juce::TableHeaderComponent::notSortable);
+    table.getHeader().addColumn("CARGAR", 6, 84, 75, 95, juce::TableHeaderComponent::notSortable);
     table.getHeader().setColour(juce::TableHeaderComponent::backgroundColourId, juce::Colour::fromRGB(16, 18, 24));
     table.getHeader().setColour(juce::TableHeaderComponent::textColourId, juce::Colour::fromRGB(142, 149, 165));
-    table.setRowHeight(34);
+    table.setRowHeight(56);
     table.setMultipleSelectionEnabled(false);
     addAndMakeVisible(table);
 
@@ -248,38 +251,90 @@ void YouTubeLibraryView::paintCell(juce::Graphics& g, int rowNumber, int columnI
         return;
 
     const auto& item = searchResults[static_cast<size_t>(rowNumber)];
-    g.setFont(juce::FontOptions(11.0f));
 
     switch (columnId)
     {
         case 1: // #
-            g.setColour(juce::Colour::fromRGB(100, 108, 125));
+            g.setColour(juce::Colour::fromRGB(110, 118, 135));
+            g.setFont(juce::FontOptions(11.0f));
             g.drawText(juce::String(rowNumber + 1), 0, 0, width, height, juce::Justification::centred, false);
             break;
 
-        case 2: // Red TV / YouTube icon
+        case 2: // Panoramic 16:9 Thumbnail (80x45)
         {
-            auto iconArea = juce::Rectangle<float>((static_cast<float>(width) - 16.0f) * 0.5f,
-                                                   (static_cast<float>(height) - 16.0f) * 0.5f,
-                                                   16.0f, 16.0f);
-            LucideIcons::draw(g, LucideIcons::IconType::Tv, iconArea, juce::Colour::fromRGB(239, 68, 68), 1.5f);
+            float thumbW = 80.0f;
+            float thumbH = 45.0f;
+            float thumbX = ((float)width - thumbW) * 0.5f;
+            float thumbY = ((float)height - thumbH) * 0.5f;
+            auto thumbRect = juce::Rectangle<float>(thumbX, thumbY, thumbW, thumbH);
+
+            auto img = ThumbnailCache::getInstance().getThumbnail(item.id, item.thumbnailUrl, [this](const juce::String&) {
+                table.repaint();
+            });
+
+            // Base background
+            g.setColour(juce::Colour::fromRGB(22, 25, 34));
+            g.fillRoundedRectangle(thumbRect, 4.0f);
+
+            if (img.isValid())
+            {
+                juce::Graphics::ScopedSaveState state(g);
+                juce::Path clipPath;
+                clipPath.addRoundedRectangle(thumbRect, 4.0f);
+                g.reduceClipRegion(clipPath);
+
+                g.drawImage(img, thumbRect, juce::RectanglePlacement::centred | juce::RectanglePlacement::fillDestination);
+            }
+            else
+            {
+                // Placeholder TV / Video icon
+                auto iconArea = juce::Rectangle<float>(thumbRect.getCentreX() - 10.0f,
+                                                       thumbRect.getCentreY() - 10.0f,
+                                                       20.0f, 20.0f);
+                LucideIcons::draw(g, LucideIcons::IconType::Tv, iconArea, juce::Colour::fromRGB(75, 82, 100), 1.5f);
+            }
+
+            // Sleek outer border
+            g.setColour(juce::Colour::fromRGB(42, 47, 62));
+            g.drawRoundedRectangle(thumbRect, 4.0f, 1.0f);
+
+            // Duration badge overlaid in bottom-right corner of thumbnail
+            if (item.durationText.isNotEmpty())
+            {
+                juce::Font badgeFont(juce::FontOptions(9.5f, juce::Font::bold));
+                juce::GlyphArrangement ga;
+                ga.addLineOfText(badgeFont, item.durationText, 0.0f, 0.0f);
+                float badgeW = ga.getBoundingBox(0, -1, true).getWidth() + 8.0f;
+                float badgeH = 14.0f;
+                auto badgeRect = juce::Rectangle<float>(thumbRect.getRight() - badgeW - 3.0f,
+                                                        thumbRect.getBottom() - badgeH - 3.0f,
+                                                        badgeW, badgeH);
+
+                g.setColour(juce::Colours::black.withAlpha(0.82f));
+                g.fillRoundedRectangle(badgeRect, 2.5f);
+
+                g.setColour(juce::Colours::white);
+                g.setFont(badgeFont);
+                g.drawText(item.durationText, badgeRect, juce::Justification::centred, false);
+            }
             break;
         }
 
         case 3: // TÍTULO
             g.setColour(juce::Colours::white);
-            g.setFont(juce::FontOptions(11.5f, juce::Font::bold));
-            g.drawText(item.title, 8, 0, width - 12, height, juce::Justification::centredLeft, true);
+            g.setFont(juce::FontOptions(12.5f, juce::Font::bold));
+            g.drawText(item.title, 10, 0, width - 20, height, juce::Justification::centredLeft, true);
             break;
 
         case 4: // CANAL
-            g.setColour(juce::Colour::fromRGB(142, 149, 165));
+            g.setColour(juce::Colour::fromRGB(150, 158, 175));
+            g.setFont(juce::FontOptions(11.5f, juce::Font::plain));
             g.drawText(item.artist, 6, 0, width - 12, height, juce::Justification::centredLeft, true);
             break;
 
         case 5: // DURACIÓN
             g.setColour(juce::Colour::fromRGB(0, 229, 255));
-            g.setFont(juce::FontOptions(10.5f, juce::Font::bold));
+            g.setFont(juce::FontOptions(11.0f, juce::Font::bold));
             g.drawText(item.durationText, 4, 0, width - 8, height, juce::Justification::centred, false);
             break;
 

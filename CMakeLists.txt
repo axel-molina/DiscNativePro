@@ -42,6 +42,8 @@ target_sources(DiscNativePro
         src/midi/MidiManager.cpp
         src/services/YouTubeService.h
         src/services/YouTubeService.cpp
+        src/services/ThumbnailCache.h
+        src/services/ThumbnailCache.cpp
         src/ui/TopBarComponent.h
         src/ui/TopBarComponent.cpp
         src/ui/DjKnob.h

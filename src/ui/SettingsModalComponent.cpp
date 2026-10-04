@@ -106,7 +106,19 @@ void SettingsModalComponent::setupGeneralTab()
     pitchRangeCombo.addItem(juce::String::fromUTF8("±8% (Precisión estándar Club)"), 1);
     pitchRangeCombo.addItem(juce::String::fromUTF8("±16% (Rango extendido)"), 2);
     pitchRangeCombo.addItem(juce::String::fromUTF8("±50% (Extremo / Transiciones abiertas)"), 3);
-    pitchRangeCombo.setSelectedId(1, juce::dontSendNotification);
+
+    float curRange = audioEngine.getPitchRange();
+    if (curRange > 30.0f) pitchRangeCombo.setSelectedId(3, juce::dontSendNotification);
+    else if (curRange > 12.0f) pitchRangeCombo.setSelectedId(2, juce::dontSendNotification);
+    else pitchRangeCombo.setSelectedId(1, juce::dontSendNotification);
+
+    pitchRangeCombo.onChange = [this]() {
+        int id = pitchRangeCombo.getSelectedId();
+        float r = 8.0f;
+        if (id == 2) r = 16.0f;
+        else if (id == 3) r = 50.0f;
+        audioEngine.setPitchRange(r);
+    };
     addChildComponent(pitchRangeCombo);
 
     autoCueToggle.setButtonText(juce::String::fromUTF8("Auto-CUE: Posicionar cabezal en el primer beat al cargar pista"));

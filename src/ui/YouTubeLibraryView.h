@@ -2,6 +2,7 @@
 
 #include <juce_gui_basics/juce_gui_basics.h>
 #include "../services/YouTubeService.h"
+#include "../services/ThumbnailCache.h"
 #include "DjButton.h"
 #include "LucideIcons.h"
 #include <vector>

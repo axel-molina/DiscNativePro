@@ -45,6 +45,7 @@ public:
     // DragAndDropTarget overrides (Automix panel drop zone)
     bool isInterestedInDragSource(const SourceDetails& dragSourceDetails) override;
     void itemDragEnter(const SourceDetails& dragSourceDetails) override;
+    void itemDragMove(const SourceDetails& dragSourceDetails) override;
     void itemDragExit(const SourceDetails& dragSourceDetails) override;
     void itemDropped(const SourceDetails& dragSourceDetails) override;
 
@@ -63,6 +64,7 @@ public:
     void addToAutomixQueue(const std::vector<TrackItem>& tracks);
     void clearAutomixQueue();
     void setAutomixRunning(bool running);
+    void updateTrackBpm(const juce::File& file, double bpm);
 
     // MIDI / Hardware Browser Navigation
     void navigateBrowser(int delta);

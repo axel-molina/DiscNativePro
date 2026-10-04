@@ -210,7 +210,13 @@ double DeckPlayer::getPosition() const
 void DeckPlayer::seekRelative(double deltaSeconds)
 {
     double cur = getPosition();
-    setPosition(cur + deltaSeconds);
+    double target = cur + deltaSeconds;
+    double maxDur = trackDurationSeconds.load();
+    if (maxDur > 0.0)
+        target = juce::jlimit(0.0, maxDur, target);
+    else
+        target = juce::jmax(0.0, target);
+    setPosition(target);
 }
 
 void DeckPlayer::setPitchPercent(float percent)

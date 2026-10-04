@@ -55,6 +55,13 @@ public:
     int getNumActiveOutputChannels() const { return currentNumOutputChannels.load(); }
     bool is4ChannelOutputAvailable() const { return currentNumOutputChannels.load() >= 4; }
 
+    // Pitch / Tempo Range
+    void setPitchRange(float range) {
+        deck1.setPitchRange(range);
+        deck2.setPitchRange(range);
+    }
+    float getPitchRange() const { return deck1.getPitchRange(); }
+
 private:
     juce::AudioDeviceManager deviceManager;
     juce::TimeSliceThread diskReaderThread { "DJ Disk Streaming Thread" };

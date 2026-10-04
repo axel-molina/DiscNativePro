@@ -132,24 +132,7 @@ DeckComponent::DeckComponent(int deckNum, DeckPlayer& player, juce::Colour accen
                                 juce::Colour::fromRGB(30, 215, 96),
                                 juce::Colour::fromRGB(38, 43, 56));
     playButton.onClick = [this]() {
-        if (isVideoMode && videoPlayer != nullptr)
-        {
-            if (isVideoPlaying)
-            {
-                videoPlayer->pause();
-                isVideoPlaying = false;
-            }
-            else
-            {
-                videoPlayer->play();
-                isVideoPlaying = true;
-            }
-        }
-        else
-        {
-            if (deck.isPlaying()) deck.pause();
-            else deck.play();
-        }
+        togglePlayPause();
     };
     addAndMakeVisible(playButton);
 
@@ -162,16 +145,7 @@ DeckComponent::DeckComponent(int deckNum, DeckPlayer& player, juce::Colour accen
                                juce::Colour::fromRGB(245, 158, 11),
                                juce::Colour::fromRGB(38, 43, 56));
     cueButton.onClick = [this]() {
-        if (isVideoMode && videoPlayer != nullptr)
-        {
-            videoPlayer->pause();
-            videoPlayer->seekTo(0.0);
-            isVideoPlaying = false;
-        }
-        else
-        {
-            deck.triggerCue();
-        }
+        triggerCue();
     };
     addAndMakeVisible(cueButton);
 
@@ -275,6 +249,9 @@ void DeckComponent::loadAudioFile(const juce::File& file)
         jogWheel.setTrackInfo(cleanTitle, bpm, accent);
 
         repaint();
+
+        if (onFileLoaded)
+            onFileLoaded(file, bpm);
     }
 }
 
@@ -350,7 +327,7 @@ void DeckComponent::itemDropped(const SourceDetails& dragSourceDetails)
         repaint();
         return;
     }
-    juce::File file(desc);
+    juce::File file(desc.upToFirstOccurrenceOf("\n", false, false).trim());
     if (file.existsAsFile())
     {
         loadAudioFile(file);
@@ -412,6 +389,49 @@ void DeckComponent::pauseVideo()
     }
 }
 
+void DeckComponent::togglePlayPause()
+{
+    if (isVideoMode && videoPlayer != nullptr)
+    {
+        // Silence any background local audio track in video mode
+        if (deck.isPlaying())
+            deck.pause();
+
+        if (isVideoPlaying)
+            pauseVideo();
+        else
+            playVideo();
+    }
+    else
+    {
+        if (deck.isPlaying())
+            deck.pause();
+        else
+            deck.play();
+    }
+}
+
+void DeckComponent::triggerCue()
+{
+    if (isVideoMode && videoPlayer != nullptr)
+    {
+        if (deck.isPlaying())
+            deck.pause();
+
+        pauseVideo();
+        videoPlayer->seekTo(0.0);
+    }
+    else
+    {
+        deck.triggerCue();
+    }
+}
+
+bool DeckComponent::isPlaying() const
+{
+    return isVideoMode ? isVideoPlaying : deck.isPlaying();
+}
+
 void DeckComponent::formatTime(double seconds, char* buffer, size_t bufferSize)
 {
     if (seconds < 0.0) seconds = 0.0;
@@ -469,10 +489,16 @@ void DeckComponent::updateLabels()
                                          juce::Colour::fromRGB(38, 43, 56));
     }
 
-    // Dynamic BPM and pitch reflection (supports Tempo Blend and Pitch Bend in real-time)
+    // Dynamic BPM and pitch reflection (supports DDJ-SB2 MIDI, Tempo Blend and Pitch Bend in real-time)
     double curBpm = deck.getBpm();
     bpmLabel.setText(juce::String(curBpm, 1), juce::dontSendNotification);
     pitchBpmLabel.setText(juce::String(curBpm, 1), juce::dontSendNotification);
+
+    float currentRange = deck.getPitchRange();
+    if (std::abs(pitchSlider.getMaximum() - (double)currentRange) > 0.01)
+    {
+        pitchSlider.setRange(-currentRange, currentRange, 0.05);
+    }
 
     float currentPitchPercent = deck.getPitchPercent();
     if (!pitchSlider.isMouseButtonDown())

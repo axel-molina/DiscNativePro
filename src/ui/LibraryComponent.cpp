@@ -1,12 +1,26 @@
 #include "LibraryComponent.h"
 #include "YouTubeLibraryView.h"
 #include "../audio/SampleTrackGenerator.h"
+#include "../audio/BeatDetector.h"
 #include "CoverArtGenerator.h"
 #include <cstdio>
 
 namespace
 {
-    // Custom button strip for Column 8 ("CARGAR 1 / 2")
+    juce::String formatDuration(double seconds)
+    {
+        if (seconds <= 0.0)
+            return "--:--";
+        int totalSecs = static_cast<int>(std::round(seconds));
+        int hours = totalSecs / 3600;
+        int mins = (totalSecs % 3600) / 60;
+        int secs = totalSecs % 60;
+        if (hours > 0)
+            return juce::String::formatted("%d:%02d:%02d", hours, mins, secs);
+        return juce::String::formatted("%02d:%02d", mins, secs);
+    }
+
+    // Custom button strip for Column 9 ("CARGAR 1 / 2")
     class LoadButtonsComponent : public juce::Component
     {
     public:
@@ -113,12 +127,13 @@ LibraryComponent::LibraryComponent(juce::AudioFormatManager& fm)
     table.setColour(juce::TableListBox::backgroundColourId, juce::Colour::fromRGB(12, 13, 18));
     table.getHeader().addColumn("#", 1, 38, 30, 48, juce::TableHeaderComponent::notSortable);
     table.getHeader().addColumn("", 2, 34, 28, 42, juce::TableHeaderComponent::notSortable);
-    table.getHeader().addColumn(juce::String::fromUTF8("TÍTULO"), 3, 210, 120, 350);
-    table.getHeader().addColumn(juce::String::fromUTF8("ARTISTA"), 4, 150, 100, 250);
-    table.getHeader().addColumn(juce::String::fromUTF8("ÁLBUM"), 5, 140, 80, 250);
-    table.getHeader().addColumn("BPM", 6, 65, 50, 85);
-    table.getHeader().addColumn("KEY", 7, 55, 45, 75);
-    table.getHeader().addColumn("CARGAR", 8, 75, 70, 90, juce::TableHeaderComponent::notSortable);
+    table.getHeader().addColumn(juce::String::fromUTF8("TÍTULO"), 3, 200, 110, 350);
+    table.getHeader().addColumn(juce::String::fromUTF8("ARTISTA"), 4, 140, 90, 250);
+    table.getHeader().addColumn(juce::String::fromUTF8("ÁLBUM"), 5, 130, 80, 250);
+    table.getHeader().addColumn(juce::String::fromUTF8("DURACIÓN"), 6, 68, 52, 90);
+    table.getHeader().addColumn("BPM", 7, 62, 50, 80);
+    table.getHeader().addColumn("KEY", 8, 52, 42, 70);
+    table.getHeader().addColumn("CARGAR", 9, 74, 68, 85, juce::TableHeaderComponent::notSortable);
     table.getHeader().setColour(juce::TableHeaderComponent::backgroundColourId, juce::Colour::fromRGB(16, 18, 24));
     table.getHeader().setColour(juce::TableHeaderComponent::textColourId, juce::Colour::fromRGB(142, 149, 165));
     table.setRowHeight(34);
@@ -323,7 +338,8 @@ void LibraryComponent::addTrack(const juce::File& file, const juce::String& fold
     item.isDemo = isDemo;
     item.id = juce::String(allTracks.size() + 1);
 
-    // Try reading audio metadata
+    // Try reading audio metadata and detect BPM
+    bool bpmFound = false;
     std::unique_ptr<juce::AudioFormatReader> reader(formatManager.createReaderFor(file));
     if (reader != nullptr)
     {
@@ -335,6 +351,40 @@ void LibraryComponent::addTrack(const juce::File& file, const juce::String& fold
         item.title = title.isNotEmpty() ? title : file.getFileNameWithoutExtension().replaceCharacter('_', ' ');
         item.artist = artist.isNotEmpty() ? artist : "Artista Local";
         item.album = album.isNotEmpty() ? album : "Local Audio";
+
+        // 1. Try reading BPM from metadata tags (ID3 TBPM, bpm, tempo)
+        auto bpmStr = reader->metadataValues.getValue("bpm", "");
+        if (bpmStr.isEmpty()) bpmStr = reader->metadataValues.getValue("TBPM", "");
+        if (bpmStr.isEmpty()) bpmStr = reader->metadataValues.getValue("tempo", "");
+        if (bpmStr.isNotEmpty())
+        {
+            double val = bpmStr.getDoubleValue();
+            if (val >= 40.0 && val <= 250.0)
+            {
+                item.bpm = val;
+                bpmFound = true;
+            }
+        }
+
+        // 2. Try reading Key from metadata
+        auto keyStr = reader->metadataValues.getValue("initialkey", "");
+        if (keyStr.isEmpty()) keyStr = reader->metadataValues.getValue("TKEY", "");
+        if (keyStr.isEmpty()) keyStr = reader->metadataValues.getValue("key", "");
+        if (keyStr.isNotEmpty())
+        {
+            item.key = keyStr;
+        }
+
+        // 3. If BPM not in metadata, analyze audio content with BeatDetector
+        if (!bpmFound)
+        {
+            auto beatRes = BeatDetector::analyze(reader.get());
+            if (beatRes.bpm > 0.0)
+            {
+                item.bpm = beatRes.bpm;
+                bpmFound = true;
+            }
+        }
     }
     else
     {
@@ -344,23 +394,25 @@ void LibraryComponent::addTrack(const juce::File& file, const juce::String& fold
         item.duration = 0.0;
     }
 
-    // Default BPM estimation / matching
-    if (item.title.containsIgnoreCase("Latin") || item.title.containsIgnoreCase("Groove"))
+    if (!bpmFound)
     {
-        item.bpm = 124.0;
-        item.key = "8A";
-        item.album = "Club Sessions Vol. 1";
-    }
-    else if (item.title.containsIgnoreCase("Sunset") || item.title.containsIgnoreCase("Beach"))
-    {
-        item.bpm = 126.0;
-        item.key = "11A";
-        item.album = "Ibiza Opening 2026";
-    }
-    else
-    {
-        item.bpm = 124.0;
-        item.key = "8A";
+        if (item.title.containsIgnoreCase("Latin") || item.title.containsIgnoreCase("Groove"))
+        {
+            item.bpm = 124.0;
+            item.key = "8A";
+            item.album = "Club Sessions Vol. 1";
+        }
+        else if (item.title.containsIgnoreCase("Sunset") || item.title.containsIgnoreCase("Beach"))
+        {
+            item.bpm = 126.0;
+            item.key = "11A";
+            item.album = "Ibiza Opening 2026";
+        }
+        else
+        {
+            item.bpm = 124.0;
+            item.key = "8A";
+        }
     }
 
     allTracks.push_back(item);
@@ -572,13 +624,19 @@ void LibraryComponent::paintCell(juce::Graphics& g, int rowNumber, int columnId,
             g.drawText(track.album, cellBounds, juce::Justification::centredLeft, true);
             break;
 
-        case 6: // BPM
+        case 6: // Duración
+            g.setColour(juce::Colour::fromRGB(142, 149, 165));
+            g.setFont(juce::FontOptions(11.5f));
+            g.drawText(formatDuration(track.duration), cellBounds, juce::Justification::centred, false);
+            break;
+
+        case 7: // BPM
             g.setColour(juce::Colours::white);
             g.setFont(juce::FontOptions(12.0f, juce::Font::bold));
             g.drawText(juce::String(track.bpm, 1), cellBounds, juce::Justification::centred, false);
             break;
 
-        case 7: // Key
+        case 8: // Key
         {
             auto pill = cellBounds.reduced(4, 7).toFloat();
             g.setColour(juce::Colour::fromRGB(0, 180, 216).withAlpha(0.15f));
@@ -599,7 +657,7 @@ void LibraryComponent::paintCell(juce::Graphics& g, int rowNumber, int columnId,
 
 juce::Component* LibraryComponent::refreshComponentForCell(int rowNumber, int columnId, bool /*isRowSelected*/, juce::Component* existingComponentToUpdate)
 {
-    if (columnId == 8) // Column 8: CARGAR
+    if (columnId == 9) // Column 9: CARGAR
     {
         auto* comp = static_cast<LoadButtonsComponent*>(existingComponentToUpdate);
         if (comp == nullptr)
@@ -822,30 +880,46 @@ bool LibraryComponent::keyPressed(const juce::KeyPress& key)
 
 bool LibraryComponent::isInterestedInDragSource(const SourceDetails& dragSourceDetails)
 {
-    return dragSourceDetails.localPosition.x >= getWidth() - 250
-           && dragSourceDetails.description.toString().isNotEmpty();
+    // In JUCE, localPosition is (0,0) during this initial inquiry,
+    // so we accept any non-empty drag description here.
+    return dragSourceDetails.description.toString().isNotEmpty();
 }
 
 void LibraryComponent::itemDragEnter(const SourceDetails& dragSourceDetails)
 {
-    if (dragSourceDetails.localPosition.x >= getWidth() - 250)
+    bool hover = (dragSourceDetails.localPosition.x >= getWidth() - 260);
+    if (hover != automixDropHover)
     {
-        automixDropHover = true;
+        automixDropHover = hover;
+        repaint();
+    }
+}
+
+void LibraryComponent::itemDragMove(const SourceDetails& dragSourceDetails)
+{
+    bool hover = (dragSourceDetails.localPosition.x >= getWidth() - 260);
+    if (hover != automixDropHover)
+    {
+        automixDropHover = hover;
         repaint();
     }
 }
 
 void LibraryComponent::itemDragExit(const SourceDetails&)
 {
-    automixDropHover = false;
-    repaint();
+    if (automixDropHover)
+    {
+        automixDropHover = false;
+        repaint();
+    }
 }
 
 void LibraryComponent::itemDropped(const SourceDetails& dragSourceDetails)
 {
     automixDropHover = false;
 
-    if (dragSourceDetails.localPosition.x >= getWidth() - 250)
+    // Check if the drop happened over the right 260px Automix panel
+    if (dragSourceDetails.localPosition.x >= getWidth() - 260)
     {
         juce::StringArray paths;
         paths.addTokens(dragSourceDetails.description.toString(), "\n", "");
@@ -853,13 +927,83 @@ void LibraryComponent::itemDropped(const SourceDetails& dragSourceDetails)
         std::vector<TrackItem> tracksToAdd;
         for (const auto& path : paths)
         {
-            juce::File file(path);
+            auto trimmed = path.trim();
+            if (trimmed.isEmpty()) continue;
+
+            bool found = false;
+            // 1. Search in allTracks
             for (const auto& track : allTracks)
             {
-                if (track.file == file)
+                if (track.file.getFullPathName() == trimmed || track.file == juce::File(trimmed))
                 {
                     tracksToAdd.push_back(track);
+                    found = true;
                     break;
+                }
+            }
+            // 2. Search in filteredTracks
+            if (!found)
+            {
+                for (const auto& track : filteredTracks)
+                {
+                    if (track.file.getFullPathName() == trimmed || track.file == juce::File(trimmed))
+                    {
+                        tracksToAdd.push_back(track);
+                        found = true;
+                        break;
+                    }
+                }
+            }
+            // 3. Fallback: if it's a valid local file dropped
+            if (!found)
+            {
+                juce::File f(trimmed);
+                if (f.existsAsFile())
+                {
+                    TrackItem ti;
+                    ti.id = juce::String(juce::Random::getSystemRandom().nextInt());
+                    ti.file = f;
+                    ti.title = f.getFileNameWithoutExtension().replaceCharacter('_', ' ');
+                    ti.artist = "Artista Local";
+                    ti.album = "Local Audio";
+                    ti.bpm = 124.0;
+                    ti.key = "8A";
+                    ti.duration = 180.0;
+
+                    std::unique_ptr<juce::AudioFormatReader> reader(formatManager.createReaderFor(f));
+                    if (reader != nullptr)
+                    {
+                        ti.duration = (double)reader->lengthInSamples / reader->sampleRate;
+                        auto metaTitle = reader->metadataValues.getValue("title", "");
+                        auto metaArtist = reader->metadataValues.getValue("artist", "");
+                        auto metaAlbum = reader->metadataValues.getValue("album", "");
+                        if (metaTitle.isNotEmpty()) ti.title = metaTitle;
+                        if (metaArtist.isNotEmpty()) ti.artist = metaArtist;
+                        if (metaAlbum.isNotEmpty()) ti.album = metaAlbum;
+
+                        auto bpmStr = reader->metadataValues.getValue("bpm", "");
+                        if (bpmStr.isEmpty()) bpmStr = reader->metadataValues.getValue("TBPM", "");
+                        if (bpmStr.isEmpty()) bpmStr = reader->metadataValues.getValue("tempo", "");
+                        if (bpmStr.isNotEmpty())
+                        {
+                            double val = bpmStr.getDoubleValue();
+                            if (val >= 40.0 && val <= 250.0)
+                                ti.bpm = val;
+                        }
+                        else
+                        {
+                            auto beatRes = BeatDetector::analyze(reader.get());
+                            if (beatRes.bpm > 0.0)
+                                ti.bpm = beatRes.bpm;
+                        }
+
+                        auto keyStr = reader->metadataValues.getValue("initialkey", "");
+                        if (keyStr.isEmpty()) keyStr = reader->metadataValues.getValue("TKEY", "");
+                        if (keyStr.isEmpty()) keyStr = reader->metadataValues.getValue("key", "");
+                        if (keyStr.isNotEmpty()) ti.key = keyStr;
+                    }
+
+                    tracksToAdd.push_back(ti);
                 }
             }
         }
@@ -942,3 +1086,125 @@ void LibraryComponent::setAutomixRunning(bool running)
     }
     repaint();
 }
+
+void LibraryComponent::navigateBrowser(int delta)
+{
+    if (isBrowsingFolders)
+    {
+        folderTree.navigateFolders(delta);
+    }
+    else
+    {
+        int numRows = getNumRows();
+        if (numRows <= 0)
+            return;
+
+        int curRow = table.getSelectedRow();
+        if (curRow < 0)
+            curRow = 0;
+        else
+            curRow = juce::jlimit(0, numRows - 1, curRow + delta);
+
+        table.selectRow(curRow, false, true);
+        table.scrollToEnsureRowIsOnscreen(curRow);
+    }
+    repaint();
+}
+
+void LibraryComponent::handleBrowseClick()
+{
+    if (isBrowsingFolders)
+    {
+        // If current folder has subfolders: expand/collapse it
+        bool expandedOrCollapsed = folderTree.toggleExpandCurrentFolder();
+        if (!expandedOrCollapsed)
+        {
+            // Leaf folder: switch focus directly to track table
+            isBrowsingFolders = false;
+            if (table.getSelectedRow() < 0 && getNumRows() > 0)
+            {
+                table.selectRow(0, false, true);
+                table.scrollToEnsureRowIsOnscreen(0);
+            }
+        }
+    }
+    else
+    {
+        // In song list: toggle back to browsing folder tree
+        isBrowsingFolders = true;
+    }
+    repaint();
+}
+
+juce::File LibraryComponent::getSelectedTrackFile() const
+{
+    int row = table.getSelectedRow();
+    if (row >= 0 && row < static_cast<int>(filteredTracks.size()))
+    {
+        return filteredTracks[static_cast<size_t>(row)].file;
+    }
+    if (!filteredTracks.empty())
+    {
+        return filteredTracks[0].file;
+    }
+    return {};
+}
+
+void LibraryComponent::loadSelectedTrack(int deckIndex)
+{
+    int row = table.getSelectedRow();
+    if (row < 0 && !filteredTracks.empty())
+    {
+        row = 0;
+        table.selectRow(0, false, true);
+    }
+
+    if (row >= 0 && row < static_cast<int>(filteredTracks.size()) && onLoadTrack)
+    {
+        onLoadTrack(deckIndex, filteredTracks[static_cast<size_t>(row)].file);
+    }
+}
+
+void LibraryComponent::updateTrackBpm(const juce::File& file, double bpm)
+{
+    if (bpm <= 0.0)
+        return;
+
+    bool updated = false;
+    for (auto& t : allTracks)
+    {
+        if (t.file == file)
+        {
+            t.bpm = bpm;
+            updated = true;
+            break;
+        }
+    }
+
+    for (auto& t : filteredTracks)
+    {
+        if (t.file == file)
+        {
+            t.bpm = bpm;
+            updated = true;
+            break;
+        }
+    }
+
+    for (auto& t : automixQueue)
+    {
+        if (t.file == file)
+        {
+            t.bpm = bpm;
+            updated = true;
+        }
+    }
+
+    if (updated)
+    {
+        table.updateContent();
+        table.repaint();
+        repaint();
+    }
+}
+

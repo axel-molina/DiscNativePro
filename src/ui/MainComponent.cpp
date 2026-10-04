@@ -96,6 +96,14 @@ MainComponent::MainComponent()
             deck2.loadAudioFile(file);
     };
 
+    // Synchronize detected Deck BPM back to Library and Automix queue
+    deck1.onFileLoaded = [this](const juce::File& file, double detectedBpm) {
+        library.updateTrackBpm(file, detectedBpm);
+    };
+    deck2.onFileLoaded = [this](const juce::File& file, double detectedBpm) {
+        library.updateTrackBpm(file, detectedBpm);
+    };
+
     library.onLoadYouTubeTrack = [this](int deckIndex, const YouTubeSearchResult& video) {
         if (deckIndex == 0)
             deck1.loadYouTubeVideo(video);
@@ -108,6 +116,41 @@ MainComponent::MainComponent()
     };
     library.onStopAutomix = [this]() {
         stopAutomix();
+    };
+
+    // Connect MIDI hardware browser and deck loader
+    midiManager.onBrowseRotate = [this](int delta) {
+        library.navigateBrowser(delta);
+    };
+    midiManager.onBrowseClick = [this]() {
+        library.handleBrowseClick();
+    };
+    midiManager.onLoadTrack = [this](int deckIndex) {
+        library.loadSelectedTrack(deckIndex);
+    };
+    midiManager.onPlayPause = [this](int deckIndex) {
+        if (deckIndex == 0)
+        {
+            deck1.togglePlayPause();
+            midiManager.sendMidiMessage(juce::MidiMessage::noteOn(1, 11, (juce::uint8)(deck1.isPlaying() ? 127 : 0)));
+        }
+        else
+        {
+            deck2.togglePlayPause();
+            midiManager.sendMidiMessage(juce::MidiMessage::noteOn(2, 11, (juce::uint8)(deck2.isPlaying() ? 127 : 0)));
+        }
+    };
+    midiManager.onCue = [this](int deckIndex) {
+        if (deckIndex == 0)
+        {
+            deck1.triggerCue();
+            midiManager.sendMidiMessage(juce::MidiMessage::noteOn(1, 11, (juce::uint8)0));
+        }
+        else
+        {
+            deck2.triggerCue();
+            midiManager.sendMidiMessage(juce::MidiMessage::noteOn(2, 11, (juce::uint8)0));
+        }
     };
 
     addAndMakeVisible(library);
@@ -222,50 +265,24 @@ bool MainComponent::keyPressed(const juce::KeyPress& key)
     // Deck 1 Shortcuts
     if (c == 'q')
     {
-        if (deck1.isVideoModeActive())
-        {
-            if (deck1.isVideoPlayingActive())
-                deck1.pauseVideo();
-            else
-                deck1.playVideo();
-        }
-        else
-        {
-            auto& d1 = audioEngine.getDeck(0);
-            if (d1.isPlaying()) d1.pause(); else d1.play();
-        }
+        deck1.togglePlayPause();
         return true;
     }
     if (c == 'w')
     {
-        if (deck1.isVideoModeActive())
-            deck1.pauseVideo();
-        audioEngine.getDeck(0).triggerCue();
+        deck1.triggerCue();
         return true;
     }
 
     // Deck 2 Shortcuts
     if (c == 'p')
     {
-        if (deck2.isVideoModeActive())
-        {
-            if (deck2.isVideoPlayingActive())
-                deck2.pauseVideo();
-            else
-                deck2.playVideo();
-        }
-        else
-        {
-            auto& d2 = audioEngine.getDeck(1);
-            if (d2.isPlaying()) d2.pause(); else d2.play();
-        }
+        deck2.togglePlayPause();
         return true;
     }
     if (c == 'o')
     {
-        if (deck2.isVideoModeActive())
-            deck2.pauseVideo();
-        audioEngine.getDeck(1).triggerCue();
+        deck2.triggerCue();
         return true;
     }
 

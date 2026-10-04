@@ -41,6 +41,14 @@ public:
     void setVideoVolume(float effectiveVolume);
     void playVideo();
     void pauseVideo();
+    void togglePlayPause();
+    void triggerCue();
+    bool isPlaying() const;
+
+    double getOriginalBpm() const { return deck.getOriginalBpm(); }
+    double getBpm() const { return deck.getBpm(); }
+
+    std::function<void(const juce::File& file, double detectedBpm)> onFileLoaded;
 
 private:
     void updateLabels();

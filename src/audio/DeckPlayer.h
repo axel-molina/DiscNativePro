@@ -39,6 +39,8 @@ public:
     void setPitchPercent(float percent); // -8.0 to +8.0, etc.
     float getPitchPercent() const { return pitchPercent.load(); }
     void setPitchBend(float bend); // Temporary nudge (e.g. +/- 0.05)
+    void setPitchRange(float range) { pitchRange.store(juce::jmax(1.0f, range)); }
+    float getPitchRange() const     { return pitchRange.load(); }
 
     // Hot Cues (0 to 3 for 4 hot cues)
     void setHotCue(int index, double positionSeconds);
@@ -95,6 +97,7 @@ private:
 
     std::atomic<float> pitchPercent { 0.0f };
     std::atomic<float> pitchBend { 0.0f };
+    std::atomic<float> pitchRange { 8.0f };
 
     std::atomic<bool> loopActive { false };
     std::atomic<double> loopStartSeconds { 0.0 };
