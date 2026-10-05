@@ -21,6 +21,7 @@ juce_add_gui_app(DiscNativePro
     PRODUCT_NAME "DiscNativePro"
     COMPANY_NAME "DiscPro"
     BUNDLE_ID "com.discpro.discnativepro"
+    ICON_BIG "${CMAKE_CURRENT_SOURCE_DIR}/assets/icon.png"
 )
 
 target_sources(DiscNativePro
