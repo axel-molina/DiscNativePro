@@ -90,17 +90,19 @@ void ThumbnailCache::downloadAsync(const juce::String& videoId,
         bool downloadOk = false;
 
 #if !JUCE_WINDOWS
-        // Try downloading via curl on macOS / POSIX
-        juce::String escapedUrl = url;
-        escapedUrl = escapedUrl.replace("'", "'\\''");
-        juce::String cmd = "curl -s -L --max-time 6 -o '" + tmpFile.getFullPathName() + "' '" + escapedUrl + "'";
-
-        int ret = system(cmd.toRawUTF8());
-        if (ret == 0 && tmpFile.existsAsFile() && tmpFile.getSize() > 200)
+        // curl sin shell (argumentos separados: sin interpolación de comandos).
+        juce::ChildProcess curlProc;
+        juce::StringArray curlArgs { "curl", "-s", "-L", "--max-time", "6",
+                                     "-o", tmpFile.getFullPathName(), url };
+        if (curlProc.start(curlArgs))
         {
-            cacheFile.deleteFile();
-            tmpFile.moveFileTo(cacheFile);
-            downloadOk = true;
+            curlProc.waitForProcessToFinish(8000);
+            if (curlProc.getExitCode() == 0 && tmpFile.existsAsFile() && tmpFile.getSize() > 200)
+            {
+                cacheFile.deleteFile();
+                tmpFile.moveFileTo(cacheFile);
+                downloadOk = true;
+            }
         }
 #endif
 
@@ -132,9 +134,13 @@ void ThumbnailCache::downloadAsync(const juce::String& videoId,
             if (!rawImg.isValid())
             {
 #if JUCE_MAC
-                // Fallback: convert via macOS sips in case server sent WebP
-                juce::String sipsCmd = "sips -s format jpeg '" + cacheFile.getFullPathName() + "' --out '" + cacheFile.getFullPathName() + "' 2>/dev/null";
-                system(sipsCmd.toRawUTF8());
+                // Fallback: convert via macOS sips in case server sent WebP (sin shell).
+                juce::ChildProcess sipsProc;
+                juce::StringArray sipsArgs { "sips", "-s", "format", "jpeg",
+                                             cacheFile.getFullPathName(),
+                                             "--out", cacheFile.getFullPathName() };
+                if (sipsProc.start(sipsArgs))
+                    sipsProc.waitForProcessToFinish(5000);
                 rawImg = juce::ImageFileFormat::loadFrom(cacheFile);
 #endif
             }

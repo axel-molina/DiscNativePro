@@ -81,6 +81,8 @@ target_sources(DiscNativePro
         src/services/ThumbnailCache.cpp
         src/services/AIService.h
         src/services/AIService.cpp
+        src/services/SecretStore.h
+        src/services/SecretStore.cpp
         src/services/LanguageManager.h
         src/services/LanguageManager.cpp
         src/services/WaveformTheme.h
@@ -191,6 +193,7 @@ if(APPLE)
         PRIVATE
             "-framework WebKit"
             "-framework Cocoa"
+            "-framework Security"
     )
 
     set(YT_DLP_CANDIDATE "$ENV{HOME}/Library/Application Support/DiscNativePro/bin/yt-dlp")
@@ -246,6 +249,7 @@ elseif(WIN32)
             mfplat
             mfreadwrite
             mfuuid
+            advapi32
             "${microsoft_webview2_SOURCE_DIR}/build/native/${WV2_ARCH}/WebView2LoaderStatic.lib"
     )
 

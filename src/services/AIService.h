@@ -69,6 +69,9 @@ public:
     static juce::String getApiKey(AIProvider provider);
     static void setApiKey(AIProvider provider, const juce::String& key);
 
+    // Migración única: mueve todas las keys legacy de settings.json al almacén seguro.
+    static void migrateLegacySecrets();
+
     // Model per provider (user-configurable, persisted; never hardcoded at call sites)
     static juce::String getDefaultModel(AIProvider provider);
     static juce::StringArray getAvailableModels(AIProvider provider);
@@ -92,6 +95,7 @@ public:
 
 private:
     static juce::String getProviderKeyName(AIProvider provider);
+    static bool isValidModelName(const juce::String& model);
     static juce::String buildPrompt(const CurrentTrackContext& context);
     static std::vector<AIRecommendation> parseResponse(AIProvider provider, const juce::String& rawJson, juce::String& outError);
     // Fallback determinístico desde Up Next (cero IA): garantiza cards aunque la IA falle

@@ -4,6 +4,7 @@
 #include "CoverArtGenerator.h"
 #include "../services/LanguageManager.h"
 #include "../services/AIService.h"
+#include "../services/YouTubeService.h"
 #include <juce_audio_utils/juce_audio_utils.h>
 #include <algorithm>
 #include <cmath>
@@ -23,6 +24,10 @@ MainComponent::MainComponent()
 
     // Start USB MIDI Manager
     midiManager.initialise();
+
+    // Migrar credenciales legacy (settings.json en claro) al almacén seguro del sistema
+    AIService::migrateLegacySecrets();
+    YouTubeService::migrateLegacySecret();
 
     // Recording action (WAV export in ~/Music/DiscPro_Recordings/)
     topBar.onRecClicked = [this]() {

@@ -1,14 +1,9 @@
 #include "AIService.h"
 #include "YouTubeService.h"
+#include "SecretStore.h"
 #include "LanguageManager.h"
 #include <juce_events/juce_events.h>
 #include <thread>
-#include <cstdio>
-
-#if JUCE_WINDOWS
-#define popen _popen
-#define pclose _pclose
-#endif
 
 juce::File AIService::getSettingsFile()
 {
@@ -78,6 +73,21 @@ juce::String AIService::getProviderKeyName(AIProvider provider)
         case AIProvider::OpenRouter: return "openrouter";
     }
     return "gemini";
+}
+
+bool AIService::isValidModelName(const juce::String& model)
+{
+    if (model.isEmpty())
+        return false;
+    for (auto c : model)
+    {
+        const auto ch = (juce::juce_wchar) c;
+        const bool allowed = juce::CharacterFunctions::isLetterOrDigit(ch)
+                             || ch == '-' || ch == '_' || ch == '.' || ch == '/' || ch == ':';
+        if (!allowed)
+            return false;
+    }
+    return true;
 }
 
 juce::String AIService::getDefaultModel(AIProvider provider)
@@ -155,6 +165,11 @@ void AIService::setModel(AIProvider provider, const juce::String& model)
 
 juce::String AIService::getApiKey(AIProvider provider)
 {
+    const auto account = "ai/" + getProviderKeyName(provider);
+    const auto secureValue = SecretStore::read(account);
+    if (secureValue.isNotEmpty())
+        return secureValue.trim();
+
     auto file = getSettingsFile();
     if (file.existsAsFile())
     {
@@ -164,12 +179,30 @@ juce::String AIService::getApiKey(AIProvider provider)
             juce::Identifier propId("aiApiKey_" + getProviderKeyName(provider));
             if (json.hasProperty(propId))
             {
-                return json[propId].toString().trim();
+                auto legacyValue = json[propId].toString().trim();
+                if (legacyValue.isNotEmpty() && SecretStore::write(account, legacyValue))
+                {
+                    if (auto* obj = json.getDynamicObject())
+                    {
+                        obj->removeProperty(propId);
+                        file.replaceWithText(juce::JSON::toString(json));
+                    }
+                }
+                return legacyValue;
             }
             // Fallback to generic aiApiKey if it's the current provider
             if (json.hasProperty("aiApiKey") && getProvider() == provider)
             {
-                return json["aiApiKey"].toString().trim();
+                auto legacyValue = json["aiApiKey"].toString().trim();
+                if (legacyValue.isNotEmpty() && SecretStore::write(account, legacyValue))
+                {
+                    if (auto* obj = json.getDynamicObject())
+                    {
+                        obj->removeProperty("aiApiKey");
+                        file.replaceWithText(juce::JSON::toString(json));
+                    }
+                }
+                return legacyValue;
             }
         }
     }
@@ -178,6 +211,8 @@ juce::String AIService::getApiKey(AIProvider provider)
 
 void AIService::setApiKey(AIProvider provider, const juce::String& key)
 {
+    const auto account = "ai/" + getProviderKeyName(provider);
+    const auto trimmedKey = key.trim();
     auto file = getSettingsFile();
     juce::var json;
     if (file.existsAsFile())
@@ -188,12 +223,80 @@ void AIService::setApiKey(AIProvider provider, const juce::String& key)
     if (auto* obj = json.getDynamicObject())
     {
         juce::Identifier propId("aiApiKey_" + getProviderKeyName(provider));
-        if (key.trim().isNotEmpty())
-            obj->setProperty(propId, key.trim());
+        if (trimmedKey.isNotEmpty())
+        {
+            if (SecretStore::write(account, trimmedKey))
+                obj->removeProperty(propId);
+            else
+                obj->setProperty(propId, trimmedKey);
+        }
         else
+        {
+            SecretStore::remove(account);
             obj->removeProperty(propId);
+            obj->removeProperty("aiApiKey");
+        }
     }
     file.replaceWithText(juce::JSON::toString(json));
+}
+
+void AIService::migrateLegacySecrets()
+{
+    auto file = getSettingsFile();
+    if (!file.existsAsFile())
+        return;
+
+    auto json = juce::JSON::parse(file);
+    if (!json.isObject())
+        return;
+
+    auto* obj = json.getDynamicObject();
+    if (obj == nullptr)
+        return;
+
+    const AIProvider allProviders[] { AIProvider::Gemini, AIProvider::OpenAI, AIProvider::Claude,
+                                      AIProvider::DeepSeek, AIProvider::OpenRouter };
+
+    bool changed = false;
+    for (auto provider : allProviders)
+    {
+        const auto account = juce::String("ai/") + getProviderKeyName(provider);
+        const auto secure = SecretStore::read(account).trim();
+
+        juce::Identifier propId("aiApiKey_" + getProviderKeyName(provider));
+        const auto legacy = json.hasProperty(propId) ? json[propId].toString().trim() : juce::String();
+
+        // Elimina la key en claro solo si el almacén seguro ya la tiene o la escritura tuvo éxito.
+        if (legacy.isNotEmpty())
+        {
+            if (secure.isNotEmpty() || SecretStore::write(account, legacy))
+            {
+                obj->removeProperty(propId);
+                changed = true;
+            }
+        }
+        else if (json.hasProperty(propId))
+        {
+            obj->removeProperty(propId);
+            changed = true;
+        }
+    }
+
+    // Key genérica legacy: se asigna al proveedor actual.
+    if (json.hasProperty("aiApiKey"))
+    {
+        const auto account = juce::String("ai/") + getProviderKeyName(getProvider());
+        const auto legacy = json["aiApiKey"].toString().trim();
+        if (legacy.isEmpty()
+            || (SecretStore::read(account).isNotEmpty() || SecretStore::write(account, legacy)))
+        {
+            obj->removeProperty("aiApiKey");
+            changed = true;
+        }
+    }
+
+    if (changed)
+        file.replaceWithText(juce::JSON::toString(json));
 }
 
 bool AIService::isEnabled()
@@ -513,7 +616,7 @@ void AIService::requestRecommendationsAsync(
     auto provider = getProvider();
     auto apiKey = getApiKey(provider);
     auto modelName = getModel(provider).trim();
-    if (modelName.isEmpty())
+    if (!isValidModelName(modelName))
         modelName = getDefaultModel(provider);
 
     if (apiKey.isEmpty())
@@ -552,14 +655,14 @@ void AIService::requestRecommendationsAsync(
                 : buildPrompt(enriched) + juce::String::fromUTF8("\n\nTu respuesta anterior no fue JSON válido. Responde SOLO el objeto JSON, sin nada más.");
         juce::String endpoint;
         juce::String postData;
-        juce::String authHeader;
+        juce::String extraHeaders;
 
         juce::var payload(new juce::DynamicObject());
 
         if (provider == AIProvider::Gemini)
         {
-            // ponytail: modelo configurable por usuario; Google depreca IDs seguido, no quemar literales aquí
-            endpoint = "https://generativelanguage.googleapis.com/v1beta/models/" + modelName + ":generateContent?key=" + apiKey;
+            endpoint = "https://generativelanguage.googleapis.com/v1beta/models/" + modelName + ":generateContent";
+            extraHeaders = "x-goog-api-key: " + apiKey;
 
             // Gemini payload
             juce::var partsArray;
@@ -582,7 +685,7 @@ void AIService::requestRecommendationsAsync(
         else if (provider == AIProvider::OpenAI)
         {
             endpoint = "https://api.openai.com/v1/chat/completions";
-            authHeader = "-H \"Authorization: Bearer " + apiKey + "\"";
+            extraHeaders = "Authorization: Bearer " + apiKey;
 
             payload.getDynamicObject()->setProperty("model", modelName);
 
@@ -603,7 +706,7 @@ void AIService::requestRecommendationsAsync(
         else if (provider == AIProvider::DeepSeek)
         {
             endpoint = "https://api.deepseek.com/chat/completions";
-            authHeader = "-H \"Authorization: Bearer " + apiKey + "\"";
+            extraHeaders = "Authorization: Bearer " + apiKey;
 
             payload.getDynamicObject()->setProperty("model", modelName);
 
@@ -624,7 +727,7 @@ void AIService::requestRecommendationsAsync(
         else if (provider == AIProvider::Claude)
         {
             endpoint = "https://api.anthropic.com/v1/messages";
-            authHeader = "-H \"x-api-key: " + apiKey + "\" -H \"anthropic-version: 2023-06-01\"";
+            extraHeaders = "x-api-key: " + apiKey + "\r\nanthropic-version: 2023-06-01";
 
             payload.getDynamicObject()->setProperty("model", modelName);
             payload.getDynamicObject()->setProperty("max_tokens", 1600);
@@ -642,9 +745,9 @@ void AIService::requestRecommendationsAsync(
             // API compatible con OpenAI; sin response_format (algunos modelos free devuelven 400).
             // El salvamento por llaves de parseResponse cubre el formato.
             endpoint = "https://openrouter.ai/api/v1/chat/completions";
-            authHeader = "-H \"Authorization: Bearer " + apiKey + "\""
-                       + " -H \"HTTP-Referer: https://discnativepro.app\""
-                       + " -H \"X-Title: DiscNativePro\"";
+            extraHeaders = "Authorization: Bearer " + apiKey
+                         + "\r\nHTTP-Referer: https://discnativepro.app"
+                         + "\r\nX-Title: DiscNativePro";
 
             payload.getDynamicObject()->setProperty("model", modelName);
 
@@ -661,27 +764,19 @@ void AIService::requestRecommendationsAsync(
 
         postData = juce::JSON::toString(payload);
 
-        // Write payload to temp file for curl execution
-        auto tempFile = juce::File::createTempFile("ai_req_");
-        tempFile.replaceWithText(postData);
-
-        auto respFile = juce::File::createTempFile("ai_resp_");
-
-        juce::String curlCmd = "curl -s -L --max-time 15 -X POST \"" + endpoint + "\" "
-                             + "-H \"Content-Type: application/json\" "
-                             + authHeader + " "
-                             + "--data-binary \"@" + tempFile.getFullPathName() + "\" "
-                             + "-o \"" + respFile.getFullPathName() + "\"";
-
-        int res = system(curlCmd.toRawUTF8());
-        tempFile.deleteFile();
+        int statusCode = 0;
+        auto request = juce::URL::createWithoutParsing(endpoint).withPOSTData(postData);
+        auto options = juce::URL::InputStreamOptions(juce::URL::ParameterHandling::inPostData)
+                           .withHttpRequestCmd("POST")
+                           .withExtraHeaders("Content-Type: application/json\r\n" + extraHeaders)
+                           .withConnectionTimeoutMs(15000)
+                           .withNumRedirectsToFollow(3)
+                           .withStatusCode(&statusCode);
+        auto responseStream = request.createInputStream(options);
 
         juce::String rawResponse;
-        if (res == 0 && respFile.existsAsFile())
-        {
-            rawResponse = respFile.loadFileAsString();
-            respFile.deleteFile();
-        }
+        if (responseStream != nullptr)
+            rawResponse = responseStream->readEntireStreamAsString();
 
         if (rawResponse.isEmpty())
         {
@@ -701,15 +796,6 @@ void AIService::requestRecommendationsAsync(
                 break;
             }
         }
-#if JUCE_DEBUG
-        {
-            auto dumpFile = juce::File::getSpecialLocation(juce::File::userApplicationDataDirectory)
-                                .getChildFile("DiscNativePro")
-                                .getChildFile("ai_last_response.json");
-            dumpFile.replaceWithText(rawResponse);
-            DBG("AI-Match: respuesta cruda en " << dumpFile.getFullPathName());
-        }
-#endif
         recs = parseResponse(provider, rawResponse, parseError);
         } // for attempt
 

@@ -1,15 +1,10 @@
 #include "YouTubeService.h"
-#include <cstdio>
+#include "SecretStore.h"
 #include <cstring>
 #include <string>
 #include <thread>
 #include <mutex>
 #include <map>
-
-#if JUCE_WINDOWS
-#define popen _popen
-#define pclose _pclose
-#endif
 
 juce::File YouTubeService::getSettingsFile()
 {
@@ -22,13 +17,26 @@ juce::File YouTubeService::getSettingsFile()
 
 juce::String YouTubeService::getApiKey()
 {
+    const auto secureValue = SecretStore::read("youtube");
+    if (secureValue.isNotEmpty())
+        return secureValue.trim();
+
     auto file = getSettingsFile();
     if (file.existsAsFile())
     {
         auto json = juce::JSON::parse(file);
         if (json.isObject() && json.hasProperty("youtubeApiKey"))
         {
-            return json["youtubeApiKey"].toString().trim();
+            auto legacyValue = json["youtubeApiKey"].toString().trim();
+            if (legacyValue.isNotEmpty() && SecretStore::write("youtube", legacyValue))
+            {
+                if (auto* obj = json.getDynamicObject())
+                {
+                    obj->removeProperty("youtubeApiKey");
+                    file.replaceWithText(juce::JSON::toString(json));
+                }
+            }
+            return legacyValue;
         }
     }
     return {};
@@ -36,6 +44,7 @@ juce::String YouTubeService::getApiKey()
 
 void YouTubeService::setApiKey(const juce::String& key)
 {
+    const auto trimmedKey = key.trim();
     auto file = getSettingsFile();
     juce::var json;
     if (file.existsAsFile())
@@ -49,13 +58,57 @@ void YouTubeService::setApiKey(const juce::String& key)
 
     if (auto* obj = json.getDynamicObject())
     {
-        if (key.trim().isNotEmpty())
-            obj->setProperty("youtubeApiKey", key.trim());
+        if (trimmedKey.isNotEmpty())
+        {
+            if (SecretStore::write("youtube", trimmedKey))
+                obj->removeProperty("youtubeApiKey");
+            else
+                obj->setProperty("youtubeApiKey", trimmedKey);
+        }
         else
+        {
+            SecretStore::remove("youtube");
             obj->removeProperty("youtubeApiKey");
+        }
     }
 
     file.replaceWithText(juce::JSON::toString(json));
+}
+
+void YouTubeService::migrateLegacySecret()
+{
+    auto file = getSettingsFile();
+    if (!file.existsAsFile())
+        return;
+
+    auto json = juce::JSON::parse(file);
+    if (!json.isObject())
+        return;
+
+    auto* obj = json.getDynamicObject();
+    if (obj == nullptr)
+        return;
+
+    const auto account = juce::String("youtube");
+    const auto legacy = json.hasProperty("youtubeApiKey") ? json["youtubeApiKey"].toString().trim() : juce::String();
+
+    bool changed = false;
+    if (legacy.isNotEmpty())
+    {
+        if (SecretStore::read(account).isNotEmpty() || SecretStore::write(account, legacy))
+        {
+            obj->removeProperty("youtubeApiKey");
+            changed = true;
+        }
+    }
+    else if (json.hasProperty("youtubeApiKey"))
+    {
+        obj->removeProperty("youtubeApiKey");
+        changed = true;
+    }
+
+    if (changed)
+        file.replaceWithText(juce::JSON::toString(json));
 }
 
 bool YouTubeService::hasApiKey()
@@ -291,21 +344,14 @@ juce::String downloadYouTubePage(const juce::String& pageUrl)
     juce::String html;
 
 #if !JUCE_WINDOWS
-    juce::String cmd = "curl -s -L --max-time 6 "
-                       "-H 'User-Agent: Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36' "
-                       "-H 'Accept-Language: es,en-US;q=0.9,en;q=0.8' "
-                       "'" + pageUrl + "'";
-
-    FILE* pipe = popen(cmd.toRawUTF8(), "r");
-    if (pipe != nullptr)
-    {
-        char buffer[16384];
-        std::string outStr;
-        while (size_t bytes = fread(buffer, 1, sizeof(buffer), pipe))
-            outStr.append(buffer, bytes);
-        pclose(pipe);
-        html = juce::String::fromUTF8(outStr.data(), (int)outStr.size());
-    }
+    // curl sin shell (argumentos separados: sin interpolación de comandos).
+    juce::ChildProcess curlProc;
+    juce::StringArray curlArgs { "curl", "-s", "-L", "--max-time", "6",
+                                 "-H", "User-Agent: Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+                                 "-H", "Accept-Language: es,en-US;q=0.9,en;q=0.8",
+                                 pageUrl };
+    if (curlProc.start(curlArgs))
+        html = curlProc.readAllProcessOutput();
 #endif
 
     if (html.isEmpty())
@@ -572,26 +618,14 @@ std::vector<YouTubeSearchResult> YouTubeService::searchPublic(const juce::String
     juce::String html;
 
 #if !JUCE_WINDOWS
-    // Use curl on macOS / POSIX for ultra-fast, robust response with HTTP/2 and modern TLS
-    juce::String escapedQuery = query;
-    escapedQuery = escapedQuery.replace("'", "'\\''");
-    juce::String cmd = "curl -s -L --max-time 6 "
-                       "-H 'User-Agent: Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36' "
-                       "-H 'Accept-Language: es,en-US;q=0.9,en;q=0.8' "
-                       "'https://www.youtube.com/results?search_query=" + juce::URL::addEscapeChars(escapedQuery, true) + "'";
-
-    FILE* pipe = popen(cmd.toRawUTF8(), "r");
-    if (pipe != nullptr)
-    {
-        char buffer[16384];
-        std::string outStr;
-        while (size_t bytes = fread(buffer, 1, sizeof(buffer), pipe))
-        {
-            outStr.append(buffer, bytes);
-        }
-        pclose(pipe);
-        html = juce::String::fromUTF8(outStr.data(), (int)outStr.size());
-    }
+    // curl sin shell (argumentos separados: sin interpolación de comandos ni quoting manual).
+    juce::ChildProcess curlProc;
+    juce::StringArray curlArgs { "curl", "-s", "-L", "--max-time", "6",
+                                 "-H", "User-Agent: Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+                                 "-H", "Accept-Language: es,en-US;q=0.9,en;q=0.8",
+                                 "https://www.youtube.com/results?search_query=" + juce::URL::addEscapeChars(query, true) };
+    if (curlProc.start(curlArgs))
+        html = curlProc.readAllProcessOutput();
 #endif
 
     // On Windows (or fallback on macOS), use native juce::URL in-memory streaming

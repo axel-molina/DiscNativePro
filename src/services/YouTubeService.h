@@ -23,6 +23,9 @@ public:
     static void setApiKey(const juce::String& key);
     static bool hasApiKey();
 
+    // Migración única: mueve la key legacy de settings.json al almacén seguro.
+    static void migrateLegacySecret();
+
     // Reproducción automática al cargar un video en bandeja (default: true)
     static bool isVideoAutoplayEnabled();
     static void setVideoAutoplayEnabled(bool enabled);

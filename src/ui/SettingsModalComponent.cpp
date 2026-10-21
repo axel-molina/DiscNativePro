@@ -1,6 +1,7 @@
 #include "SettingsModalComponent.h"
 #include "../services/YouTubeService.h"
 #include "../services/WaveformTheme.h"
+#include "../services/SecretStore.h"
 
 SettingsModalComponent::SettingsModalComponent(AudioEngine& engine, MidiManager& midiMgr, int initialTab)
     : audioEngine(engine), midi(midiMgr), activeTab(initialTab)
@@ -809,6 +810,7 @@ void SettingsModalComponent::setupStreamingTab()
     apiKeyEditor.setColour(juce::TextEditor::backgroundColourId, juce::Colour::fromRGB(17, 19, 26));
     apiKeyEditor.setColour(juce::TextEditor::textColourId, juce::Colours::white);
     apiKeyEditor.setColour(juce::TextEditor::outlineColourId, juce::Colour::fromRGB(38, 43, 58));
+    apiKeyEditor.setPasswordCharacter((juce::juce_wchar)'*');
     apiKeyEditor.setText(YouTubeService::getApiKey(), juce::dontSendNotification);
     bodyContent.addChildComponent(apiKeyEditor);
 
@@ -1471,7 +1473,10 @@ void SettingsModalComponent::updateTabVisibility()
         bool enabled = aiEnabledToggle.getToggleState();
         if (hasKey && enabled)
         {
-            aiStatusBadge.setText(LanguageManager::trUtf8("● Recomendaciones IA Activas (", "● AI Recommendations Active (") + aiProviderCombo.getText() + " / " + aiModelCombo.getText().trim() + ")", juce::dontSendNotification);
+            auto badge = LanguageManager::trUtf8("● Recomendaciones IA Activas (", "● AI Recommendations Active (") + aiProviderCombo.getText() + " / " + aiModelCombo.getText().trim() + ")";
+            if (!SecretStore::isAvailable())
+                badge += LanguageManager::trUtf8(" · guardado local (sin almacén seguro)", " · local storage (no secure store)");
+            aiStatusBadge.setText(badge, juce::dontSendNotification);
             aiStatusBadge.setColour(juce::Label::textColourId, juce::Colour::fromRGB(74, 222, 128));
         }
         else if (hasKey && !enabled)
