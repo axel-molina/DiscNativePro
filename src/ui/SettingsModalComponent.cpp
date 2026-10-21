@@ -449,7 +449,12 @@ void SettingsModalComponent::refreshLanguage()
     downloadsOpenBtn.setText(LanguageManager::trUtf8("Abrir Carpeta", "Open Folder"));
     downloadsResetBtn.setText(LanguageManager::trUtf8("Por defecto", "Default"));
 
-    appInfoLabel.setText(LanguageManager::trUtf8("DiscNativePro DJ Workstation v1.0.0 • Motor C++20 nativo con JUCE 8, CoreAudio y SIMD DSP.", "DiscNativePro DJ Workstation v1.0.0 • Native C++20 engine with JUCE 8, CoreAudio & SIMD DSP."), juce::dontSendNotification);
+    // La versión nunca se hardcodea: se lee de la fuente runtime única
+    // (UpdateService::getCurrentVersion -> JUCEApplication::getApplicationVersion,
+    // alimentada por APP_VERSION en CMake). Un build 1.0.0 muestra 1.0.0; 1.3.0, 1.3.0.
+    const juce::String appVersion = UpdateService::getCurrentVersion();
+    appInfoLabel.setText(LanguageManager::tr("DiscNativePro DJ Workstation v" + appVersion + " • Motor C++20 nativo con JUCE 8, CoreAudio y SIMD DSP.",
+                                             "DiscNativePro DJ Workstation v" + appVersion + " • Native C++20 engine with JUCE 8, CoreAudio & SIMD DSP."), juce::dontSendNotification);
 
     // Tab 1: Dispositivos / Devices
     routingSectionLabel.setText(LanguageManager::trUtf8("Enrutamiento de Salidas de Audio (Pioneer DDJ / Multi-Canal)", "Audio Output Routing (Pioneer DDJ / Multi-Channel)"), juce::dontSendNotification);

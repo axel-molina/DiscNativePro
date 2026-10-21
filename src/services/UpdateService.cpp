@@ -75,6 +75,12 @@ ReleaseItem parseReleaseItem(const juce::var& releaseObj)
 
 juce::String UpdateService::getCurrentVersion()
 {
+    // Fuente runtime única: la versión la decide JUCEApplication
+    // (getApplicationVersion()), alimentada por APP_VERSION en CMake.
+    if (auto* app = juce::JUCEApplicationBase::getInstance())
+        return app->getApplicationVersion();
+
+    // Fallback solo para contextos sin instancia de app (tests/herramientas).
 #ifdef DISCNATIVEPRO_VERSION
     return DISCNATIVEPRO_VERSION;
 #else

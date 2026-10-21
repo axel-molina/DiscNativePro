@@ -155,3 +155,21 @@ Reemplazar la distribución en archivo `.zip` comprimido por un instalador profe
 ## 3. Verificación
 - **Compilación**: `cmake --build build -j 2` completado al 100% con 0 errores y 0 warnings.
 - **Auto-Relaunch**: App relanzada activamente con PID `180`.
+
+---
+
+# Walkthrough — Alineación global de versión
+
+## Objetivo
+Eliminar versiones hardcodeadas y usar la versión calculada por CMake como fuente única para el bundle, la interfaz y el servicio de actualizaciones.
+
+## Cambios
+- CMake deriva `APP_BUNDLE_VERSION` de `APP_VERSION` y lo aplica a los metadatos del bundle.
+- Settings muestra la versión runtime de la aplicación.
+- UpdateService consulta la versión runtime y conserva fallback para contextos sin instancia.
+- El instalador Windows usa `1.3.0` como fallback local y permite inyección desde CI mediante `MyAppVersion`.
+
+## Verificación
+- `cmake --build build --parallel` completado con `[100%] Built target DiscNativePro`.
+- La app Release fue relanzada y quedó activa mediante `pgrep -fl DiscNativePro`.
+- El build emitió warnings preexistentes de JUCE/Harfbuzz, sin errores.

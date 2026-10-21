@@ -26,6 +26,15 @@ if(NOT DEFINED APP_VERSION OR "${APP_VERSION}" STREQUAL "")
 endif()
 message(STATUS "DiscNativePro APP_VERSION: ${APP_VERSION}")
 
+# Versión numérica para metadatos del bundle (CFBundleShortVersionString /
+# VS_VERSION_INFO). git describe puede producir "1.3.0-1-g4dda9cb", que no es
+# válido para el bundle, así que se recorta al prefijo X.Y.Z.
+string(REGEX MATCH "^[0-9]+(\\.[0-9]+){0,2}" APP_BUNDLE_VERSION "${APP_VERSION}")
+if(APP_BUNDLE_VERSION STREQUAL "")
+    set(APP_BUNDLE_VERSION "${PROJECT_VERSION}")
+endif()
+message(STATUS "DiscNativePro bundle version: ${APP_BUNDLE_VERSION}")
+
 include(FetchContent)
 
 # Fetch JUCE 8
@@ -42,6 +51,7 @@ juce_add_gui_app(DiscNativePro
     PRODUCT_NAME "DiscNativePro"
     COMPANY_NAME "DiscPro"
     BUNDLE_ID "com.discpro.discnativepro"
+    VERSION "${APP_BUNDLE_VERSION}"
     ICON_BIG "${CMAKE_CURRENT_SOURCE_DIR}/assets/icon.png"
 )
 
