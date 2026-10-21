@@ -167,7 +167,7 @@ Eliminar versiones hardcodeadas y usar la versión calculada por CMake como fuen
 - CMake deriva `APP_BUNDLE_VERSION` de `APP_VERSION` y lo aplica a los metadatos del bundle.
 - Settings muestra la versión runtime de la aplicación.
 - UpdateService consulta la versión runtime y conserva fallback para contextos sin instancia.
-- El instalador Windows usa `1.3.0` como fallback local y permite inyección desde CI mediante `MyAppVersion`.
+- El instalador Windows exige la inyección de `MyAppVersion` desde el release build.
 
 ## Verificación
 - `cmake --build build --parallel` completado con `[100%] Built target DiscNativePro`.
@@ -176,7 +176,7 @@ Eliminar versiones hardcodeadas y usar la versión calculada por CMake como fuen
 
 ## Correcciones post-QA
 - El fallback de CMake sin Git usa `PROJECT_VERSION`, evitando una versión runtime antigua.
-- Se eliminaron los fallbacks runtime `1.0.0-dev`; `DISCNATIVEPRO_VERSION` es obligatorio y proviene de `APP_VERSION`.
+- Se eliminaron los fallbacks runtime obsoletos; `DISCNATIVEPRO_VERSION` es obligatorio y proviene de `APP_VERSION`.
 - Inno Setup ahora exige `MyAppVersion` inyectado por el release build, evitando instaladores con versión divergente.
 - Build final Release: `[100%] Built target DiscNativePro`; app relanzada con PID `67782`.
 - CI normaliza referencias no numéricas al `PROJECT_VERSION` vigente y CMake normaliza `APP_VERSION` antes de propagarla a runtime y bundle.
