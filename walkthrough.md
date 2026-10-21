@@ -155,3 +155,42 @@ Reemplazar la distribución en archivo `.zip` comprimido por un instalador profe
 ## 3. Verificación
 - **Compilación**: `cmake --build build -j 2` completado al 100% con 0 errores y 0 warnings.
 - **Auto-Relaunch**: App relanzada activamente con PID `180`.
+
+---
+
+# Walkthrough — Selector de vista 2 Bandejas / Ondas (Waves)
+
+## Objetivo
+Convertir el badge estático "2 Bandejas" del top bar en un selector bilingüe de vista (2 Bandejas por defecto / Ondas-Waves) con un nuevo modo de vista de ondas a ancho completo, persistido en settings.json y con conmutación en caliente.
+
+## Cambios
+
+### [NEW] `src/ui/WavesViewComponent.h` / `.cpp`
+- `WavesTrackStrip`: franja por deck con badge (BANDEJA 1/2), título, artista, badge de key (color via `KeyDetector::getCamelotColour`), BPM, tiempo "MM:SS.d / MM:SS.d" y pitch, cada una con su `OverviewWaveform` enlazada al mismo `DeckPlayer`.
+- `WavesViewComponent`: apila las dos franjas a ancho completo de la app; expone `updateFromDecks(deck1, deck2)` con un POD `WavesTrackInfo` relleno desde `MainComponent::timerCallback` (30Hz).
+
+### [MODIFY] `src/ui/TopBarComponent.h` / `.cpp`
+- Enum `ViewMode { TwoDecks, Waves }`; botones segmentados `viewDecksButton` / `viewWavesButton` reemplazan al `layoutBadge`.
+- `setViewMode(mode, sendCallback)` + callback `onViewModeChanged`.
+
+### [MODIFY] `src/ui/DeckComponent.h` / `.cpp`
+- `setWavesMode(bool)`: oculta header/overview/jog/videoPlayer/art; `resizedWavesMode()` coloca columna de pitch + 3 filas uniformes (transporte, hot cues, loop+SYNC/KEY).
+- Visibilidad del jog centralizada en `updateJogVisibility()`; getters nuevos `getCurrentSeconds/getTotalSeconds/getPitchOffsetPercent`.
+
+### [MODIFY] `src/ui/MainComponent.h` / `.cpp`
+- Estado del modo + persistencia `"viewMode": "decks"|"waves"` en `AudioEngine::getSettingsFile()` (misma semántica de preservar JSON que `LanguageManager`).
+- Rama de layout de ondas en `resized()`: banda de ondas `jlimit(116,168, area.getHeight()/4)` arriba a ancho completo, luego deck1|mixer|deck2; factor de alto de librería 0.26 (min 150) solo en modo ondas.
+- `timerCallback` actualiza los strips a 30Hz desde ambos decks.
+
+### [MODIFY] `CMakeLists.txt`
+- Registrados `WavesViewComponent.h/.cpp` (~línea 106).
+
+## Verificación
+- **Compilación**: `cmake --build build` (Release) → 0 errores / 0 warnings en los 4 .cpp tocados (solo warnings preexistentes de harfbuzz en terceros).
+- **Auto-Relaunch**: `pkill -f DiscNativePro; open build/DiscNativePro_artefacts/Release/DiscNativePro.app` → PID activo confirmado con `pgrep`.
+- **Conmutación en caliente**: click en "Ondas" → mismo PID, layout de ondas activo (capturas); click en "2 Bandejas" → mismo PID, layout original restaurado idéntico.
+- **Persistencia**: tras conmutar a Ondas, `~/Library/DiscNativePro/settings.json` contiene `"viewMode": "waves"`; relanzamiento completo (nuevo PID) abre directamente en modo Ondas; al volver a "2 Bandejas" el archivo queda `"viewMode": "decks"`.
+- **Capturas** (modo Ondas, app en vivo):
+  - `docs/screenshots/waves-view-1360x870.png` (contenido 1360x870)
+  - `docs/screenshots/waves-view-1280x700.png` (contenido 1280x700; el layout mantiene mixer y strips completos)
+- **2 Bandejas idéntico**: captura post-retorno coincide con el layout original (jogs, covers, mixer, librería sin cambios).

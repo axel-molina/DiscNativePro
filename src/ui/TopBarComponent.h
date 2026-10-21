@@ -23,17 +23,24 @@ public:
     void setSmpActive(bool active);
     void setUpdateAvailable(bool available);
 
+    // Selector de vista: 2 Bandejas (default) u Ondas/Waves, bilingüe y en caliente
+    enum class ViewMode { TwoDecks, Waves };
+    ViewMode getViewMode() const { return currentViewMode; }
+    void setViewMode(ViewMode mode, bool sendCallback = true);
+
     std::function<void()> onRecClicked;
     std::function<void()> onFxClicked;
     std::function<void()> onSmpClicked;
     std::function<void()> onSettingsClicked;
     std::function<void()> onFullscreenClicked;
     std::function<void()> onUpdateClicked;
+    std::function<void(ViewMode)> onViewModeChanged;
 
 private:
     void updateClock();
     void updateMemoryUsage();
     double getProcessMemoryMB();
+    void updateViewSelectorColours();
 
     // Left buttons
     DjButton recButton;
@@ -46,10 +53,12 @@ private:
     // Right elements
     juce::Label ramLabel;
     juce::Label clockLabel;
-    DjButton layoutBadge;
+    DjButton viewDecksButton;
+    DjButton viewWavesButton;
     DjButton updateButton;
     DjButton settingsButton;
     DjButton fullscreenButton;
+    ViewMode currentViewMode { ViewMode::TwoDecks };
 
     bool isRecording { false };
     double currentRecSeconds { 0.0 };

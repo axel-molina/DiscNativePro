@@ -105,6 +105,8 @@ target_sources(DiscNativePro
         src/ui/JogWheel.cpp
         src/ui/OverviewWaveform.h
         src/ui/OverviewWaveform.cpp
+        src/ui/WavesViewComponent.h
+        src/ui/WavesViewComponent.cpp
         src/ui/VerticalWaveform.h
         src/ui/VerticalWaveform.cpp
         src/ui/ChannelStripComponent.h

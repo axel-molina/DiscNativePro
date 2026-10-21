@@ -63,16 +63,18 @@ TopBarComponent::TopBarComponent()
     ramLabel.setTooltip("Consumo de memoria RAM de DiscNativePro en tiempo real");
     addAndMakeVisible(ramLabel);
 
-    layoutBadge.setIcon(LucideIcons::IconType::CircleDot, 12.0f);
-    layoutBadge.setText("2 Decks");
-    layoutBadge.setFontSize(10.5f);
-    layoutBadge.setCornerRadius(6.0f);
-    layoutBadge.setCustomColours(juce::Colour::fromRGB(22, 24, 32),
-                                juce::Colour::fromRGB(96, 165, 250),
-                                juce::Colour::fromRGB(96, 165, 250),
-                                juce::Colour::fromRGB(37, 40, 51));
-    layoutBadge.setInterceptsMouseClicks(false, false);
-    addAndMakeVisible(layoutBadge);
+    // Selector de vista segmentado: 2 Bandejas (default) | Ondas / Waves
+    viewDecksButton.setFontSize(10.5f);
+    viewDecksButton.setCornerRadius(6.0f);
+    viewDecksButton.onClick = [this]() { setViewMode(ViewMode::TwoDecks, true); };
+    addAndMakeVisible(viewDecksButton);
+
+    viewWavesButton.setFontSize(10.5f);
+    viewWavesButton.setCornerRadius(6.0f);
+    viewWavesButton.onClick = [this]() { setViewMode(ViewMode::Waves, true); };
+    addAndMakeVisible(viewWavesButton);
+
+    updateViewSelectorColours();
 
     settingsButton.setIcon(LucideIcons::IconType::Settings, 15.0f);
     settingsButton.setCustomColours(juce::Colour::fromRGB(24, 26, 32),
@@ -126,8 +128,39 @@ void TopBarComponent::refreshLanguage()
     fullscreenButton.setTooltip(LanguageManager::trUtf8("Pantalla Completa", "Fullscreen"));
     recButton.setTooltip(LanguageManager::trUtf8("Grabar Sesión (⌘R / Ctrl+R)", "Record Session (⌘R / Ctrl+R)"));
     fxButton.setTooltip(LanguageManager::trUtf8("Panel de Efectos (FX)", "Effects Panel (FX)"));
-    layoutBadge.setText(LanguageManager::trUtf8("2 Bandejas", "2 Decks"));
+    viewDecksButton.setText(LanguageManager::trUtf8("2 Bandejas", "2 Decks"));
+    viewDecksButton.setTooltip(LanguageManager::trUtf8("Vista clásica de 2 platos", "Classic dual-platter view"));
+    viewWavesButton.setText(LanguageManager::trUtf8("Ondas", "Waves"));
+    viewWavesButton.setTooltip(LanguageManager::trUtf8("Vista de ondas a todo el ancho", "Full-width waves view"));
     updateButton.setTooltip(LanguageManager::trUtf8("Nueva versión disponible — clic para ver", "New version available — click to view"));
+}
+
+void TopBarComponent::setViewMode(ViewMode mode, bool sendCallback)
+{
+    currentViewMode = mode;
+    updateViewSelectorColours();
+
+    if (sendCallback && onViewModeChanged)
+        onViewModeChanged(mode);
+}
+
+void TopBarComponent::updateViewSelectorColours()
+{
+    const bool decksActive = (currentViewMode == ViewMode::TwoDecks);
+    const auto activeBg = juce::Colour::fromRGB(37, 99, 235);
+    const auto activeBorder = juce::Colour::fromRGB(96, 165, 250);
+    const auto idleBg = juce::Colour::fromRGB(22, 24, 32);
+    const auto idleText = juce::Colour::fromRGB(142, 149, 165);
+    const auto idleBorder = juce::Colour::fromRGB(37, 40, 51);
+
+    viewDecksButton.setCustomColours(decksActive ? activeBg : idleBg,
+                                     decksActive ? juce::Colours::white : idleText,
+                                     decksActive ? juce::Colours::white : idleText,
+                                     decksActive ? activeBorder : idleBorder);
+    viewWavesButton.setCustomColours(decksActive ? idleBg : activeBg,
+                                     decksActive ? idleText : juce::Colours::white,
+                                     decksActive ? idleText : juce::Colours::white,
+                                     decksActive ? idleBorder : activeBorder);
 }
 
 void TopBarComponent::setUpdateAvailable(bool available)
@@ -309,7 +342,10 @@ void TopBarComponent::resized()
         updateButton.setBounds(area.removeFromRight(92).reduced(0, 2));
         area.removeFromRight(6);
     }
-    layoutBadge.setBounds(area.removeFromRight(95).reduced(0, 3));
+    // Selector de vista segmentado (2 Bandejas | Ondas)
+    auto viewSelector = area.removeFromRight(150);
+    viewDecksButton.setBounds(viewSelector.removeFromLeft(86).reduced(1, 3));
+    viewWavesButton.setBounds(viewSelector.reduced(1, 3));
     area.removeFromRight(6);
     clockLabel.setBounds(area.removeFromRight(80).reduced(0, 3));
     area.removeFromRight(6);
