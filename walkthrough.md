@@ -155,3 +155,55 @@ Reemplazar la distribución en archivo `.zip` comprimido por un instalador profe
 ## 3. Verificación
 - **Compilación**: `cmake --build build -j 2` completado al 100% con 0 errores y 0 warnings.
 - **Auto-Relaunch**: App relanzada activamente con PID `180`.
+
+---
+
+# Walkthrough — Remediación de seguridad CRÍT-01 / ALT-01 (eliminación de shell e integración de secretos)
+
+## 1. Objetivo
+Eliminar la ejecución de comandos mediante shell (`system`/`popen`) en el flujo de red y proteger las API keys (IA y YouTube) sin romper proveedor, modelo, persistencia, reintento ni fallback. Ver informe completo en `security_audit.md`.
+
+## 2. Cambios
+
+### [NEW] `src/services/SecretStore.h/.cpp`
+- Interfaz: `read`, `write`, `remove`, `isAvailable`.
+- macOS: Keychain (Security.framework). Windows: Credential Manager (`advapi32`). Linux/otros: `secrets.json` con permisos `0600`.
+- `isAvailable()` → `true` en macOS/Windows, `false` cuando solo hay fallback local.
+
+### [MODIFY] `src/services/AIService.h/.cpp`
+- Sustituido `curl` + `system()` por `juce::URL::createInputStream` con POST, timeout 15 s, headers separados y `withNumRedirectsToFollow(3)`.
+- Gemini pasa de `?key=` en URL a header `x-goog-api-key`.
+- `getApiKey`/`setApiKey` leen/escriben `SecretStore`. Nuevo `migrateLegacySecrets()` (invocado en el arranque desde `MainComponent`) migra de una vez **todos** los proveedores (y `YouTubeService::migrateLegacySecret()` la key de YouTube): cada key se elimina de `settings.json` solo tras confirmar la escritura en el almacén seguro.
+- Añadido `isValidModelName()` (letras/dígitos y `- _ . / :`): modelo inválido → `getDefaultModel`. Permite custom `provider/model`.
+- Eliminados `<cstdio>` y los `#define popen/_popen`.
+
+### [MODIFY] `src/services/YouTubeService.cpp`
+- `downloadYouTubePage()` y `searchPublic()`: `popen(curl ...)` → `juce::ChildProcess` con `StringArray` de argumentos (sin shell, sin quoting manual).
+- Key de YouTube migrada a `SecretStore` (`account = "youtube"`).
+- Eliminado `<cstdio>`.
+
+### [MODIFY] `src/services/ThumbnailCache.cpp`
+- `system(curl ...)` → `juce::ChildProcess` con args separados.
+- `system(sips ...)` → `juce::ChildProcess` con args separados (sin redirección de shell).
+
+### [MODIFY] `src/ui/SettingsModalComponent.cpp`
+- `apiKeyEditor` (YouTube) se muestra como contraseña (`setPasswordCharacter('*')`).
+- El badge de estado de IA añade `· guardado local (sin almacén seguro)` cuando `SecretStore::isAvailable()` es `false`.
+
+### [MODIFY] `CMakeLists.txt`
+- macOS: `-framework Security`. Windows: `advapi32`.
+
+### Limpieza
+- Eliminados duplicados de iCloud `src/services/YouTubeAudioDownloader 2.cpp/.h` y carpetas `build/**/" 2"`.
+
+## 3. Verificación
+- **Compilación**: `cmake --build build -j 2` → 0 errores; 0 warnings en archivos tocados (los warnings restantes son preexistentes en `AsyncFolderScanner.cpp`/`UsbLibraryView.cpp`).
+- **Shell eliminado**: `grep -rn "\bsystem(\|popen(\|_popen(" src/` → 0 resultados.
+- **Correcciones de compilación aplicadas a `SecretStore.cpp`** (escrito por el agente previo sin compilar): `json.getProperty(account, juce::var())` en lugar de `json[account]`, e `#include <sys/stat.h>` en la rama macOS.
+- **Nota de entorno**: la caché de CMake quedó inconsistente (JUCE resuelto desde `/private/tmp/discnativepro-juce` vs `build/_deps/juce-src`); se regeneró la subcaché de `tools` y se reconfiguró.
+- **Auto-Relaunch**: `pkill -f DiscNativePro; open build/DiscNativePro_artefacts/Release/DiscNativePro.app` → PID activo.
+- **Prueba funcional (mini-app JUCE con el patrón exacto)**: `ChildProcess`+curl devuelve HTML de YouTube (`len=1.595.822`, `hasPromptData=1`, `exit=0`); arg con `; touch /tmp/pwned` → `probeCreated=0` (sin shell, inyección neutralizada).
+- **Prueba en vivo (app real)**:
+  - Vista YouTube → buscar `daft punk` → **"Mostrando 19 videos encontrados en YouTube"**; fila 1 = "Daft Punk - Around The World (Official Music Video)" (4:02).
+  - Miniaturas: 3 jpg nuevos en `~/Library/DiscNativePro/Thumbnails/` (p. ej. `FGBhQbmPwH8.jpg`, JPEG 320x180 válido).
+  - Migración: `settings.json` quedó **sin `aiApiKey_*`**; `secrets.json` no existe (usa Keychain). Pestaña IA muestra **"● Recomendaciones IA Activas (OpenRouter / openai/gpt-4o-mini)"** → keys legibles desde Keychain.
