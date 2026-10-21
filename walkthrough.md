@@ -194,3 +194,27 @@ Convertir el badge estático "2 Bandejas" del top bar en un selector bilingüe d
   - `docs/screenshots/waves-view-1360x870.png` (contenido 1360x870)
   - `docs/screenshots/waves-view-1280x700.png` (contenido 1280x700; el layout mantiene mixer y strips completos)
 - **2 Bandejas idéntico**: captura post-retorno coincide con el layout original (jogs, covers, mixer, librería sin cambios).
+
+---
+
+# QA independiente — Selector de vista 2 Bandejas / Ondas
+
+Verificación ejecutada por separado de la implementación, contra los criterios de aceptación de la tarea `task_f7307607a3fd` (run `run_eb0c05079cc6`).
+
+## Estático
+- **Alcance del diff**: solo `src/ui/{TopBar,Main,Deck,WavesView}Component.*`, `CMakeLists.txt`, `docs/screenshots/` y este documento. `AudioEngine`, `MidiManager`/MIDI Learn, biblioteca, AutoMix y grabación intactos.
+- **Shell prohibido**: `grep -rn "\bsystem(\|popen(\|_popen(" src/` → 0 resultados.
+- **Sin asignaciones en tiempo real**: ninguna línea añadida por el diff contiene `new`/`malloc`/`push_back` dentro de callbacks de audio (la única asignación nueva, `new DynamicObject`, es en el guardado de settings desde el hilo de UI).
+
+## Compilación
+- Recompilación forzada de los 4 `.cpp` tocados (`touch` + `cmake --build build -j 2`, Release): **4 archivos compilados, exit 0, 0 errores y 0 warnings** propios (solo warnings preexistentes de terceros).
+
+## Funcional (app en vivo, clics reales con `cliclick`)
+- **Conmutación en caliente**: clic en "2 Bandejas" → layout clásico restaurado (platos, covers, mixer) en el **mismo PID**; clic en "Ondas" → vista de ondas activa, también sin reiniciar.
+- **Datos de las tiras**: con pista cargada (BAD BUNNY x JHAY CORTES – DAÑA…), la tira de Bandeja 2 muestra exactamente los mismos datos que el deck: título, artista, key `9A / Em` (color Camelot), BPM `110.0`, tiempo `00:00.x / 03:34.2` y pitch `+0.0%`, con la OverviewWaveform a todo el ancho y sin platos ni vinilos.
+- **Persistencia (escritura)**: `settings.json` conmuta `waves → decks → waves` con cada clic en el selector.
+- **Persistencia (lectura)**: relanzamiento completo (`pkill` + `open`, PID nuevo 96021) abre directamente en modo Ondas con `"viewMode": "waves"`.
+- **Capturas de aceptación**: `docs/screenshots/waves-view-1360x870.png` y `waves-view-1280x700.png` validadas visualmente (dimensiones exactas, modo Ondas correcto en ambas).
+
+## Resultado
+**APROBADO** — los 6 criterios observables de aceptación se cumplen. Nota menor: la rama se nombró `axel-molina/waves-view` en lugar de `feature/waves-view` (cosmético, sin impacto).
