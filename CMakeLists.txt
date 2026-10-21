@@ -19,7 +19,7 @@ if(NOT DEFINED APP_VERSION OR "${APP_VERSION}" STREQUAL "")
                     OUTPUT_STRIP_TRAILING_WHITESPACE
                     ERROR_QUIET)
     if(GIT_DESCRIBE STREQUAL "")
-        set(APP_VERSION "1.0.0-dev")
+        set(APP_VERSION "${PROJECT_VERSION}")
     else()
         string(REGEX REPLACE "^v" "" APP_VERSION "${GIT_DESCRIBE}")
     endif()

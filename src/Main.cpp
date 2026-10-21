@@ -1,17 +1,20 @@
 #include <juce_gui_extra/juce_gui_extra.h>
 #include "ui/MainComponent.h"
 
+// Fuente única de versión: CMake inyecta DISCNATIVEPRO_VERSION desde APP_VERSION
+// en target_compile_definitions. Si falta, falla explícitamente en compilación en
+// vez de mostrar una versión hardcodeada falsa.
+#ifndef DISCNATIVEPRO_VERSION
+    #error "DISCNATIVEPRO_VERSION no definido: CMake debe inyectarlo desde APP_VERSION (target_compile_definitions)."
+#endif
+
 class DiscNativeProApplication : public juce::JUCEApplication
 {
 public:
     DiscNativeProApplication() {}
 
     const juce::String getApplicationName() override       { return "DiscNativePro"; }
-#ifdef DISCNATIVEPRO_VERSION
     const juce::String getApplicationVersion() override    { return DISCNATIVEPRO_VERSION; }
-#else
-    const juce::String getApplicationVersion() override    { return "1.0.0-dev"; }
-#endif
     bool moreThanOneInstanceAllowed() override             { return true; }
 
     void initialise(const juce::String& commandLineParameters) override

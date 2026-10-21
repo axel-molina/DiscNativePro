@@ -2,9 +2,7 @@
 ; Produces DiscNativePro-Windows-x64-Setup.exe
 
 #ifndef MyAppVersion
-; Fallback local: la fuente de verdad es el tag de release (v1.3.0 -> 1.3.0),
-; inyectado por CI con `iscc /DMyAppVersion=...` en .github/workflows/release.yml.
-#define MyAppVersion "1.3.0"
+#error MyAppVersion must be supplied by the release build with /DMyAppVersion=...
 #endif
 
 #define MyAppName "DiscNativePro"

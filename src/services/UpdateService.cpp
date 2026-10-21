@@ -80,12 +80,7 @@ juce::String UpdateService::getCurrentVersion()
     if (auto* app = juce::JUCEApplicationBase::getInstance())
         return app->getApplicationVersion();
 
-    // Fallback solo para contextos sin instancia de app (tests/herramientas).
-#ifdef DISCNATIVEPRO_VERSION
     return DISCNATIVEPRO_VERSION;
-#else
-    return "1.0.0-dev";
-#endif
 }
 
 int UpdateService::compareVersions(const juce::String& a, const juce::String& b)

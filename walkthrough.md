@@ -173,3 +173,9 @@ Eliminar versiones hardcodeadas y usar la versión calculada por CMake como fuen
 - `cmake --build build --parallel` completado con `[100%] Built target DiscNativePro`.
 - La app Release fue relanzada y quedó activa mediante `pgrep -fl DiscNativePro`.
 - El build emitió warnings preexistentes de JUCE/Harfbuzz, sin errores.
+
+## Correcciones post-QA
+- El fallback de CMake sin Git usa `PROJECT_VERSION`, evitando una versión runtime antigua.
+- Se eliminaron los fallbacks runtime `1.0.0-dev`; `DISCNATIVEPRO_VERSION` es obligatorio y proviene de `APP_VERSION`.
+- Inno Setup ahora exige `MyAppVersion` inyectado por el release build, evitando instaladores con versión divergente.
+- Build final Release: `[100%] Built target DiscNativePro`; app relanzada con PID `67782`.
