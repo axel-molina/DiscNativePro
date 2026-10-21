@@ -115,7 +115,7 @@ jobs:
         run: |
           VER="${GITHUB_REF_NAME}"; VER="${VER#v}"
           PROJECT_VERSION="$(sed -nE 's/^project\(DiscNativePro VERSION ([0-9.]+).*/\1/p' CMakeLists.txt | head -1)"
-          case "$VER" in [0-9]*) VER="${VER%%-*}";; *) VER="$PROJECT_VERSION";; esac
+          if [[ "$VER" =~ ^([0-9]+(\.[0-9]+){0,2}) ]]; then VER="${BASH_REMATCH[1]}"; else VER="$PROJECT_VERSION"; fi
           cmake -B build -G "Ninja" -DCMAKE_BUILD_TYPE=Release -DAPP_VERSION="$VER"
 
       - name: Build DiscNativePro (Release)
@@ -154,7 +154,7 @@ jobs:
         run: |
           VER="${GITHUB_REF_NAME}"; VER="${VER#v}"
           PROJECT_VERSION="$(sed -nE 's/^project\(DiscNativePro VERSION ([0-9.]+).*/\1/p' CMakeLists.txt | head -1)"
-          case "$VER" in [0-9]*) VER="${VER%%-*}";; *) VER="$PROJECT_VERSION";; esac
+          if [[ "$VER" =~ ^([0-9]+(\.[0-9]+){0,2}) ]]; then VER="${BASH_REMATCH[1]}"; else VER="$PROJECT_VERSION"; fi
           cmake -B build -DCMAKE_BUILD_TYPE=Release -DAPP_VERSION="$VER"
 
       - name: Build DiscNativePro (Release)
