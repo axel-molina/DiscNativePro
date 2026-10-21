@@ -180,3 +180,10 @@ Eliminar versiones hardcodeadas y usar la versión calculada por CMake como fuen
 - Inno Setup ahora exige `MyAppVersion` inyectado por el release build, evitando instaladores con versión divergente.
 - Build final Release: `[100%] Built target DiscNativePro`; app relanzada con PID `67782`.
 - CI normaliza referencias no numéricas al `PROJECT_VERSION` vigente y CMake normaliza `APP_VERSION` antes de propagarla a runtime y bundle.
+
+## Re-verificación QA (build aislado Release)
+- Build aislado en el worktree (JUCE 8.0.6 clonado en temp, `FETCHCONTENT_SOURCE_DIR_JUCE` propio; sin rutas del checkout principal): `[100%] Built target DiscNativePro`, 0 errores y 0 warnings en ficheros propios (recompilados Main.cpp y UpdateService.cpp a propósito; solo hay warnings de Harfbuzz dentro de JUCE).
+- `Info.plist` del bundle: `CFBundleShortVersionString` y `CFBundleVersion` = `1.3.0`; el binario embebe `DISCNATIVEPRO_VERSION="1.3.0"` (normalizado por CMake desde `git describe v1.3.0-8-g8ae8bbf`).
+- Grep final: sin `1.0.0-dev` ni `v1.0.0` hardcodeados en `src/` ni `installer/` (los textos restantes de versiones en walkthrough son históricos/documentales).
+- Auto-Relaunch: `pkill` + `open build/DiscNativePro_artefacts/Release/DiscNativePro.app` → `pgrep` PID `67942` activo.
+- `src/audio/AudioEngine.cpp` no fue modificado en esta rama (fuera de alcance).
