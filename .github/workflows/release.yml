@@ -33,7 +33,8 @@ jobs:
         run: |
           $ver = "${{ github.ref_name }}"
           if ($ver.StartsWith("v")) { $ver = $ver.Substring(1) }
-          if ($ver -match '^([0-9]+(?:\.[0-9]+){0,2})') { $ver = $Matches[1] } else { $ver = "1.3.0" }
+          $projectVersion = (Select-String -Path CMakeLists.txt -Pattern 'project\(DiscNativePro VERSION ([0-9.]+)' | Select-Object -First 1).Matches.Groups[1].Value
+          if ($ver -match '^([0-9]+(?:\.[0-9]+){0,2})') { $ver = $Matches[1] } else { $ver = $projectVersion }
           cmake -B build -DCMAKE_BUILD_TYPE=Release -DAPP_VERSION="$ver" -DJUCE_WEBVIEW2_PACKAGE_LOCATION="${{ github.workspace }}/packages"
 
       - name: Build DiscNativePro (Release)
@@ -67,7 +68,8 @@ jobs:
 
           $ver = "${{ github.ref_name }}"
           if ($ver.StartsWith("v")) { $ver = $ver.Substring(1) }
-          if ($ver -match '^([0-9]+(?:\.[0-9]+){0,2})') { $ver = $Matches[1] } else { $ver = "1.3.0" }
+          $projectVersion = (Select-String -Path CMakeLists.txt -Pattern 'project\(DiscNativePro VERSION ([0-9.]+)' | Select-Object -First 1).Matches.Groups[1].Value
+          if ($ver -match '^([0-9]+(?:\.[0-9]+){0,2})') { $ver = $Matches[1] } else { $ver = $projectVersion }
 
           iscc "/DMyAppVersion=$ver" "installer\windows\installer.iss"
 
@@ -112,7 +114,8 @@ jobs:
       - name: Configure CMake
         run: |
           VER="${GITHUB_REF_NAME}"; VER="${VER#v}"
-          case "$VER" in [0-9]*) VER="${VER%%-*}";; *) VER="1.3.0";; esac
+          PROJECT_VERSION="$(sed -nE 's/^project\(DiscNativePro VERSION ([0-9.]+).*/\1/p' CMakeLists.txt | head -1)"
+          case "$VER" in [0-9]*) VER="${VER%%-*}";; *) VER="$PROJECT_VERSION";; esac
           cmake -B build -G "Ninja" -DCMAKE_BUILD_TYPE=Release -DAPP_VERSION="$VER"
 
       - name: Build DiscNativePro (Release)
@@ -150,7 +153,8 @@ jobs:
       - name: Configure CMake
         run: |
           VER="${GITHUB_REF_NAME}"; VER="${VER#v}"
-          case "$VER" in [0-9]*) VER="${VER%%-*}";; *) VER="1.3.0";; esac
+          PROJECT_VERSION="$(sed -nE 's/^project\(DiscNativePro VERSION ([0-9.]+).*/\1/p' CMakeLists.txt | head -1)"
+          case "$VER" in [0-9]*) VER="${VER%%-*}";; *) VER="$PROJECT_VERSION";; esac
           cmake -B build -DCMAKE_BUILD_TYPE=Release -DAPP_VERSION="$VER"
 
       - name: Build DiscNativePro (Release)
