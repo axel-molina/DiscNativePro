@@ -24,15 +24,18 @@ if(NOT DEFINED APP_VERSION OR "${APP_VERSION}" STREQUAL "")
         string(REGEX REPLACE "^v" "" APP_VERSION "${GIT_DESCRIBE}")
     endif()
 endif()
+
+string(REGEX MATCH "^[0-9]+(\\.[0-9]+){0,2}" APP_VERSION_NORMALIZED "${APP_VERSION}")
+if(APP_VERSION_NORMALIZED STREQUAL "")
+    set(APP_VERSION_NORMALIZED "${PROJECT_VERSION}")
+endif()
+set(APP_VERSION "${APP_VERSION_NORMALIZED}")
 message(STATUS "DiscNativePro APP_VERSION: ${APP_VERSION}")
 
 # Versión numérica para metadatos del bundle (CFBundleShortVersionString /
 # VS_VERSION_INFO). git describe puede producir "1.3.0-1-g4dda9cb", que no es
 # válido para el bundle, así que se recorta al prefijo X.Y.Z.
-string(REGEX MATCH "^[0-9]+(\\.[0-9]+){0,2}" APP_BUNDLE_VERSION "${APP_VERSION}")
-if(APP_BUNDLE_VERSION STREQUAL "")
-    set(APP_BUNDLE_VERSION "${PROJECT_VERSION}")
-endif()
+set(APP_BUNDLE_VERSION "${APP_VERSION}")
 message(STATUS "DiscNativePro bundle version: ${APP_BUNDLE_VERSION}")
 
 include(FetchContent)

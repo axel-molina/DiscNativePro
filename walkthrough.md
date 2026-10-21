@@ -179,3 +179,4 @@ Eliminar versiones hardcodeadas y usar la versión calculada por CMake como fuen
 - Se eliminaron los fallbacks runtime `1.0.0-dev`; `DISCNATIVEPRO_VERSION` es obligatorio y proviene de `APP_VERSION`.
 - Inno Setup ahora exige `MyAppVersion` inyectado por el release build, evitando instaladores con versión divergente.
 - Build final Release: `[100%] Built target DiscNativePro`; app relanzada con PID `67782`.
+- CI normaliza referencias no numéricas al `PROJECT_VERSION` vigente y CMake normaliza `APP_VERSION` antes de propagarla a runtime y bundle.
