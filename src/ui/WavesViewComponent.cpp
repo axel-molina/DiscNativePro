@@ -22,7 +22,8 @@ void formatStripTime(double seconds, char* buffer, size_t bufferSize)
 // ============================== WavesTrackStrip ==============================
 
 WavesTrackStrip::WavesTrackStrip(int deckNum, DeckPlayer& player, juce::Colour deckAccent)
-    : deckIndex(deckNum), accent(deckAccent), waveform(player, deckAccent)
+    : deckIndex(deckNum), accent(deckAccent),
+      scrollWave(player, deckAccent), overviewWaveform(player, deckAccent)
 {
     deckBadge.setFont(juce::FontOptions(9.5f, juce::Font::bold));
     deckBadge.setColour(juce::Label::textColourId, accent);
@@ -69,7 +70,8 @@ WavesTrackStrip::WavesTrackStrip(int deckNum, DeckPlayer& player, juce::Colour d
     pitchLabel.setJustificationType(juce::Justification::centred);
     addAndMakeVisible(pitchLabel);
 
-    addAndMakeVisible(waveform);
+    addAndMakeVisible(scrollWave);
+    addAndMakeVisible(overviewWaveform);
 
     refreshLanguage();
 }
@@ -205,8 +207,12 @@ void WavesTrackStrip::resized()
 
     area.removeFromTop(2);
 
-    // 2. Onda a todo el ancho de la tira
-    waveform.setBounds(area);
+    // 2. Overview fino de contexto (posición en la canción, clicable)
+    overviewWaveform.setBounds(area.removeFromTop(16));
+    area.removeFromTop(2);
+
+    // 3. Wave principal scrolling (±3s, playhead centrado): precisión de picos
+    scrollWave.setBounds(area);
 }
 
 // ============================= WavesViewComponent =============================

@@ -2,6 +2,7 @@
 
 #include <juce_gui_basics/juce_gui_basics.h>
 #include "OverviewWaveform.h"
+#include "DeckScrollWaveform.h"
 #include "../audio/DeckPlayer.h"
 #include "../services/LanguageManager.h"
 
@@ -49,7 +50,7 @@ public:
     void itemDragExit(const SourceDetails& dragSourceDetails) override;
     void itemDropped(const SourceDetails& dragSourceDetails) override;
 
-    OverviewWaveform& getWaveform() { return waveform; }
+    OverviewWaveform& getWaveform() { return overviewWaveform; }
 
 private:
     int deckIndex;
@@ -64,7 +65,9 @@ private:
     juce::Label bpmLabel;
     juce::Label timeLabel;
     juce::Label pitchLabel;
-    OverviewWaveform waveform;
+    // Wave principal scrolling (±3s, precisión de picos) + overview fino de contexto
+    DeckScrollWaveform scrollWave;
+    OverviewWaveform overviewWaveform;
     juce::String lastKeyText;
     juce::Colour lastKeyColour { juce::Colour::fromRGB(142, 149, 165) };
 

@@ -379,3 +379,34 @@ administrador de archivos.
   franjas altas con datos y ondas de ambas bandejas; faders con separador.
 - **2 Bandejas idéntico** (todo ramificado por `wavesMode`).
 - **Compilación**: `cmake --build build` (Release) → 0 errores / 0 warnings en archivos tocados.
+
+---
+
+# Ajuste 6 — Wave scrolling con precisión de picos en las tiras (modo Ondas)
+
+## Objetivo
+La onda completa (overview) comprime los picos hasta hacerlos ilegibles para mezclar. Las
+pasas a un **wave scrolling** como el central de 2 Bandejas (ventana ±3s, playhead centrado,
+resolución fina de transientes), conservando una **tira overview fina** de contexto con la
+posición de reproducción, y con la **cuadrícula de beats al BPM real** de cada pista.
+
+## Cambios
+### [NEW] `src/ui/DeckScrollWaveform.h` / `.cpp`
+- Wave scrolling de una bandeja: timer 60Hz, ventana ±3s, barras multibanda desde la línea
+  base con `WaveformTheme` (mismo estilo que el wave central de 2 Bandejas), cuadrícula de
+  beats calculada con `DeckPlayer::getBpm()` (fallback 124), playhead acentado centrado y
+  seek por click/drag sobre la onda.
+
+### [MODIFY] `src/ui/WavesViewComponent.h` / `.cpp`
+- `WavesTrackStrip`: fila de datos → **overview fino (16px, clicable)** → **wave scrolling**
+  (resto del alto). Se mantiene el drag & drop y los datos de pista.
+
+### [MODIFY] `CMakeLists.txt`
+- Registrados `DeckScrollWaveform.h/.cpp`.
+
+## Verificación (app en vivo, capturas)
+- Tiras con pistas cargadas: wave scrolling con picos finos visibles, cuadrícula de beats,
+  playhead centrado; overview fino con marcador de posición (~30% con 00:30/03:33).
+- Datos de pista, drop targets y 2 Bandejas sin cambios.
+- **Compilación**: `cmake --build build` (Release) → 0 errores / 0 warnings en archivos nuevos
+  (warnings mostrados son preexistentes de `SoundCloudService`/`AsyncFolderScanner`/`UsbLibraryView`).

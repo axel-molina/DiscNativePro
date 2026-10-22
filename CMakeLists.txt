@@ -103,6 +103,8 @@ target_sources(DiscNativePro
         src/ui/VuMeter.h
         src/ui/JogWheel.h
         src/ui/JogWheel.cpp
+        src/ui/DeckScrollWaveform.h
+        src/ui/DeckScrollWaveform.cpp
         src/ui/OverviewWaveform.h
         src/ui/OverviewWaveform.cpp
         src/ui/WavesViewComponent.h
