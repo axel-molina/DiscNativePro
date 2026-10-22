@@ -228,6 +228,10 @@ elseif(WIN32)
             JUCE_USE_WIN_WEBVIEW2=1
             JUCE_USE_WIN_WEBVIEW2_WITH_STATIC_LINKING=1
             JUCE_USE_CURL=0
+            # Fuerza el rasterizador GDI software (comportamiento JUCE 7) en vez
+            # de Direct2D, que deja la ventana sin pintar en equipos con GPU
+            # híbrida Intel+AMD. Reversible cuando JUCE estabilice D2D.
+            JUCE_DIRECT2D=0
     )
 
     if(${CMAKE_SYSTEM_PROCESSOR} STREQUAL "arm64")

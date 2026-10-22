@@ -12,7 +12,9 @@ public:
 #else
     const juce::String getApplicationVersion() override    { return "1.0.0-dev"; }
 #endif
-    bool moreThanOneInstanceAllowed() override             { return true; }
+    // Instancia única: un segundo lanzamiento reactiva la ventana existente
+    // (ver anotherInstanceStarted) en vez de dejar procesos huérfanos.
+    bool moreThanOneInstanceAllowed() override             { return false; }
 
     void initialise(const juce::String& commandLineParameters) override
     {
@@ -57,6 +59,14 @@ public:
 
     void anotherInstanceStarted(const juce::String& /*commandLine*/) override
     {
+        if (mainWindow == nullptr)
+            return;
+
+        if (mainWindow->isMinimised())
+            mainWindow->setMinimised(false);
+
+        mainWindow->setVisible(true);
+        mainWindow->toFront(true);
     }
 
     class MainWindow : public juce::DocumentWindow

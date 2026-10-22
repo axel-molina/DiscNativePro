@@ -19,15 +19,24 @@ MainComponent::MainComponent()
       mixer(audioEngine),
       library(audioEngine.getFormatManager())
 {
-    // Start CoreAudio low-latency engine
-    audioEngine.initialise();
+    // Inicialización pesada diferida a un tick del message loop: la ventana ya
+    // está pintada cuando arranca el audio, así un dispositivo que tarde o se
+    // cuelgue no deja la app sin ventana visible.
+    juce::Component::SafePointer<MainComponent> safeThis(this);
+    juce::Timer::callAfterDelay(0, [safeThis]() {
+        if (safeThis == nullptr)
+            return;
 
-    // Start USB MIDI Manager
-    midiManager.initialise();
+        // Start CoreAudio low-latency engine
+        safeThis->audioEngine.initialise();
 
-    // Migrar credenciales legacy (settings.json en claro) al almacén seguro del sistema
-    AIService::migrateLegacySecrets();
-    YouTubeService::migrateLegacySecret();
+        // Start USB MIDI Manager
+        safeThis->midiManager.initialise();
+
+        // Migrar credenciales legacy (settings.json en claro) al almacén seguro del sistema
+        AIService::migrateLegacySecrets();
+        YouTubeService::migrateLegacySecret();
+    });
 
     // Recording action (WAV export in ~/Music/DiscPro_Recordings/)
     topBar.onRecClicked = [this]() {
