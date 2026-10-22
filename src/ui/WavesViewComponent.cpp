@@ -121,9 +121,68 @@ void WavesTrackStrip::paint(juce::Graphics& g)
     g.setColour(juce::Colour::fromRGB(30, 34, 44));
     g.drawRoundedRectangle(bounds.reduced(1.0f), 8.0f, 1.2f);
 
+    if (dragOver)
+    {
+        g.setColour(accent.withAlpha(0.9f));
+        g.drawRoundedRectangle(bounds.reduced(2.0f), 7.0f, 2.0f);
+    }
+
     // Barra de acento del deck en el borde izquierdo
     g.setColour(accent.withAlpha(0.9f));
     g.fillRoundedRectangle(bounds.getX() + 3.0f, bounds.getY() + 10.0f, 3.0f, bounds.getHeight() - 20.0f, 1.5f);
+}
+
+// Drag & drop: soltar sobre la tira carga en su bandeja, exactamente igual
+// que soltar sobre el espacio del deck (archivos del Finder y drags internos).
+
+bool WavesTrackStrip::isInterestedInFileDrag(const juce::StringArray& files)
+{
+    return deckTarget != nullptr && deckTarget->isInterestedInFileDrag(files);
+}
+
+void WavesTrackStrip::fileDragEnter(const juce::StringArray&, int, int)
+{
+    dragOver = true;
+    repaint();
+}
+
+void WavesTrackStrip::fileDragExit(const juce::StringArray&)
+{
+    dragOver = false;
+    repaint();
+}
+
+void WavesTrackStrip::filesDropped(const juce::StringArray& files, int x, int y)
+{
+    dragOver = false;
+    repaint();
+    if (deckTarget != nullptr)
+        deckTarget->filesDropped(files, x, y);
+}
+
+bool WavesTrackStrip::isInterestedInDragSource(const SourceDetails& dragSourceDetails)
+{
+    return deckTarget != nullptr && deckTarget->isInterestedInDragSource(dragSourceDetails);
+}
+
+void WavesTrackStrip::itemDragEnter(const SourceDetails&)
+{
+    dragOver = true;
+    repaint();
+}
+
+void WavesTrackStrip::itemDragExit(const SourceDetails&)
+{
+    dragOver = false;
+    repaint();
+}
+
+void WavesTrackStrip::itemDropped(const SourceDetails& dragSourceDetails)
+{
+    dragOver = false;
+    repaint();
+    if (deckTarget != nullptr)
+        deckTarget->itemDropped(dragSourceDetails);
 }
 
 void WavesTrackStrip::resized()
@@ -163,6 +222,12 @@ WavesViewComponent::WavesViewComponent(DeckPlayer& player1, juce::Colour accent1
 
 WavesViewComponent::~WavesViewComponent()
 {
+}
+
+void WavesViewComponent::setDeckDropTargets(DeckComponent* deck1, DeckComponent* deck2)
+{
+    strip1.setDeckDropTarget(deck1);
+    strip2.setDeckDropTarget(deck2);
 }
 
 void WavesViewComponent::updateFromDecks(DeckComponent& deck1, DeckComponent& deck2)

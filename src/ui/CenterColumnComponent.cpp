@@ -141,6 +141,13 @@ void CenterColumnComponent::paint(juce::Graphics& g)
     g.fillRect(0, bottomY, getWidth(), 64);
     g.setColour(juce::Colour::fromRGB(31, 35, 46));
     g.drawHorizontalLine(bottomY, 0.0f, (float)getWidth());
+
+    // Modo Ondas: separador vertical entre los dos faders de volumen
+    if (wavesMode)
+    {
+        g.setColour(juce::Colour::fromRGB(31, 35, 46));
+        g.drawVerticalLine(getWidth() / 2, 54.0f, (float)bottomY - 8.0f);
+    }
 }
 
 void CenterColumnComponent::resized()

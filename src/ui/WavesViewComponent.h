@@ -23,7 +23,10 @@ struct WavesTrackInfo
 
 // Tira horizontal a todo el ancho: datos del deck + OverviewWaveform ligado
 // al mismo DeckPlayer (mismos picos, seek y marcadores que la onda del deck).
-class WavesTrackStrip : public juce::Component
+// Acepta drops (Finder y drags internos de la librería) y los carga en su deck.
+class WavesTrackStrip : public juce::Component,
+                        public juce::FileDragAndDropTarget,
+                        public juce::DragAndDropTarget
 {
 public:
     WavesTrackStrip(int deckNumber, DeckPlayer& player, juce::Colour deckAccent);
@@ -35,11 +38,24 @@ public:
     void paint(juce::Graphics& g) override;
     void resized() override;
 
+    // Drag & drop: mismo comportamiento que soltar sobre la bandeja
+    void setDeckDropTarget(DeckComponent* target) { deckTarget = target; }
+    bool isInterestedInFileDrag(const juce::StringArray& files) override;
+    void fileDragEnter(const juce::StringArray& files, int x, int y) override;
+    void fileDragExit(const juce::StringArray& files) override;
+    void filesDropped(const juce::StringArray& files, int x, int y) override;
+    bool isInterestedInDragSource(const SourceDetails& dragSourceDetails) override;
+    void itemDragEnter(const SourceDetails& dragSourceDetails) override;
+    void itemDragExit(const SourceDetails& dragSourceDetails) override;
+    void itemDropped(const SourceDetails& dragSourceDetails) override;
+
     OverviewWaveform& getWaveform() { return waveform; }
 
 private:
     int deckIndex;
     juce::Colour accent;
+    DeckComponent* deckTarget { nullptr };
+    bool dragOver { false };
 
     juce::Label deckBadge;
     juce::Label titleLabel;
@@ -67,6 +83,9 @@ public:
 
     // Refleja los datos de cada deck en su tira y refresca ambas ondas.
     void updateFromDecks(DeckComponent& deck1, DeckComponent& deck2);
+
+    // Destinos de drop: soltar sobre la tira de una bandeja carga en ese deck.
+    void setDeckDropTargets(DeckComponent* deck1, DeckComponent* deck2);
 
     void languageChanged() override;
     void resized() override;

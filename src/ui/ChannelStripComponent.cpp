@@ -73,14 +73,15 @@ ChannelStripComponent::~ChannelStripComponent()
     volumeFader.setLookAndFeel(nullptr);
 }
 
-void ChannelStripComponent::setFaderHostedElsewhere(bool away)
+void ChannelStripComponent::setWavesMode(bool waves)
 {
-    if (faderHostedElsewhere == away)
+    if (wavesMode == waves)
         return;
 
-    faderHostedElsewhere = away;
-    if (!away)
+    wavesMode = waves;
+    if (!wavesMode)
         addAndMakeVisible(volumeFader);
+    vuMeter.setVisible(!wavesMode);
 
     resized();
     repaint();
@@ -159,14 +160,26 @@ void ChannelStripComponent::resized()
     // the old layout overflowed; tall screens render exactly as before (fader max 180).
     int availH = totalArea.getHeight();
     int knobSpacing = 3;
-    int knobH = juce::jlimit(28, 44, (availH - 90 - 16) / 4);
+    const int reservedFader = wavesMode ? 0 : 90;
+    int knobH = juce::jlimit(28, 44, (availH - reservedFader - 16) / 4);
     int knobsTotal = (knobH * 4) + (knobSpacing * 3) + 2;
-    int faderH = juce::jlimit(90, 180, availH - knobsTotal - 4);
-    auto faderArea = totalArea.removeFromBottom(faderH);
 
-    // Separator line position (raised nicely above the fader)
-    faderSeparatorY = (float)faderArea.getY() - 4.0f;
-    faderArea.removeFromTop(4); // padding below separator line
+    juce::Rectangle<int> faderArea;
+    if (wavesMode)
+    {
+        // Modo Ondas: sin fader (vive en el centro) ni VU: solo EQ, y los
+        // knobs aprovechan toda la altura de la columna.
+        faderSeparatorY = 0.0f;
+    }
+    else
+    {
+        int faderH = juce::jlimit(90, 180, availH - knobsTotal - 4);
+        faderArea = totalArea.removeFromBottom(faderH);
+
+        // Separator line position (raised nicely above the fader)
+        faderSeparatorY = (float)faderArea.getY() - 4.0f;
+        faderArea.removeFromTop(4); // padding below separator line
+    }
 
     // 4. EQ Knobs section: perfectly centered vertically in the middle of remaining upper area
     int totalKnobsHeight = (knobH * 4) + (knobSpacing * 3);
@@ -183,14 +196,9 @@ void ChannelStripComponent::resized()
     filterKnob.setBounds(totalArea.removeFromTop(knobH).reduced(2, 1));
 
     // 5. Volume Fader & VU Meter: takes the extended fader height
-    auto faderContent = faderArea.reduced(2, 0);
-    if (faderHostedElsewhere)
+    if (!wavesMode)
     {
-        // El fader vive en el centro del mixer (modo Ondas): el VU ocupa el hueco
-        vuMeter.setBounds(faderContent.withSizeKeepingCentre(16, faderContent.getHeight()).reduced(0, 2));
-    }
-    else
-    {
+        auto faderContent = faderArea.reduced(2, 0);
         vuMeter.setBounds(faderContent.removeFromRight(12).reduced(0, 2));
         faderContent.removeFromRight(4);
         volumeFader.setBounds(faderContent);

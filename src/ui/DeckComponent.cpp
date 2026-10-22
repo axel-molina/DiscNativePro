@@ -1334,9 +1334,9 @@ void DeckComponent::resizedWavesMode()
     transportBtns.removeFromLeft(8);
     cueButton.setBounds(transportBtns.reduced(2, 0));
 
-    // 2b. Hot Cues: 4 pads que llenan la altura de la fila
-    hotCueRowLabel.setBounds(hotCueRow.removeFromLeft(62).reduced(2, 0));
-    hotCueRow.removeFromLeft(4);
+    // 2b. Hot Cues: etiqueta arriba a la izquierda y los 4 pads justo debajo
+    hotCueRowLabel.setBounds(hotCueRow.removeFromTop(14).reduced(2, 0));
+    hotCueRow.removeFromTop(2);
     int padW = (hotCueRow.getWidth() - 18) / 4;
     for (int i = 0; i < 4; ++i)
     {

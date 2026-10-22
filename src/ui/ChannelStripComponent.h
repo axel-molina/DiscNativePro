@@ -18,9 +18,10 @@ public:
     void resized() override;
     void timerCallback() override;
 
-    // Modo Ondas: el fader de volumen se reubica en el centro del mixer.
+    // Modo Ondas: el fader de volumen se reubica en el centro del mixer y el
+    // VU desaparece; la columna solo lleva EQ y queda más estrecha.
     juce::Slider& getVolumeFader() { return volumeFader; }
-    void setFaderHostedElsewhere(bool away);
+    void setWavesMode(bool waves);
 
 private:
     int index;
@@ -39,7 +40,7 @@ private:
     DjButton cueButton { "CUE" };
     DjLookAndFeel djLookAndFeel;
     float faderSeparatorY { 0.0f };
-    bool faderHostedElsewhere { false };
+    bool wavesMode { false };
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(ChannelStripComponent)
 };

@@ -290,3 +290,41 @@ espacio liberado hace las franjas de onda más altas (mejor visión de los picos
   `VerticalWaveform` restaurado (verificado tras conmutar con el selector desplegable).
 - **Conmutación en caliente** en ambos sentidos con persistencia (`viewMode` actualizado).
 - **Compilación**: `cmake --build build` (Release) → 0 errores / 0 warnings en archivos tocados.
+
+---
+
+# Ajuste 3 — Drops en las tiras, mixer más delgado y HOT CUE superior (modo Ondas)
+
+## Objetivo
+Cuatro mejoras del modo Ondas: cargar canciones soltándolas sobre la onda de su bandeja,
+separar los faders del centro, reordenar HOT CUE (etiqueta arriba-izquierda, pads debajo) y
+eliminar los VU para columnas más estrechas con una librería más alta.
+
+## Cambios
+### [MODIFY] `src/ui/WavesViewComponent.h` / `.cpp`
+- `WavesTrackStrip` implementa `FileDragAndDropTarget` + `DragAndDropTarget`: acepta archivos
+  del Finder (mismas extensiones de audio que el deck) y drags internos de la librería
+  (incluidos `yt:`), y los **reenvía al `DeckComponent` de su bandeja** (`filesDropped` /
+  `itemDropped`): soltar sobre la onda carga exactamente igual que soltar sobre el deck.
+  Resaltado del borde de acento mientras se arrastra sobre la tira.
+- `WavesViewComponent::setDeckDropTargets(deck1, deck2)` cableado desde `MainComponent`.
+
+### [MODIFY] `src/ui/CenterColumnComponent.cpp`
+- Línea separadora vertical entre los dos faders de volumen del centro (modo Ondas).
+
+### [MODIFY] `src/ui/DeckComponent.cpp`
+- `resizedWavesMode()`: "HOT CUE" arriba a la izquierda y los 4 pads justo debajo.
+
+### [MODIFY] `src/ui/ChannelStripComponent.h/.cpp`, `MixerComponent.h/.cpp`, `MainComponent.cpp`
+- `setWavesMode(bool)` en la columna: sin VU y sin zona de fader (los knobs usan toda la
+  altura); columnas CH de 96→72px y mixer de 430→382px en modo Ondas.
+- Librería más alta en modo Ondas (factor 0.26→0.31): más pistas visibles en la tabla.
+
+## Verificación
+- **Layout (app en vivo, captura)**: HOT CUE con etiqueta superior-izquierda y pads debajo;
+  columnas CH estrechas sin VU; faders CH1|CH2 en el centro con separador; franjas y librería
+  más altas. 2 Bandejas conserva su diseño clásico (VU y faders en columnas, onda vertical).
+- **Compilación**: `cmake --build build` (Release) → 0 errores / 0 warnings en archivos tocados.
+- **Drag & drop**: implementado con paridad exacta al deck (reenvío de `filesDropped` /
+  `itemDropped`); la prueba funcional de arrastre en vivo queda pendiente de ejecutarse con
+  la app en primer plano (la automatización de clics se interrumpió por uso del equipo).

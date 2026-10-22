@@ -99,6 +99,7 @@ MainComponent::MainComponent()
     };
 
     addChildComponent(wavesView);
+    wavesView.setDeckDropTargets(&deck1, &deck2);
     applyViewMode();
 
     addChildComponent(fxPanel);
@@ -453,10 +454,10 @@ void MainComponent::resized()
     const bool waves = (currentViewMode == TopBarComponent::ViewMode::Waves);
 
     float totalRemainingHeight = static_cast<float>(area.getHeight());
-    // En modo Ondas la biblioteca cede algo de alto para que el mixer conserve
-    // sus mínimos de altura (~300px) incluso en ventanas de 1280x700.
+    // En modo Ondas el mixer compacto (sin VU) libera alto: la biblioteca gana
+    // espacio para ver más pistas en la tabla.
     int libHeight = waves
-                        ? juce::jlimit(150, 480, static_cast<int>(totalRemainingHeight * 0.26f))
+                        ? juce::jlimit(150, 480, static_cast<int>(totalRemainingHeight * 0.31f))
                         : juce::jlimit(190, 480, static_cast<int>(totalRemainingHeight * (isFxPanelVisible ? 0.35f : 0.41f)));
     library.setBounds(area.removeFromBottom(libHeight));
 
@@ -474,7 +475,7 @@ void MainComponent::resized()
 
     // 4. Center workspace
     area.reduce(6, 4);
-    int mixerWidth = 430; // 96px Ch1 + 238px Center + 96px Ch2
+    int mixerWidth = waves ? 382 : 430; // Ondas: 72px Ch1 + 238px Center + 72px Ch2
     int deckWidth = (area.getWidth() - mixerWidth - 12) / 2;
 
     if (waves)
