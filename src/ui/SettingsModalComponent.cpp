@@ -550,7 +550,10 @@ void SettingsModalComponent::refreshLanguage()
 
     // Tab 8: Diseño
     designTitleLabel.setText(LanguageManager::trUtf8("Personalización de Waveforms", "Waveform Personalization"), juce::dontSendNotification);
-    designDescLabel.setText(LanguageManager::trUtf8("Elige los colores de Graves, Medios y Agudos. Se aplican en vivo a los 3 waveforms y se guardan automáticamente.", "Choose the Low, Mid and High colours. They apply live to all 3 waveforms and save automatically."), juce::dontSendNotification);
+    designDescLabel.setText(LanguageManager::trUtf8("Elige los colores de Graves, Medios y Agudos. Se aplican en vivo al wave de la bandeja seleccionada y se guardan automáticamente.", "Choose the Low, Mid and High colours. They apply live to the selected deck's waveform and save automatically."), juce::dontSendNotification);
+    deckThemeLabel.setText(LanguageManager::trUtf8("Bandeja:", "Deck:"), juce::dontSendNotification);
+    deckTheme1Btn.setText(LanguageManager::trUtf8("Bandeja 1", "Deck 1"));
+    deckTheme2Btn.setText(LanguageManager::trUtf8("Bandeja 2", "Deck 2"));
     waveLowLabel.setText(LanguageManager::trUtf8("Graves (Low):", "Lows (Low):"), juce::dontSendNotification);
     waveMidLabel.setText(LanguageManager::trUtf8("Medios (Mid):", "Mids (Mid):"), juce::dontSendNotification);
     waveHighLabel.setText(LanguageManager::trUtf8("Agudos (High):", "Highs (High):"), juce::dontSendNotification);
@@ -1002,11 +1005,32 @@ void SettingsModalComponent::setupDesignTab()
     designTitleLabel.setColour(juce::Label::textColourId, juce::Colour::fromRGB(0, 180, 216));
     bodyContent.addChildComponent(designTitleLabel);
 
-    designDescLabel.setText(juce::String::fromUTF8("Elige los colores de Graves, Medios y Agudos. Se aplican en vivo a los 3 waveforms y se guardan automáticamente."), juce::dontSendNotification);
+    designDescLabel.setText(juce::String::fromUTF8("Elige los colores de Graves, Medios y Agudos. Se aplican en vivo al wave de la bandeja seleccionada y se guardan automáticamente."), juce::dontSendNotification);
     designDescLabel.setFont(juce::FontOptions(10.5f));
     designDescLabel.setColour(juce::Label::textColourId, juce::Colour::fromRGB(160, 165, 180));
     designDescLabel.setJustificationType(juce::Justification::topLeft);
     bodyContent.addChildComponent(designDescLabel);
+
+    // Selector de bandeja (Deck 1 / Deck 2): cada bandeja tiene su propio tema
+    deckThemeLabel.setText(juce::String::fromUTF8("Bandeja:"), juce::dontSendNotification);
+    deckThemeLabel.setFont(juce::FontOptions(11.0f, juce::Font::plain));
+    deckThemeLabel.setColour(juce::Label::textColourId, juce::Colour::fromRGB(180, 185, 200));
+    bodyContent.addChildComponent(deckThemeLabel);
+
+    auto setupDeckToggle = [this](DjButton& btn, int deck) {
+        btn.setFontSize(10.5f);
+        btn.setCornerRadius(6.0f);
+        btn.onClick = [this, deck]() {
+            designDeckIndex = deck;
+            refreshDesignSwatches();
+        };
+        bodyContent.addChildComponent(btn);
+    };
+
+    deckTheme1Btn.setText(juce::String::fromUTF8("Bandeja 1"));
+    deckTheme2Btn.setText(juce::String::fromUTF8("Bandeja 2"));
+    setupDeckToggle(deckTheme1Btn, 0);
+    setupDeckToggle(deckTheme2Btn, 1);
 
     auto setupRow = [this](juce::Label& label, DjButton& swatch, const char* text, int band) {
         label.setText(juce::String::fromUTF8(text), juce::dontSendNotification);
@@ -1036,7 +1060,7 @@ void SettingsModalComponent::setupDesignTab()
                              juce::Colour::fromRGB(0, 180, 216),
                              juce::Colour::fromRGB(45, 50, 68));
         btn.onClick = [this, preset]() {
-            WaveformTheme::applyPreset(preset);
+            WaveformTheme::applyPreset(designDeckIndex, preset);
             refreshDesignSwatches();
         };
         bodyContent.addChildComponent(btn);
@@ -1242,9 +1266,32 @@ void SettingsModalComponent::refreshDesignSwatches()
                              juce::Colours::white.withAlpha(0.4f));
         btn.setText("#" + c.toString().substring(2).toUpperCase());
     };
-    paintSwatch(waveLowSwatch, WaveformTheme::low());
-    paintSwatch(waveMidSwatch, WaveformTheme::mid());
-    paintSwatch(waveHighSwatch, WaveformTheme::high());
+
+    const int deck = designDeckIndex;
+    paintSwatch(waveLowSwatch, WaveformTheme::low(deck));
+    paintSwatch(waveMidSwatch, WaveformTheme::mid(deck));
+    paintSwatch(waveHighSwatch, WaveformTheme::high(deck));
+
+    // Estado visual del toggle de bandeja
+    auto styleDeckToggle = [](DjButton& btn, bool isActive) {
+        if (isActive)
+        {
+            btn.setCustomColours(juce::Colour::fromRGB(0, 180, 216).withAlpha(0.22f),
+                                 juce::Colour::fromRGB(0, 229, 255),
+                                 juce::Colour::fromRGB(0, 229, 255),
+                                 juce::Colour::fromRGB(0, 180, 216));
+        }
+        else
+        {
+            btn.setCustomColours(juce::Colour::fromRGB(32, 35, 48),
+                                 juce::Colour::fromRGB(160, 165, 180),
+                                 juce::Colour::fromRGB(160, 165, 180),
+                                 juce::Colour::fromRGB(45, 50, 68));
+        }
+    };
+    styleDeckToggle(deckTheme1Btn, designDeckIndex == 0);
+    styleDeckToggle(deckTheme2Btn, designDeckIndex == 1);
+
     repaint();
 }
 
@@ -1255,14 +1302,15 @@ void SettingsModalComponent::openColourPicker(int band)
         | juce::ColourSelector::showColourAtTop
         | juce::ColourSelector::editableColour
         | juce::ColourSelector::showSliders);
-    juce::Colour current = (band == 0) ? WaveformTheme::low()
-                         : (band == 1) ? WaveformTheme::mid()
-                                       : WaveformTheme::high();
+    juce::Colour current = (band == 0) ? WaveformTheme::low(designDeckIndex)
+                         : (band == 1) ? WaveformTheme::mid(designDeckIndex)
+                                       : WaveformTheme::high(designDeckIndex);
     selector->setCurrentColour(current);
     selector->setSize(320, 420);
     selector->addChangeListener(this);
     activeColourSelector = selector.get();
     activeColourBand = band;
+    activeColourDeck = designDeckIndex; // congela la bandeja destino del picker
 
     juce::DialogWindow::LaunchOptions opts;
     opts.content.setOwned(selector.release());
@@ -1281,11 +1329,11 @@ void SettingsModalComponent::changeListenerCallback(juce::ChangeBroadcaster* sou
     {
         juce::Colour c = selector->getCurrentColour();
         if (activeColourBand == 0)
-            WaveformTheme::setLow(c);
+            WaveformTheme::setLow(activeColourDeck, c);
         else if (activeColourBand == 1)
-            WaveformTheme::setMid(c);
+            WaveformTheme::setMid(activeColourDeck, c);
         else
-            WaveformTheme::setHigh(c);
+            WaveformTheme::setHigh(activeColourDeck, c);
         refreshDesignSwatches();
     }
 }
@@ -1503,6 +1551,9 @@ void SettingsModalComponent::updateTabVisibility()
     bool isDesign = (activeTab == 8);
     designTitleLabel.setVisible(isDesign);
     designDescLabel.setVisible(isDesign);
+    deckThemeLabel.setVisible(isDesign);
+    deckTheme1Btn.setVisible(isDesign);
+    deckTheme2Btn.setVisible(isDesign);
     waveLowLabel.setVisible(isDesign);
     waveMidLabel.setVisible(isDesign);
     waveHighLabel.setVisible(isDesign);
@@ -2077,6 +2128,13 @@ void SettingsModalComponent::resized()
         tArea.removeFromTop(4);
         designDescLabel.setBounds(tArea.removeFromTop(34));
         tArea.removeFromTop(12);
+
+        auto deckRow = tArea.removeFromTop(28);
+        deckThemeLabel.setBounds(deckRow.removeFromLeft(210));
+        deckTheme1Btn.setBounds(deckRow.removeFromLeft(140));
+        deckRow.removeFromLeft(8);
+        deckTheme2Btn.setBounds(deckRow.removeFromLeft(140));
+        tArea.removeFromTop(8);
 
         auto lowRow = tArea.removeFromTop(28);
         waveLowLabel.setBounds(lowRow.removeFromLeft(210));

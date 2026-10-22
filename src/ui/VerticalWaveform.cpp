@@ -88,16 +88,19 @@ void VerticalWaveform::renderDeckHalf(juce::Graphics& g,
         float midW = midV * maxHalfAmp;
         float highW = highV * maxHalfAmp;
 
-        // 1. Low frequency bass base (tema global)
-        g.setColour(WaveformTheme::low());
+        // Índice de bandeja: mitad izquierda = Deck 1 (0), derecha = Deck 2 (1)
+        const int deckIndex = isLeft ? 0 : 1;
+
+        // 1. Low frequency bass base (tema de esta bandeja)
+        g.setColour(WaveformTheme::low(deckIndex));
         g.fillRect(deckCenterX - lowW, y, lowW * 2.0f, barHeight);
 
-        // 2. Mid frequency vocals/leads (tema global)
-        g.setColour(WaveformTheme::mid());
+        // 2. Mid frequency vocals/leads (tema de esta bandeja)
+        g.setColour(WaveformTheme::mid(deckIndex));
         g.fillRect(deckCenterX - midW, y, midW * 2.0f, barHeight);
 
-        // 3. High frequency transients (tema global)
-        g.setColour(WaveformTheme::high());
+        // 3. High frequency transients (tema de esta bandeja)
+        g.setColour(WaveformTheme::high(deckIndex));
         g.fillRect(deckCenterX - highW, y, highW * 2.0f, barHeight);
     }
 

@@ -182,6 +182,9 @@ private:
     // --- Tab 8: Diseño (colores de waveforms) Controls ---
     juce::Label designTitleLabel;
     juce::Label designDescLabel;
+    juce::Label deckThemeLabel;
+    DjButton deckTheme1Btn;
+    DjButton deckTheme2Btn;
     juce::Label waveLowLabel;
     juce::Label waveMidLabel;
     juce::Label waveHighLabel;
@@ -194,6 +197,8 @@ private:
     DjButton presetSilverBtn;
     juce::Component::SafePointer<juce::ColourSelector> activeColourSelector;
     int activeColourBand { -1 };
+    int designDeckIndex { 0 };  // bandeja editada en el tab Diseño (0 = Deck 1, 1 = Deck 2)
+    int activeColourDeck { 0 }; // bandeja destino congelada al abrir el selector de color
 
     // --- Tab 9: Versión & Actualizaciones ---
     juce::Label versionSectionTitle;

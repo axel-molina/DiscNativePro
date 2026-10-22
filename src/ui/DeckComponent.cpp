@@ -10,7 +10,7 @@
 
 DeckComponent::DeckComponent(int deckNum, DeckPlayer& player, AudioEngine& audioEngine, juce::Colour accentColour)
     : deckIndex(deckNum), deck(player), engine(audioEngine), accent(accentColour),
-      overviewWaveform(player, accentColour),
+      overviewWaveform(player, accentColour, deckNum),
       jogWheel(player, accentColour)
 {
     pitchSlider.setLookAndFeel(&djLookAndFeel);

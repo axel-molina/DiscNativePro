@@ -7,7 +7,7 @@
 class OverviewWaveform : public juce::Component
 {
 public:
-    OverviewWaveform(DeckPlayer& player, juce::Colour deckAccent);
+    OverviewWaveform(DeckPlayer& player, juce::Colour deckAccent, int deckIndex);
     ~OverviewWaveform() override;
 
     void setAccentColour(juce::Colour c) { accent = c; repaint(); }
@@ -39,6 +39,7 @@ private:
 
     DeckPlayer& deck;
     juce::Colour accent;
+    int deckIdx { 0 }; // 0 = Deck 1, 1 = Deck 2 (tema de waveform propio)
 
     std::vector<float> peaksLow;
     std::vector<float> peaksMid;

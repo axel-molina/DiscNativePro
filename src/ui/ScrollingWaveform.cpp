@@ -82,16 +82,19 @@ void ScrollingWaveform::drawDeckWaveform(juce::Graphics& g, DeckPlayer& player, 
 
             float dir = invert ? 1.0f : -1.0f;
 
-            // Low frequency (tema global)
-            g.setColour(WaveformTheme::low());
+            // Índice de bandeja: mitad superior = Deck 1 (0), inferior = Deck 2 (1)
+            const int deckIndex = invert ? 0 : 1;
+
+            // Low frequency (tema de esta bandeja)
+            g.setColour(WaveformTheme::low(deckIndex));
             g.fillRect(x, baselineY, (float)stepPixels, dir * lAmp * 0.85f);
 
-            // Mid frequency (tema global)
-            g.setColour(WaveformTheme::mid());
+            // Mid frequency (tema de esta bandeja)
+            g.setColour(WaveformTheme::mid(deckIndex));
             g.fillRect(x, baselineY, (float)stepPixels, dir * mAmp * 0.75f);
 
-            // High frequency (tema global)
-            g.setColour(WaveformTheme::high());
+            // High frequency (tema de esta bandeja)
+            g.setColour(WaveformTheme::high(deckIndex));
             g.fillRect(x, baselineY, (float)stepPixels, dir * hAmp * 0.65f);
         }
     }

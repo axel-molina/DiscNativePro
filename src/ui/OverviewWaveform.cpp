@@ -1,8 +1,8 @@
 #include "OverviewWaveform.h"
 #include "../services/WaveformTheme.h"
 
-OverviewWaveform::OverviewWaveform(DeckPlayer& player, juce::Colour deckAccent)
-    : deck(player), accent(deckAccent)
+OverviewWaveform::OverviewWaveform(DeckPlayer& player, juce::Colour deckAccent, int deckIndex)
+    : deck(player), accent(deckAccent), deckIdx(deckIndex)
 {
     setMouseCursor(juce::MouseCursor::PointingHandCursor);
 }
@@ -103,16 +103,16 @@ void OverviewWaveform::paint(juce::Graphics& g)
             float mAmp = mid[idx] * halfHeight;
             float hAmp = high[idx] * halfHeight;
 
-            // 1. Low frequency bass base (tema global)
-            g.setColour(WaveformTheme::low());
+            // 1. Low frequency bass base (tema de esta bandeja)
+            g.setColour(WaveformTheme::low(deckIdx));
             g.fillRect((float)x, halfHeight - lAmp * 0.8f, 1.0f, lAmp * 1.6f);
 
-            // 2. Mid frequency vocals/leads (tema global)
-            g.setColour(WaveformTheme::mid());
+            // 2. Mid frequency vocals/leads (tema de esta bandeja)
+            g.setColour(WaveformTheme::mid(deckIdx));
             g.fillRect((float)x, halfHeight - mAmp * 0.9f, 1.0f, mAmp * 1.8f);
 
-            // 3. High frequency transients (tema global)
-            g.setColour(WaveformTheme::high());
+            // 3. High frequency transients (tema de esta bandeja)
+            g.setColour(WaveformTheme::high(deckIdx));
             g.fillRect((float)x, halfHeight - hAmp, 1.0f, hAmp * 2.0f);
         }
     }
