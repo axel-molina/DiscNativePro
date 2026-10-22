@@ -354,3 +354,28 @@ faders del centro) para que la librería gane más espacio.
   faders más holgados de ancho con su separador, librería más alta.
 - **2 Bandejas idéntico**: todo ramificado por `wavesMode`.
 - **Compilación**: `cmake --build build` (Release) → 0 errores / 0 warnings en archivos tocados.
+
+---
+
+# Ajuste 5 — Fila central mínima y columnas EQ→CUE compactas (modo Ondas)
+
+## Objetivo
+Seguir achicando la fila central: eliminar el hueco entre los knobs de EQ y el botón CUE de
+las columnas y limitar la altura de la fila de controles, cediendo el espacio al panel del
+administrador de archivos.
+
+## Cambios
+### [MODIFY] `src/ui/ChannelStripComponent.cpp`
+- En Ondas: bloque compacto arriba-centrado con el CUE justo debajo del knob FILTER
+  (4px de separación, antes ~60–100px de aire). El camino clásico queda restaurado tal cual.
+
+### [MODIFY] `src/ui/MainComponent.cpp`
+- Reparto vertical explícito en Ondas: fila central **fija en 230px**, franjas de onda
+  150–220px (mitad del resto) y **todo lo demás a la librería**. Determinista en cualquier
+  tamaño de ventana.
+
+## Verificación (app en vivo, captura)
+- Columnas CH con FILTER→CUE pegados; fila central plana; librería notablemente más alta;
+  franjas altas con datos y ondas de ambas bandejas; faders con separador.
+- **2 Bandejas idéntico** (todo ramificado por `wavesMode`).
+- **Compilación**: `cmake --build build` (Release) → 0 errores / 0 warnings en archivos tocados.

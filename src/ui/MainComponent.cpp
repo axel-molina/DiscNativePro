@@ -454,11 +454,22 @@ void MainComponent::resized()
     const bool waves = (currentViewMode == TopBarComponent::ViewMode::Waves);
 
     float totalRemainingHeight = static_cast<float>(area.getHeight());
-    // En modo Ondas el mixer compacto (sin VU) libera alto: la biblioteca gana
-    // espacio para ver más pistas en la tabla.
-    int libHeight = waves
-                        ? juce::jlimit(150, 480, static_cast<int>(totalRemainingHeight * 0.35f))
-                        : juce::jlimit(190, 480, static_cast<int>(totalRemainingHeight * (isFxPanelVisible ? 0.35f : 0.41f)));
+    // Modo Ondas: reparto explícito — franjas de onda arriba, fila central
+    // COMPACTA (230px) y todo lo demás para la librería (más pistas visibles).
+    int wavesBandHeight = 0;
+    int libHeight;
+    if (waves)
+    {
+        const int chrome = (isFxPanelVisible ? 54 : 0) + (isSamplerPanelVisible ? 76 : 0);
+        const int controlsH = 230;
+        const int remain = juce::jmax(320, static_cast<int>(totalRemainingHeight) - chrome - controlsH - 8);
+        wavesBandHeight = juce::jlimit(150, 220, remain / 2);
+        libHeight = juce::jlimit(150, 480, remain - wavesBandHeight);
+    }
+    else
+    {
+        libHeight = juce::jlimit(190, 480, static_cast<int>(totalRemainingHeight * (isFxPanelVisible ? 0.35f : 0.41f)));
+    }
     library.setBounds(area.removeFromBottom(libHeight));
 
     // 3. Optional FX Strip (54px) directly below Decks/Mixer and above Library (djay Pro style)
@@ -481,11 +492,8 @@ void MainComponent::resized()
     if (waves)
     {
         // 4a. Modo Ondas: dos ondas apiladas a todo el ancho con los datos de
-        // cada deck; debajo, los controles sin platos (deck1 | mixer | deck2).
-        // El mixer compacto (sin onda vertical) libera altura para franjas más
-        // altas: mejor amplitud y visión de los picos.
-        int bandHeight = juce::jlimit(160, 240, area.getHeight() * 2 / 5);
-        wavesView.setBounds(area.removeFromTop(bandHeight));
+        // cada deck; debajo, la fila central compacta (deck1 | mixer | deck2).
+        wavesView.setBounds(area.removeFromTop(wavesBandHeight));
         area.removeFromTop(8);
     }
 
