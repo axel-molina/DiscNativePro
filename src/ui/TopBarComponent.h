@@ -2,6 +2,7 @@
 #include "DjButton.h"
 #include "../services/LanguageManager.h"
 #include <functional>
+#include <memory>
 
 class TopBarComponent : public juce::Component,
                         public juce::Timer,
@@ -23,10 +24,13 @@ public:
     void setSmpActive(bool active);
     void setUpdateAvailable(bool available);
 
-    // Selector de vista: 2 Bandejas (default) u Ondas/Waves, bilingüe y en caliente
+    // Selector de vista desplegable: 2 Bandejas (default) u Ondas/Waves, bilingüe y en caliente.
+    // El botón muestra la vista activa; al hacer clic despliega la lista de opciones con la
+    // activa marcada, y elegir una de la lista aplica el cambio.
     enum class ViewMode { TwoDecks, Waves };
     ViewMode getViewMode() const { return currentViewMode; }
     void setViewMode(ViewMode mode, bool sendCallback = true);
+    void selectViewMode(ViewMode mode);
 
     std::function<void()> onRecClicked;
     std::function<void()> onFxClicked;
@@ -37,10 +41,15 @@ public:
     std::function<void(ViewMode)> onViewModeChanged;
 
 private:
+    class ViewSelectorDropdown;
+
     void updateClock();
     void updateMemoryUsage();
     double getProcessMemoryMB();
-    void updateViewSelectorColours();
+    void toggleViewSelector();
+    void hideViewSelector();
+    void updateViewSelectorAppearance(bool open);
+    juce::String viewModeLabel(ViewMode mode) const;
 
     // Left buttons
     DjButton recButton;
@@ -53,8 +62,8 @@ private:
     // Right elements
     juce::Label ramLabel;
     juce::Label clockLabel;
-    DjButton viewDecksButton;
-    DjButton viewWavesButton;
+    DjButton viewSelectorButton;
+    std::unique_ptr<ViewSelectorDropdown> viewDropdown;
     DjButton updateButton;
     DjButton settingsButton;
     DjButton fullscreenButton;

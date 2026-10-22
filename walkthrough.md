@@ -218,3 +218,35 @@ Verificación ejecutada por separado de la implementación, contra los criterios
 
 ## Resultado
 **APROBADO** — los 6 criterios observables de aceptación se cumplen. Nota menor: la rama se nombró `axel-molina/waves-view` en lugar de `feature/waves-view` (cosmético, sin impacto).
+
+---
+
+# Ajuste — Selector de vista desplegable (ComboBox personalizado)
+
+## Objetivo
+Los dos botones segmentados (2 Bandejas | Ondas) se reemplazan por un **selector desplegable
+real**: un único botón que muestra la vista activa con chevron (`⌄ Ondas`); al hacer clic se
+despliega un panel propio con **todas las opciones y la activa marcada con check**; elegir una
+de la lista aplica el cambio. Preparado para futuras vistas (p. ej. "4 Bandejas").
+
+## Cambios
+### [MODIFY] `src/ui/TopBarComponent.h` / `.cpp`
+- `viewDecksButton`/`viewWavesButton` → `viewSelectorButton` (DjButton con `ChevronDown` +
+  texto de la vista activa vía `viewModeLabel()`).
+- Clase anidada `ViewSelectorDropdown`: panel modal como hijo del componente padre (evita el
+  recorte de los 40px de la barra), filas por opción con `LucideIcons::Check` en la activa,
+  hover resaltado, `Esc` cierra, clic fuera cierra (`inputAttemptWhenModal`), selección →
+  `selectViewMode()` → `onViewModeChanged`.
+- El botón muestra borde acentuado mientras el panel está abierto (`updateViewSelectorAppearance`).
+- El panel se cierra automáticamente en cualquier re-layout.
+
+## Verificación (app en vivo, clics reales con `cliclick` + capturas)
+- Clic en el selector → panel desplegado con "2 Bandejas" y "✓ Ondas" (activa marcada).
+- Elegir "2 Bandejas" → vista clásica restaurada (platos), botón actualizado y
+  `settings.json` → `"viewMode": "decks"`; reabrir muestra "✓ 2 Bandejas".
+- Elegir "Ondas" → vista de ondas activa y `"viewMode": "waves"`.
+- Clic fuera del panel y tecla `Esc` → el panel se cierra sin cambiar la vista.
+- Compilación: `cmake --build build` (Release) → 0 errores / 0 warnings en los archivos tocados.
+- Nota de entorno: cada rebuild cambia la firma ad-hoc de la app y macOS vuelve a pedir
+  autorización del llavero para `com.discpro.discnativepro.api-key` (diálogos de SecurityAgent
+  que bloquean el arranque hasta responderlos; para pruebas de UI se usó un `HOME` temporal).
