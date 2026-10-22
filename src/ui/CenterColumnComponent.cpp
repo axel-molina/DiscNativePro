@@ -97,6 +97,27 @@ void CenterColumnComponent::timerCallback()
     }
 }
 
+void CenterColumnComponent::setWavesMode(bool active, juce::Slider* fader1, juce::Slider* fader2)
+{
+    if (externalFader1 != nullptr)
+        removeChildComponent(externalFader1);
+    if (externalFader2 != nullptr)
+        removeChildComponent(externalFader2);
+
+    wavesMode = active;
+    externalFader1 = active ? fader1 : nullptr;
+    externalFader2 = active ? fader2 : nullptr;
+
+    verticalWaveform.setVisible(!active);
+    if (externalFader1 != nullptr)
+        addAndMakeVisible(externalFader1);
+    if (externalFader2 != nullptr)
+        addAndMakeVisible(externalFader2);
+
+    resized();
+    repaint();
+}
+
 void CenterColumnComponent::paint(juce::Graphics& g)
 {
     auto bounds = getLocalBounds().toFloat();
@@ -147,6 +168,18 @@ void CenterColumnComponent::resized()
     bottomArea.removeFromTop(4);
     crossfader.setBounds(bottomArea.reduced(4, 0));
 
-    // 3. Middle Section: Dual Vertical Waveform fills all remaining space!
-    verticalWaveform.setBounds(area);
+    // 3. Middle Section: Dual Vertical Waveform, u ondas: faders de volumen
+    // de cada bandeja lado a lado (la onda horizontal superior ya muestra la onda)
+    if (wavesMode && externalFader1 != nullptr && externalFader2 != nullptr)
+    {
+        auto mid = area.reduced(8, 8);
+        auto half = mid.getWidth() / 2;
+        externalFader1->setBounds(mid.removeFromLeft(half).reduced(14, 4));
+        mid.removeFromLeft(4);
+        externalFader2->setBounds(mid.reduced(14, 4));
+    }
+    else
+    {
+        verticalWaveform.setBounds(area);
+    }
 }

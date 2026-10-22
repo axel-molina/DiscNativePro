@@ -1312,10 +1312,13 @@ void DeckComponent::resizedWavesMode()
         area.removeFromRight(12);
     }
 
-    // 2. Tres filas de controles uniformes (transporte, hot cues, loop + SYNC/KEY)
+    // 2. Tres filas de controles compactas (transporte, hot cues, loop + SYNC/KEY):
+    // filas y huecos limitados para no separar los botones, bloque centrado
     const int totalH = area.getHeight();
-    const int rowH = juce::jmax(32, juce::jmin(80, (totalH - 24) / 3));
-    const int gap = juce::jmax(4, (totalH - 3 * rowH) / 4);
+    const int rowH = juce::jlimit(40, 64, (totalH - 20) / 3);
+    const int gap = juce::jlimit(4, 10, (totalH - 3 * rowH) / 4);
+    const int blockH = 3 * rowH + 2 * gap;
+    area.removeFromTop(juce::jmax(0, (totalH - blockH) / 2));
 
     auto transportRow = area.removeFromTop(rowH);
     area.removeFromTop(gap);

@@ -73,6 +73,19 @@ ChannelStripComponent::~ChannelStripComponent()
     volumeFader.setLookAndFeel(nullptr);
 }
 
+void ChannelStripComponent::setFaderHostedElsewhere(bool away)
+{
+    if (faderHostedElsewhere == away)
+        return;
+
+    faderHostedElsewhere = away;
+    if (!away)
+        addAndMakeVisible(volumeFader);
+
+    resized();
+    repaint();
+}
+
 void ChannelStripComponent::timerCallback()
 {
     vuMeter.setLevels(strip.meterPeakLeft.load(), strip.meterPeakRight.load());
@@ -171,7 +184,15 @@ void ChannelStripComponent::resized()
 
     // 5. Volume Fader & VU Meter: takes the extended fader height
     auto faderContent = faderArea.reduced(2, 0);
-    vuMeter.setBounds(faderContent.removeFromRight(12).reduced(0, 2));
-    faderContent.removeFromRight(4);
-    volumeFader.setBounds(faderContent);
+    if (faderHostedElsewhere)
+    {
+        // El fader vive en el centro del mixer (modo Ondas): el VU ocupa el hueco
+        vuMeter.setBounds(faderContent.withSizeKeepingCentre(16, faderContent.getHeight()).reduced(0, 2));
+    }
+    else
+    {
+        vuMeter.setBounds(faderContent.removeFromRight(12).reduced(0, 2));
+        faderContent.removeFromRight(4);
+        volumeFader.setBounds(faderContent);
+    }
 }

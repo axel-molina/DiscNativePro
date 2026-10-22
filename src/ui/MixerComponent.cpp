@@ -14,6 +14,29 @@ MixerComponent::~MixerComponent()
 {
 }
 
+void MixerComponent::setWavesMode(bool waves)
+{
+    if (wavesMode == waves)
+        return;
+
+    wavesMode = waves;
+
+    if (waves)
+    {
+        centerColumn.setWavesMode(true, &channel1.getVolumeFader(), &channel2.getVolumeFader());
+        channel1.setFaderHostedElsewhere(true);
+        channel2.setFaderHostedElsewhere(true);
+    }
+    else
+    {
+        centerColumn.setWavesMode(false, nullptr, nullptr);
+        channel1.setFaderHostedElsewhere(false);
+        channel2.setFaderHostedElsewhere(false);
+    }
+
+    resized();
+}
+
 void MixerComponent::paint(juce::Graphics& g)
 {
     g.fillAll(juce::Colour::fromRGB(12, 13, 18));

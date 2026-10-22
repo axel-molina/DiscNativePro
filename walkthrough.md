@@ -250,3 +250,43 @@ de la lista aplica el cambio. Preparado para futuras vistas (p. ej. "4 Bandejas"
 - Nota de entorno: cada rebuild cambia la firma ad-hoc de la app y macOS vuelve a pedir
   autorización del llavero para `com.discpro.discnativepro.api-key` (diálogos de SecurityAgent
   que bloquean el arranque hasta responderlos; para pruebas de UI se usó un `HOME` temporal).
+
+---
+
+# Ajuste 2 — Mixer compacto en modo Ondas y franjas de onda más altas
+
+## Objetivo
+En modo Ondas el diseño quedaba desordenado (botones demasiado espaciados) y el centro del
+mixer mostraba un `VerticalWaveform` redundante. Se elimina la onda vertical en esta vista,
+los faders de volumen de cada bandeja ocupan su lugar, la parte central se comprime y el
+espacio liberado hace las franjas de onda más altas (mejor visión de los picos).
+
+## Cambios
+### [MODIFY] `src/ui/ChannelStripComponent.h` / `.cpp`
+- `getVolumeFader()` + `setFaderHostedElsewhere(bool)`: con el fader fuera de la columna,
+  el hueco inferior lo ocupa el VU centrado.
+
+### [MODIFY] `src/ui/CenterColumnComponent.h` / `.cpp`
+- `setWavesMode(bool, Slider*, Slider*)`: oculta `verticalWaveform` y aloja los dos faders
+  externos lado a lado en el centro (MASTER/PHONES arriba; crossfader + SMOOTH/TEMPO BLEND
+  debajo, sin cambios).
+
+### [MODIFY] `src/ui/MixerComponent.h` / `.cpp`
+- `setWavesMode(bool)`: re-padrea los faders entre las columnas y el centro según el modo.
+
+### [MODIFY] `src/ui/DeckComponent.cpp`
+- `resizedWavesMode()`: filas compactas (alto máx 64, huecos máx 10) y bloque centrado
+  verticalmente — los botones dejan de quedar espaciados.
+
+### [MODIFY] `src/ui/MainComponent.cpp`
+- `applyViewMode()` notifica al mixer; banda de ondas `jlimit(160, 240, area*2/5)`
+  (antes `jlimit(116, 168, area/4)`): franjas notablemente más altas.
+
+## Verificación (app en vivo, capturas)
+- **Modo Ondas**: sin onda vertical; faders CH1|CH2 lado a lado en el centro; columnas con
+  EQ (HIGH/MID/LOW/FILTER) + VU; crossfader + SMOOTH/TEMPO debajo; botones de deck compactos;
+  franjas superiores más altas.
+- **Modo 2 Bandejas**: idéntico al clásico — faders de vuelta en las columnas y
+  `VerticalWaveform` restaurado (verificado tras conmutar con el selector desplegable).
+- **Conmutación en caliente** en ambos sentidos con persistencia (`viewMode` actualizado).
+- **Compilación**: `cmake --build build` (Release) → 0 errores / 0 warnings en archivos tocados.

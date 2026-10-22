@@ -406,6 +406,7 @@ void MainComponent::applyViewMode()
     const bool waves = (currentViewMode == TopBarComponent::ViewMode::Waves);
     deck1.setWavesMode(waves);
     deck2.setWavesMode(waves);
+    mixer.setWavesMode(waves);
     wavesView.setVisible(waves);
 }
 
@@ -480,7 +481,9 @@ void MainComponent::resized()
     {
         // 4a. Modo Ondas: dos ondas apiladas a todo el ancho con los datos de
         // cada deck; debajo, los controles sin platos (deck1 | mixer | deck2).
-        int bandHeight = juce::jlimit(116, 168, area.getHeight() / 4);
+        // El mixer compacto (sin onda vertical) libera altura para franjas más
+        // altas: mejor amplitud y visión de los picos.
+        int bandHeight = juce::jlimit(160, 240, area.getHeight() * 2 / 5);
         wavesView.setBounds(area.removeFromTop(bandHeight));
         area.removeFromTop(8);
     }
