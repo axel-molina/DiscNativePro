@@ -457,7 +457,7 @@ void MainComponent::resized()
     // En modo Ondas el mixer compacto (sin VU) libera alto: la biblioteca gana
     // espacio para ver más pistas en la tabla.
     int libHeight = waves
-                        ? juce::jlimit(150, 480, static_cast<int>(totalRemainingHeight * 0.31f))
+                        ? juce::jlimit(150, 480, static_cast<int>(totalRemainingHeight * 0.35f))
                         : juce::jlimit(190, 480, static_cast<int>(totalRemainingHeight * (isFxPanelVisible ? 0.35f : 0.41f)));
     library.setBounds(area.removeFromBottom(libHeight));
 

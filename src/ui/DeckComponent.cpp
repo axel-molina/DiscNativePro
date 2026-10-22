@@ -1296,7 +1296,7 @@ void DeckComponent::resizedWavesMode()
 {
     // Modo Ondas: sin cabecera, sin onda interna y sin plato. Los controles
     // restantes se reacomodan uniformemente en el espacio liberado por el plato.
-    auto area = getLocalBounds().reduced(8, 6);
+    auto area = getLocalBounds().reduced(6, 4);
 
     // 1. Columna de pitch completa en el borde exterior del deck
     const int pitchW = 64;
@@ -1304,19 +1304,19 @@ void DeckComponent::resizedWavesMode()
     if (deckIndex == 0)
     {
         pitchArea = area.removeFromLeft(pitchW);
-        area.removeFromLeft(12);
+        area.removeFromLeft(8);
     }
     else
     {
         pitchArea = area.removeFromRight(pitchW);
-        area.removeFromRight(12);
+        area.removeFromRight(8);
     }
 
     // 2. Tres filas de controles compactas (transporte, hot cues, loop + SYNC/KEY):
-    // filas y huecos limitados para no separar los botones, bloque centrado
+    // filas y huecos mínimos para aplastar la parte central, bloque centrado
     const int totalH = area.getHeight();
-    const int rowH = juce::jlimit(40, 64, (totalH - 20) / 3);
-    const int gap = juce::jlimit(4, 10, (totalH - 3 * rowH) / 4);
+    const int rowH = juce::jlimit(34, 52, (totalH - 16) / 3);
+    const int gap = juce::jlimit(3, 6, (totalH - 3 * rowH) / 4);
     const int blockH = 3 * rowH + 2 * gap;
     area.removeFromTop(juce::jmax(0, (totalH - blockH) / 2));
 
@@ -1327,26 +1327,26 @@ void DeckComponent::resizedWavesMode()
     auto loopRow = area.removeFromTop(rowH);
 
     // 2a. Transporte: PLAY | CUE (botones centrados verticalmente)
-    int btnH = juce::jmin(rowH, 44);
+    int btnH = juce::jmin(rowH, 38);
     auto transportBtns = transportRow.withSizeKeepingCentre(transportRow.getWidth(), btnH);
-    int playW = (transportBtns.getWidth() - 8) / 2;
-    playButton.setBounds(transportBtns.removeFromLeft(playW).reduced(2, 0));
-    transportBtns.removeFromLeft(8);
-    cueButton.setBounds(transportBtns.reduced(2, 0));
+    int playW = (transportBtns.getWidth() - 6) / 2;
+    playButton.setBounds(transportBtns.removeFromLeft(playW).reduced(1, 0));
+    transportBtns.removeFromLeft(6);
+    cueButton.setBounds(transportBtns.reduced(1, 0));
 
     // 2b. Hot Cues: etiqueta arriba a la izquierda y los 4 pads justo debajo
-    hotCueRowLabel.setBounds(hotCueRow.removeFromTop(14).reduced(2, 0));
-    hotCueRow.removeFromTop(2);
-    int padW = (hotCueRow.getWidth() - 18) / 4;
+    hotCueRowLabel.setBounds(hotCueRow.removeFromTop(12).reduced(2, 0));
+    hotCueRow.removeFromTop(1);
+    int padW = (hotCueRow.getWidth() - 12) / 4;
     for (int i = 0; i < 4; ++i)
     {
-        hotCueButtons[static_cast<size_t>(i)].setBounds(hotCueRow.removeFromLeft(padW).reduced(2, 0));
+        hotCueButtons[static_cast<size_t>(i)].setBounds(hotCueRow.removeFromLeft(padW).reduced(1, 0));
         if (i < 3)
-            hotCueRow.removeFromLeft(6);
+            hotCueRow.removeFromLeft(4);
     }
 
     // 2c. Loop + SYNC/KEY uniformes en la tercera fila
-    int loopBtnH = juce::jmin(rowH, 40);
+    int loopBtnH = juce::jmin(rowH, 34);
     auto loopBtns = loopRow.withSizeKeepingCentre(loopRow.getWidth(), loopBtnH);
     loopPrevButton.setBounds(loopBtns.removeFromLeft(loopBtnH).reduced(2, 0));
     loopBtns.removeFromLeft(6);

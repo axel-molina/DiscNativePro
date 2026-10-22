@@ -328,3 +328,29 @@ eliminar los VU para columnas más estrechas con una librería más alta.
 - **Drag & drop**: implementado con paridad exacta al deck (reenvío de `filesDropped` /
   `itemDropped`); la prueba funcional de arrastre en vivo queda pendiente de ejecutarse con
   la app en primer plano (la automatización de clics se interrumpió por uso del equipo).
+
+---
+
+# Ajuste 4 — Aplanar más la parte central del modo Ondas
+
+## Objetivo
+Reducir aún más el aire de la parte central (botones de los decks, controles de bandeja y
+faders del centro) para que la librería gane más espacio.
+
+## Cambios
+### [MODIFY] `src/ui/DeckComponent.cpp`
+- `resizedWavesMode()` más compacto: filas máx 52px (antes 64), huecos máx 6 (antes 10),
+  botones de 38/34px (antes 44/40), márgenes reducidos y pads más juntos.
+
+### [MODIFY] `src/ui/CenterColumnComponent.cpp`
+- En Ondas: sección superior 46→40px e inferior 64→56px; faders con menos margen
+  horizontal (insets 14→8px, más cerca del separador y de los bordes).
+
+### [MODIFY] `src/ui/MainComponent.cpp`
+- Librería en Ondas: factor 0.31→0.35 (más pistas visibles).
+
+## Verificación
+- **App en vivo (captura)**: parte central notablemente más aplanada, botones compactos,
+  faders más holgados de ancho con su separador, librería más alta.
+- **2 Bandejas idéntico**: todo ramificado por `wavesMode`.
+- **Compilación**: `cmake --build build` (Release) → 0 errores / 0 warnings en archivos tocados.

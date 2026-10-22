@@ -121,6 +121,8 @@ void CenterColumnComponent::setWavesMode(bool active, juce::Slider* fader1, juce
 void CenterColumnComponent::paint(juce::Graphics& g)
 {
     auto bounds = getLocalBounds().toFloat();
+    const int topH = wavesMode ? 40 : 46;
+    const int bottomH = wavesMode ? 56 : 64;
 
     // Dark base background #0c0d12 with borders #1c202a
     g.fillAll(juce::Colour::fromRGB(12, 13, 18));
@@ -131,14 +133,14 @@ void CenterColumnComponent::paint(juce::Graphics& g)
 
     // Top section background #12141a
     g.setColour(juce::Colour::fromRGB(18, 20, 26));
-    g.fillRect(0, 0, getWidth(), 46);
+    g.fillRect(0, 0, getWidth(), topH);
     g.setColour(juce::Colour::fromRGB(31, 35, 46));
-    g.drawHorizontalLine(46, 0.0f, (float)getWidth());
+    g.drawHorizontalLine(topH, 0.0f, (float)getWidth());
 
     // Bottom section background #12141a
-    int bottomY = getHeight() - 64;
+    int bottomY = getHeight() - bottomH;
     g.setColour(juce::Colour::fromRGB(18, 20, 26));
-    g.fillRect(0, bottomY, getWidth(), 64);
+    g.fillRect(0, bottomY, getWidth(), bottomH);
     g.setColour(juce::Colour::fromRGB(31, 35, 46));
     g.drawHorizontalLine(bottomY, 0.0f, (float)getWidth());
 
@@ -146,22 +148,24 @@ void CenterColumnComponent::paint(juce::Graphics& g)
     if (wavesMode)
     {
         g.setColour(juce::Colour::fromRGB(31, 35, 46));
-        g.drawVerticalLine(getWidth() / 2, 54.0f, (float)bottomY - 8.0f);
+        g.drawVerticalLine(getWidth() / 2, (float)topH + 6.0f, (float)bottomY - 6.0f);
     }
 }
 
 void CenterColumnComponent::resized()
 {
     auto area = getLocalBounds();
+    const int topH = wavesMode ? 40 : 46;
+    const int bottomH = wavesMode ? 56 : 64;
 
-    // 1. Top Section (46px)
-    auto topArea = area.removeFromTop(46).reduced(6, 2);
+    // 1. Top Section
+    auto topArea = area.removeFromTop(topH).reduced(6, 2);
     masterKnob.setBounds(topArea.removeFromLeft(48).reduced(0, 1));
     phonesKnob.setBounds(topArea.removeFromRight(48).reduced(0, 1));
     masterMeter.setBounds(topArea.reduced(8, 4));
 
-    // 2. Bottom Section (64px)
-    auto bottomArea = area.removeFromBottom(64).reduced(6, 4);
+    // 2. Bottom Section
+    auto bottomArea = area.removeFromBottom(bottomH).reduced(6, 4);
 
     // Crossfader header controls (1, SMOOTH, TEMPO BLEND, 2)
     auto ctrlRow = bottomArea.removeFromTop(20);
@@ -179,11 +183,11 @@ void CenterColumnComponent::resized()
     // de cada bandeja lado a lado (la onda horizontal superior ya muestra la onda)
     if (wavesMode && externalFader1 != nullptr && externalFader2 != nullptr)
     {
-        auto mid = area.reduced(8, 8);
+        auto mid = area.reduced(6, 6);
         auto half = mid.getWidth() / 2;
-        externalFader1->setBounds(mid.removeFromLeft(half).reduced(14, 4));
-        mid.removeFromLeft(4);
-        externalFader2->setBounds(mid.reduced(14, 4));
+        externalFader1->setBounds(mid.removeFromLeft(half).reduced(8, 2));
+        mid.removeFromLeft(2);
+        externalFader2->setBounds(mid.reduced(8, 2));
     }
     else
     {
