@@ -443,3 +443,26 @@ multi-resolución y dibuja con escala dB + cuerpo/picos. Lo mismo es posible con
   beat, cuerpo multibanda + línea de pico, cuadrícula alineada y playhead centrado — el
   "bloque grueso" desaparece incluso en material comprimido.
 - **Compilación**: `cmake --build build` (Release) → 0 errores / 0 warnings en archivos nuevos.
+
+---
+
+# Ajuste 8 — Scrub estilo plato de vinilo sobre la onda expandida
+
+## Objetivo
+Hacer click sobre la onda scrolling y arrastrar izquierda/derecha debe mover la aguja como
+el plato de vinilo (con sonido de scratch), en lugar del salto de posición anterior.
+
+## Cambios
+### [MODIFY] `src/ui/DeckScrollWaveform.h` / `.cpp`
+- Misma semántica que `JogWheel`: `mouseDown` → `beginScratch` (si está en pausa entra en
+  "audición" para que el gesto suene y vuelve a pausa al soltar); `mouseDrag` → velocidad
+  suavizada y limitada (±10 rev/s) vía `setScratchVelocity`, con mapeo **1:1 con la onda**
+  (arrastrar un ancho de ventana = 6s de audio); `mouseUp` → `endScratch`. Reposo = aguja
+  detenida, y el retroceso suena igual que el avance.
+- Se elimina el seek por click en la onda expandida (el overview fino sigue siendo la barra
+  de seek clicable).
+
+## Verificación
+- **Compilación**: `cmake --build build` (Release) → 0 errores / 0 warnings.
+- Prueba de gesto en vivo pendiente (equipo en uso); el ciclo scratch replica el del
+  `JogWheel`, verificado en la app.

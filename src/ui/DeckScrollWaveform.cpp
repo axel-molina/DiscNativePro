@@ -182,23 +182,63 @@ void DeckScrollWaveform::drawOverviewFallback(juce::Graphics& g, juce::Rectangle
     }
 }
 
+// Scrub estilo plato de vinilo (misma semántica que JogWheel): tocar la onda
+// "agarra" la aguja — el movimiento horizontal suena como scratch, incluido el
+// reposo (quieto = aguja detenida) y el retroceso. En pausa entra en "audición"
+// para que el gesto suene; al soltar vuelve a pausa.
+
 void DeckScrollWaveform::mouseDown(const juce::MouseEvent& e)
 {
-    seekToMouse((float)e.x);
+    if (!deck.isLoaded())
+        return;
+
+    auditioning = false;
+    if (!deck.isPlaying())
+    {
+        deck.play();
+        auditioning = true;
+    }
+
+    scrubbing = true;
+    smoothRevPerSec = 0.0f;
+    deck.beginScratch();
+    lastMouseX = (float)e.x;
+    lastMoveMs = juce::Time::getMillisecondCounter();
 }
 
 void DeckScrollWaveform::mouseDrag(const juce::MouseEvent& e)
 {
-    seekToMouse((float)e.x);
-}
-
-void DeckScrollWaveform::seekToMouse(float mouseX)
-{
-    const double totalDur = deck.getLengthInSeconds();
-    if (!deck.isLoaded() || totalDur <= 0.0)
+    if (!scrubbing)
         return;
 
-    const double pixelsPerSec = (double)getWidth() / visibleWindowSecs;
-    const double target = deck.getPosition() + ((double)mouseX - (double)getWidth() * 0.5) / pixelsPerSec;
-    deck.setPosition(juce::jlimit(0.0, totalDur, target));
+    const juce::uint32 now = juce::Time::getMillisecondCounter();
+    const double dt = (double)(now - lastMoveMs) / 1000.0;
+    const float dx = (float)e.x - lastMouseX;
+    lastMouseX = (float)e.x;
+    lastMoveMs = now;
+
+    if (dt <= 0.0)
+        return;
+
+    // Mapeo 1:1 con la onda: arrastrar un ancho de ventana = 6s de audio.
+    // La API del plato usa rev/s donde 1 rev/s = 1.8 audio-segundos por segundo.
+    const double pixelsPerSec = (double)juce::jmax(1, getWidth()) / visibleWindowSecs;
+    const float instRevPerSec = (float)(((double)dx / pixelsPerSec) / dt / 1.8);
+    smoothRevPerSec += (instRevPerSec - smoothRevPerSec) * 0.35f;
+    deck.setScratchVelocity(juce::jlimit(-10.0f, 10.0f, smoothRevPerSec));
+}
+
+void DeckScrollWaveform::mouseUp(const juce::MouseEvent&)
+{
+    if (scrubbing)
+    {
+        deck.setScratchVelocity(0.0f);
+        deck.endScratch();
+        scrubbing = false;
+    }
+    if (auditioning)
+    {
+        deck.pause();
+        auditioning = false;
+    }
 }

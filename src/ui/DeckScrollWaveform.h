@@ -20,18 +20,25 @@ public:
     void timerCallback() override;
     void mouseDown(const juce::MouseEvent& e) override;
     void mouseDrag(const juce::MouseEvent& e) override;
+    void mouseUp(const juce::MouseEvent& e) override;
 
 private:
     void ensureFinePeaks();
     void drawFineWave(juce::Graphics& g, juce::Rectangle<float> area, double currentPos);
     void drawOverviewFallback(juce::Graphics& g, juce::Rectangle<float> area, double currentPos);
-    void seekToMouse(float mouseX);
 
     DeckPlayer& deck;
     juce::Colour accent;
 
     WindowPeakExtractor extractor;
     juce::File extractorFile;
+
+    // Scrub estilo plato de vinilo: arrastrar mueve la aguja con sonido
+    bool scrubbing { false };
+    bool auditioning { false };
+    float lastMouseX { 0.0f };
+    juce::uint32 lastMoveMs { 0 };
+    float smoothRevPerSec { 0.0f };
 
     static constexpr double visibleWindowSecs = 6.0;
 
