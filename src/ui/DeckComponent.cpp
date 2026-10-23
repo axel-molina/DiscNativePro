@@ -66,13 +66,30 @@ DeckComponent::DeckComponent(int deckNum, DeckPlayer& player, AudioEngine& audio
                                 juce::Colour::fromRGB(142, 149, 165),
                                 juce::Colour::fromRGB(142, 149, 165),
                                 juce::Colour::fromRGB(38, 43, 56));
-    syncButton.setClickingTogglesState(true);
+    syncButton.setClickingTogglesState(false);
+    syncButton.setToggleState(false, juce::dontSendNotification);
     syncButton.onClick = [this]() {
-        bool on = syncButton.getToggleState();
-        syncButton.setCustomColours(on ? juce::Colour::fromRGB(37, 99, 235) : juce::Colour::fromRGB(24, 27, 36),
-                                    on ? juce::Colours::white : juce::Colour::fromRGB(142, 149, 165),
-                                    on ? juce::Colours::white : juce::Colour::fromRGB(142, 149, 165),
-                                    on ? juce::Colour::fromRGB(59, 130, 246) : juce::Colour::fromRGB(38, 43, 56));
+        const bool applied = engine.syncDeckTo(deckIndex);
+
+        const juce::Colour neutralBg     = juce::Colour::fromRGB(24, 27, 36);
+        const juce::Colour neutralFg     = juce::Colour::fromRGB(142, 149, 165);
+        const juce::Colour neutralBorder = juce::Colour::fromRGB(38, 43, 56);
+
+        if (applied)
+            syncButton.setCustomColours(juce::Colour::fromRGB(37, 99, 235), juce::Colours::white,
+                                        juce::Colours::white, juce::Colour::fromRGB(59, 130, 246));
+        else
+            syncButton.setCustomColours(juce::Colour::fromRGB(180, 118, 20), juce::Colours::white,
+                                        juce::Colours::white, juce::Colour::fromRGB(217, 155, 40));
+
+        // One-shot flash: blue when applied (1.5 s), amber when not applicable (0.8 s).
+        juce::Component::SafePointer<DeckComponent> safe (this);
+        DjButton* btn = &syncButton;
+        juce::Timer::callAfterDelay(applied ? 1500 : 800,
+            [safe, btn, neutralBg, neutralFg, neutralBorder]() {
+                if (safe == nullptr) return;
+                btn->setCustomColours(neutralBg, neutralFg, neutralFg, neutralBorder);
+            });
     };
     addAndMakeVisible(syncButton);
 

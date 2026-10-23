@@ -55,6 +55,9 @@ public:
     // Tempo Blend & Crossfader
     void setTempoBlend(bool active);
     bool isTempoBlendActive() const { return tempoBlendActive.load(); }
+    // One-shot pitch match: deckIndex takes the current BPM of the other deck.
+    // Returns false when the sync is not applicable (other deck unloaded / invalid BPM).
+    bool syncDeckTo(int deckIndex);
     void setCrossfader(float val);
     void applyTempoBlend(float crossfaderVal);
     void alignBeatPhase(DeckPlayer& masterDeck, DeckPlayer& slaveDeck);
