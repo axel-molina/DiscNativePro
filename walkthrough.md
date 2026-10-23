@@ -410,3 +410,36 @@ posición de reproducción, y con la **cuadrícula de beats al BPM real** de cad
 - Datos de pista, drop targets y 2 Bandejas sin cambios.
 - **Compilación**: `cmake --build build` (Release) → 0 errores / 0 warnings en archivos nuevos
   (warnings mostrados son preexistentes de `SoundCloudService`/`AsyncFolderScanner`/`UsbLibraryView`).
+
+---
+
+# Ajuste 7 — Precisión de picos estilo Serato en el wave scrolling
+
+## Objetivo (y respuesta técnica)
+Pistas comprimidas o sets largos se dibujaban como un bloque grueso: la extracción del
+reproductor genera **8000 puntos fijos** (en un set de 84 min ≈ 0.63s por punto) con
+amplitud **lineal**. Serato no usa una librería de render distinta: precomputa picos
+multi-resolución y dibuja con escala dB + cuerpo/picos. Lo mismo es posible con JUCE tal cual.
+
+## Cambios
+### [NEW] `src/audio/WindowPeakExtractor.h` / `.cpp`
+- Segundo `AudioFormatReader` (independiente del reproductor) que extrae picos finos de
+  **256 muestras/punto (~6ms)** solo de la ventana visible (±3s + margen de 8s de caché,
+  ~41KB de memoria). La resolución es por muestras: independiente de la duración de la pista
+  (un set de 84 min obtiene el mismo detalle que un tema de 3 min).
+
+### [MODIFY] `src/ui/DeckScrollWaveform.h` / `.cpp`
+- Render con los picos finos: **cuerpo RMS multibanda** (tema de color) + **línea de pico
+  fino** encima + **curva de amplitud tipo dB** (`amp^0.55`) que expande las diferencias de
+  las pistas limitadas/brickwall. Normalización por ventana con suelo (sin despeinar partes
+  suaves). Fallback al render anterior si no hay archivo local. Cuadrícula, playhead y seek
+  sin cambios.
+
+### [MODIFY] `CMakeLists.txt`
+- Registrados `WindowPeakExtractor.h/.cpp`.
+
+## Verificación (app en vivo, capturas)
+- Pistas reales (incluida una de YouTube de 9:22): transientes individuales visibles beat a
+  beat, cuerpo multibanda + línea de pico, cuadrícula alineada y playhead centrado — el
+  "bloque grueso" desaparece incluso en material comprimido.
+- **Compilación**: `cmake --build build` (Release) → 0 errores / 0 warnings en archivos nuevos.

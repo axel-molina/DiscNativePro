@@ -2,11 +2,13 @@
 
 #include <juce_gui_basics/juce_gui_basics.h>
 #include "../audio/DeckPlayer.h"
+#include "../audio/WindowPeakExtractor.h"
 
 // Wave scrolling de una bandeja (±3s alrededor del playhead) para las tiras del
-// modo Ondas: misma técnica que el wave central de 2 Bandejas (resolución fina
-// de picos para mezclas precisas) con cuadrícula de beats al BPM real de la
-// pista. Click/drag sobre la onda hace seek.
+// modo Ondas. Picos finos por ventana (~6ms/punto, estilo Serato) con cuerpo
+// RMS multibanda, línea de pico fino y curva de amplitud tipo dB para
+// distinguir transientes incluso en pistas comprimidas. Cuadrícula de beats al
+// BPM real de la pista; click/drag hace seek.
 class DeckScrollWaveform : public juce::Component,
                            public juce::Timer
 {
@@ -20,10 +22,16 @@ public:
     void mouseDrag(const juce::MouseEvent& e) override;
 
 private:
+    void ensureFinePeaks();
+    void drawFineWave(juce::Graphics& g, juce::Rectangle<float> area, double currentPos);
+    void drawOverviewFallback(juce::Graphics& g, juce::Rectangle<float> area, double currentPos);
     void seekToMouse(float mouseX);
 
     DeckPlayer& deck;
     juce::Colour accent;
+
+    WindowPeakExtractor extractor;
+    juce::File extractorFile;
 
     static constexpr double visibleWindowSecs = 6.0;
 
