@@ -268,3 +268,37 @@ Reporte: en Windows (PC Intel iGPU + AMD dGPU) la app no abre ventana y cada lan
 ## 4. Pendientes
 - Validación runtime del binario Windows sobre el equipo del reporter (Intel+AMD) con el artifact de CI; adicionalmente pedir el *faulting module* del Visor de eventos (si mencionara `d2d1`/driver AMD, confirma la cadena D2D+driver) y actualizar drivers AMD/Intel como red de seguridad de segunda línea.
 - Merge a `main` decide el usuario (los releases se generan en push de tags).
+
+# Walkthrough — P2: Perilla de filtro sin corte al cruzar el centro
+
+## 1. Causa
+Reporte: "perilla filtro, hace un corte al pasar por la mitad". En `src/audio/DjMixer.cpp` había tres defectos y un cuarto asociado:
+1. **Banda muerta binaria ±0.03** con rama de bypass (`colCoeffs == nullptr`): al cruzar el centro el filtro se enganchaba/desenganchaba de golpe.
+2. **Sin suavizado**: el knob se leía 1× por bloque y el mismo valor se aplicaba a las 512 muestras.
+3. **Alocaciones en el hilo de audio**: `IIR::Coefficients::makeXXX` creaba 4 objetos por bloque (heap) incluso sin mover la perilla.
+4. **Taper del EQ discontinuo**: `knob <= 0.02 → 0.0001` (−80 dB) contra −36 dB en 0.021: salto de 44 dB en el kill.
+
+## 2. Cambios (rama `axel-molina/filter-knob-fix`)
+- **`b007879`** — `DjMixer.h/.cpp`: filtro color con `StateVariableTPTFilter` y barrido continuo LPF/HPF (sin banda muerta ni bypass); coeficientes de EQ persistentes reutilizados en sitio (`ArrayCoefficients` + `operator=`, con la capacidad del `Array` retenida por `clearQuick`/`ensureStorageAllocated`); suavizado por bloque (~25 ms, `SmoothedValue`); taper del EQ continuo (−80 dB → 0 dB → +6 dB).
+- **`9e6e244`** — `DjMixer.h/.cpp`: **doble SVF por canal** (LPF y HPF con estado y cutoff propios, ambos neutrales en el centro: 20 kHz y 20 Hz) + **crossfade smoothstep** en |knob| < 0.06, eliminando el clic residual que dejaba el cambio de tipo de filtro (salto de cutoff 20 kHz ↔ 20 Hz en un bloque). Cutoffs limitados a `0.45 · sampleRate`.
+
+## 3. Verificación (harness C++ headless: sine 1 kHz @ 44.1 kHz, bloques de 512)
+Delta natural de la señal de prueba: **0.1424**.
+
+| Métrica | Antiguo (`main`) | P2 (`b007879`) | P2-bis (`9e6e244`) |
+|---|---|---|---|
+| Barrido filtro: delta interno | 0.291 | 0.146 | **0.146** |
+| Barrido filtro: delta en frontera de bloque | 0.224 en knob≈+0.030 (banda muerta) | 0.432 en knob≈+0.010 (cambio de tipo) | **0.146** |
+| Kill EQ: delta interno / frontera | 0.295 / 0.193 en eq≈0.018 | 0.142 / 0.142 | 0.161 / 0.141 |
+| Barridos por mitades (LPF / HPF) | 0.173 / 0.149 | 0.144 / 0.143 | 0.144 / 0.145 |
+| Alocaciones por bloque en `process()` | 4 | 0 | **0** |
+
+Ganancia real medida (RMS de la salida para una sine unidad; ideal 0.7071):
+- Centro (knob=0): **0.70710 → 0.00 dB** (transparente, sin ripple).
+- Cerca del centro (knob=−0.02 y +0.06): **0.70710** → el crossfade no colorea.
+- Extremos: LPF knob=−1 → **−39.9 dB** y HPF knob=+1 → **−41.1 dB** a 1 kHz → el efecto sigue operativo.
+- Regresión: `cmake --build build` con 0 errores y 0 warnings en los ficheros tocados; auto-relaunch de la app tras cada compilación.
+
+## 4. Notas
+- El clic residual de `b007879` se detectó con el harness (no se habría visto en una escucha rápida), lo que justifica mantener esta prueba como criterio de aceptación para cambios de DSP.
+- El harness vive fuera del repo (scratchpad temporal) y se enlaza contra los objetos JUCE del build.
