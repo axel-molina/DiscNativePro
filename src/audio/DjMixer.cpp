@@ -1,19 +1,53 @@
 #include "DjMixer.h"
 #include <cmath>
 
-void ChannelStrip::prepare(double sampleRate, int /*blockSize*/)
+void ChannelStrip::prepare(double sampleRate, int blockSize)
 {
     reset();
 
-    // Prepare default coefficients
-    auto defaultCoeffs = juce::dsp::IIR::Coefficients<float>::makeAllPass(sampleRate, 1000.0f);
+    // Persistent EQ coefficient objects: allocated ONCE here (prepare is not the
+    // audio thread). From now on process() only overwrites their values in place.
+    lowEqCoeffs  = new juce::dsp::IIR::Coefficients<float>();
+    midEqCoeffs  = new juce::dsp::IIR::Coefficients<float>();
+    highEqCoeffs = new juce::dsp::IIR::Coefficients<float>();
+
+    // Neutral (unity gain) coefficients, assigned in place. This also reserves the
+    // coefficient storage so later in-place updates never grow the array.
+    *lowEqCoeffs  = juce::dsp::IIR::ArrayCoefficients<float>::makeLowShelf(sampleRate, 250.0f, 0.707f, 1.0f);
+    *midEqCoeffs  = juce::dsp::IIR::ArrayCoefficients<float>::makePeakFilter(sampleRate, 1000.0f, 0.8f, 1.0f);
+    *highEqCoeffs = juce::dsp::IIR::ArrayCoefficients<float>::makeHighShelf(sampleRate, 2500.0f, 0.707f, 1.0f);
+
+    lastAppliedLowGain  = 1.0f;
+    lastAppliedMidGain  = 1.0f;
+    lastAppliedHighGain = 1.0f;
+
+    const juce::dsp::ProcessSpec spec { sampleRate,
+                                        static_cast<juce::uint32>(juce::jmax(1, blockSize)),
+                                        static_cast<juce::uint32>(2) };
+
     for (int ch = 0; ch < 2; ++ch)
     {
-        lowFilter[ch].coefficients = defaultCoeffs;
-        midFilter[ch].coefficients = defaultCoeffs;
-        highFilter[ch].coefficients = defaultCoeffs;
-        colorFilter[ch].coefficients = defaultCoeffs;
+        lowFilter[ch].coefficients  = lowEqCoeffs;
+        midFilter[ch].coefficients  = midEqCoeffs;
+        highFilter[ch].coefficients = highEqCoeffs;
+
+        colorFilter[ch].prepare(spec);
+        colorFilter[ch].setType(juce::dsp::StateVariableTPTFilterType::lowpass);
+        colorFilter[ch].setResonance(0.707f);
+        colorFilter[ch].setCutoffFrequency(juce::jmin(20000.0f, static_cast<float>(sampleRate) * 0.49f));
     }
+    lastColorType = juce::dsp::StateVariableTPTFilterType::lowpass;
+
+    // ~25 ms smoothing ramps, seeded with the current knob values (no jump on start).
+    colorSmooth.reset(sampleRate, 0.025);
+    eqLowSmooth.reset(sampleRate, 0.025);
+    eqMidSmooth.reset(sampleRate, 0.025);
+    eqHighSmooth.reset(sampleRate, 0.025);
+
+    colorSmooth.setCurrentAndTargetValue(juce::jlimit(-1.0f, 1.0f, filterKnob.load()));
+    eqLowSmooth.setCurrentAndTargetValue(juce::jlimit(0.0f, 1.0f, eqLow.load()));
+    eqMidSmooth.setCurrentAndTargetValue(juce::jlimit(0.0f, 1.0f, eqMid.load()));
+    eqHighSmooth.setCurrentAndTargetValue(juce::jlimit(0.0f, 1.0f, eqHigh.load()));
 }
 
 void ChannelStrip::reset()
@@ -25,6 +59,13 @@ void ChannelStrip::reset()
         highFilter[ch].reset();
         colorFilter[ch].reset();
     }
+
+    // Snap every smoother to its last target so a seek never replays a stale ramp.
+    colorSmooth.setCurrentAndTargetValue(colorSmooth.getTargetValue());
+    eqLowSmooth.setCurrentAndTargetValue(eqLowSmooth.getTargetValue());
+    eqMidSmooth.setCurrentAndTargetValue(eqMidSmooth.getTargetValue());
+    eqHighSmooth.setCurrentAndTargetValue(eqHighSmooth.getTargetValue());
+
     meterPeakLeft.store(0.0f);
     meterPeakRight.store(0.0f);
 }
@@ -40,77 +81,100 @@ void ChannelStrip::process(juce::AudioBuffer<float>& buffer, juce::AudioBuffer<f
     if (numSamples <= 0 || sampleRate <= 0.0)
         return;
 
-    // 1. Calculate 3-band EQ coefficients
-    float lowKnob = juce::jlimit(0.0f, 1.0f, eqLow.load());
-    float midKnob = juce::jlimit(0.0f, 1.0f, eqMid.load());
-    float highKnob = juce::jlimit(0.0f, 1.0f, eqHigh.load());
+    // The coefficient objects are created in prepare(); without them the strip is silent.
+    if (lowEqCoeffs == nullptr || midEqCoeffs == nullptr || highEqCoeffs == nullptr)
+        return;
 
-    auto calcGain = [](float knob) -> float {
-        if (knob <= 0.02f) return 0.0001f; // Kill (-80dB)
+    // 1. One smoothed value per block (~25 ms ramp): continuous across blocks, no zipper.
+    eqLowSmooth.setTargetValue(juce::jlimit(0.0f, 1.0f, eqLow.load()));
+    eqMidSmooth.setTargetValue(juce::jlimit(0.0f, 1.0f, eqMid.load()));
+    eqHighSmooth.setTargetValue(juce::jlimit(0.0f, 1.0f, eqHigh.load()));
+    colorSmooth.setTargetValue(juce::jlimit(-1.0f, 1.0f, filterKnob.load()));
+
+    const float lowKnob  = eqLowSmooth.skip(numSamples);
+    const float midKnob  = eqMidSmooth.skip(numSamples);
+    const float highKnob = eqHighSmooth.skip(numSamples);
+    const float colKnob  = colorSmooth.skip(numSamples);
+
+    // Continuous taper: -80 dB kill at 0.0 -> 0 dB at 0.5 -> +6 dB at 1.0 (no jump).
+    const auto gainForKnob = [](float knob) -> float
+    {
         if (knob < 0.5f)
-            return juce::Decibels::decibelsToGain(juce::jmap(knob, 0.02f, 0.5f, -36.0f, 0.0f));
+            return juce::Decibels::decibelsToGain(juce::jmap(knob, 0.0f, 0.5f, -80.0f, 0.0f));
+
         return juce::Decibels::decibelsToGain(juce::jmap(knob, 0.5f, 1.0f, 0.0f, 6.0f));
     };
 
-    auto lowCoeffs = juce::dsp::IIR::Coefficients<float>::makeLowShelf(sampleRate, 250.0f, 0.707f, calcGain(lowKnob));
-    auto midCoeffs = juce::dsp::IIR::Coefficients<float>::makePeakFilter(sampleRate, 1000.0f, 0.8f, calcGain(midKnob));
-    auto highCoeffs = juce::dsp::IIR::Coefficients<float>::makeHighShelf(sampleRate, 2500.0f, 0.707f, calcGain(highKnob));
+    // 2. EQ coefficients assigned in place on the persistent objects (no allocation),
+    //    only when the smoothed gain actually changed.
+    const float lowGain  = gainForKnob(lowKnob);
+    const float midGain  = gainForKnob(midKnob);
+    const float highGain = gainForKnob(highKnob);
 
-    // 2. Color Filter (Bipolar Knob: Left = LPF, Center = Bypass, Right = HPF)
-    float colKnob = juce::jlimit(-1.0f, 1.0f, filterKnob.load());
-    juce::ReferenceCountedObjectPtr<juce::dsp::IIR::Coefficients<float>> colCoeffs = nullptr;
+    if (std::abs(lowGain - lastAppliedLowGain) > 1e-4f)
+    {
+        *lowEqCoeffs = juce::dsp::IIR::ArrayCoefficients<float>::makeLowShelf(sampleRate, 250.0f, 0.707f, lowGain);
+        lastAppliedLowGain = lowGain;
+    }
 
-    if (colKnob < -0.03f)
+    if (std::abs(midGain - lastAppliedMidGain) > 1e-4f)
     {
-        // Low Pass Filter sweep (from 20 kHz down to 120 Hz)
-        float norm = -colKnob;
-        float cutoff = juce::jlimit(120.0f, 20000.0f, 20000.0f * std::pow(0.006f, norm));
-        colCoeffs = juce::dsp::IIR::Coefficients<float>::makeLowPass(sampleRate, cutoff, 0.85f);
+        *midEqCoeffs = juce::dsp::IIR::ArrayCoefficients<float>::makePeakFilter(sampleRate, 1000.0f, 0.8f, midGain);
+        lastAppliedMidGain = midGain;
     }
-    else if (colKnob > 0.03f)
+
+    if (std::abs(highGain - lastAppliedHighGain) > 1e-4f)
     {
-        // High Pass Filter sweep (from 20 Hz up to 8000 Hz)
-        float norm = colKnob;
-        float cutoff = juce::jlimit(20.0f, 8000.0f, 20.0f * std::pow(400.0f, norm));
-        colCoeffs = juce::dsp::IIR::Coefficients<float>::makeHighPass(sampleRate, cutoff, 0.85f);
+        *highEqCoeffs = juce::dsp::IIR::ArrayCoefficients<float>::makeHighShelf(sampleRate, 2500.0f, 0.707f, highGain);
+        lastAppliedHighGain = highGain;
     }
+
+    // 3. Color filter: continuous bipolar sweep, no dead zone and no bypass branch.
+    const juce::dsp::StateVariableTPTFilterType colorType =
+        colKnob < 0.0f ? juce::dsp::StateVariableTPTFilterType::lowpass
+                       : juce::dsp::StateVariableTPTFilterType::highpass;
+
+    float cutoff = colKnob < 0.0f
+        ? juce::jlimit(120.0f, 20000.0f, 20000.0f * std::pow(0.006f, -colKnob))  // LPF: 20 kHz -> 120 Hz
+        : juce::jlimit(20.0f, 8000.0f, 20.0f * std::pow(400.0f, colKnob));       // HPF: 20 Hz -> 8 kHz
+
+    // The SVF requires cutoff < Nyquist.
+    cutoff = juce::jmin(cutoff, static_cast<float>(sampleRate) * 0.49f);
+
+    if (colorType != lastColorType)
+    {
+        for (int ch = 0; ch < 2; ++ch)
+            colorFilter[ch].setType(colorType);
+
+        lastColorType = colorType;
+    }
+
+    for (int ch = 0; ch < 2; ++ch)
+        colorFilter[ch].setCutoffFrequency(cutoff);
 
     int numChannels = juce::jmin(2, buffer.getNumChannels());
     for (int ch = 0; ch < numChannels; ++ch)
     {
-        lowFilter[ch].coefficients = lowCoeffs;
-        midFilter[ch].coefficients = midCoeffs;
-        highFilter[ch].coefficients = highCoeffs;
+        lowFilter[ch].coefficients  = lowEqCoeffs;
+        midFilter[ch].coefficients  = midEqCoeffs;
+        highFilter[ch].coefficients = highEqCoeffs;
 
         auto* channelData = buffer.getWritePointer(ch);
 
-        if (colCoeffs != nullptr)
+        for (int i = 0; i < numSamples; ++i)
         {
-            colorFilter[ch].coefficients = colCoeffs;
-            for (int i = 0; i < numSamples; ++i)
-            {
-                float s = channelData[i];
-                s = lowFilter[ch].processSample(s);
-                s = midFilter[ch].processSample(s);
-                s = highFilter[ch].processSample(s);
-                s = colorFilter[ch].processSample(s);
-                channelData[i] = s;
-            }
+            float s = channelData[i];
+            s = lowFilter[ch].processSample(s);
+            s = midFilter[ch].processSample(s);
+            s = highFilter[ch].processSample(s);
+            s = colorFilter[ch].processSample(ch, s);
+            channelData[i] = s;
         }
-        else
-        {
-            for (int i = 0; i < numSamples; ++i)
-            {
-                float s = channelData[i];
-                s = lowFilter[ch].processSample(s);
-                s = midFilter[ch].processSample(s);
-                s = highFilter[ch].processSample(s);
-                channelData[i] = s;
-            }
-        }
+
+        colorFilter[ch].snapToZero();
     }
 
-    // 3. Apply Trim / Gain (PFL Signal)
+    // 4. Apply Trim / Gain (PFL Signal)
     float channelGain = gain.load();
     buffer.applyGain(channelGain);
 
