@@ -268,3 +268,23 @@ Reporte: en Windows (PC Intel iGPU + AMD dGPU) la app no abre ventana y cada lan
 ## 4. Pendientes
 - Validación runtime del binario Windows sobre el equipo del reporter (Intel+AMD) con el artifact de CI; adicionalmente pedir el *faulting module* del Visor de eventos (si mencionara `d2d1`/driver AMD, confirma la cadena D2D+driver) y actualizar drivers AMD/Intel como red de seguridad de segunda línea.
 - Merge a `main` decide el usuario (los releases se generan en push de tags).
+
+# Walkthrough — P1: Botón SYNC funcional (ajuste de pitch one-shot)
+
+## 1. Causa
+El botón SYNC de cada deck (`DeckComponent.cpp:70-76`) era puramente cosmético: su `onClick` solo repintaba el botón y nunca llamaba al engine. La función de sync sí existía (sync por MIDI en `MidiManager.cpp:207-216`, que ajusta el pitch con el BPM actual del otro deck y **no** depende del estado play/pause), por lo que se percibía "el sync no funciona" en cualquier estado.
+
+## 2. Cambios (rama `axel-molina/sync-button-fix`, commit `34332ae`)
+- **`AudioEngine::syncDeckTo(int deckIndex)`** [NEW]: retorna `false` si el otro deck no está cargado o hay BPM inválido (0); si aplica, `self.setPitchPercent((other.getBpm()/self.getOriginalBpm() - 1) * 100)` y retorna `true`.
+- **`MidiManager.cpp`**: `deck1_sync`/`deck2_sync` delegan en `syncDeckTo` (el cálculo vive en un único sitio; mismo comportamiento).
+- **`DeckComponent.cpp`**: el `onClick` llama al engine; destello **azul 1.5 s** al aplicar (one-shot, sin enclavamiento) y **ámbar 0.8 s** cuando no es aplicable (feedback visible en vez de "botón muerto"). Sin toggle persistente; reset con `Timer::callAfterDelay` + `SafePointer`, sin timers permanentes.
+
+## 3. Verificación
+- `cmake --build build` → 0 errores; recompilación forzada de los 4 ficheros tocados → 0 warnings (el resto del log es third-party JUCE/harfbuzz).
+- Cableado confirmado: `syncDeckTo` público (`AudioEngine.h:60`) y los labels de BPM se refrescan cada tick desde `deck.getBpm()` (`DeckComponent.cpp:1018-1024`), así que el BPM aplicado se ve sin tocar nada más.
+- Auto-relaunch: `pkill` acotado a este worktree + `open` del build Release actualizado → PID activo.
+- **Pendiente de prueba con oído del usuario** (requiere cargar dos tracks): SYNC en deck 1 y 2 en pausa y reproduciendo, y caso no aplicable con un solo deck (destello ámbar).
+
+## 4. Alcance excluido (fases siguientes)
+- Alineación de fase/beatgrid → P3 (`alignBeatPhase` + reset thread-safe del stretcher).
+- Respeto del pitch range configurado, half/double-time y BPM con decimales → P4.
