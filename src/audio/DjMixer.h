@@ -29,9 +29,11 @@ struct ChannelStrip
     juce::dsp::IIR::Filter<float> midFilter[2];
     juce::dsp::IIR::Filter<float> highFilter[2];
 
-    // Color filter: TPT state-variable filter, designed for sweeping cutoffs
-    // without artefacts and without heap allocations in the audio thread.
-    juce::dsp::StateVariableTPTFilter<float> colorFilter[2];
+    // Color filter: two TPT SVF (LPF/HPF) with crossfade at centre to avoid
+    // cutoff jumps on type change. Designed for sweeping cutoffs without
+    // artefacts and without heap allocations in the audio thread.
+    juce::dsp::StateVariableTPTFilter<float> colorLowFilter[2];
+    juce::dsp::StateVariableTPTFilter<float> colorHighFilter[2];
 
     // Per-block smoothing (~25 ms) so knob moves stay continuous across blocks.
     juce::SmoothedValue<float> colorSmooth, eqLowSmooth, eqMidSmooth, eqHighSmooth;
@@ -40,11 +42,10 @@ struct ChannelStrip
     // place in process() (no new Ptr / no makeXXX allocation on the audio thread).
     juce::dsp::IIR::Coefficients<float>::Ptr lowEqCoeffs, midEqCoeffs, highEqCoeffs;
 
-    // Caches used to skip redundant coefficient/filter-type updates.
+    // Caches used to skip redundant coefficient updates.
     float lastAppliedLowGain { -1.0f };
     float lastAppliedMidGain { -1.0f };
     float lastAppliedHighGain { -1.0f };
-    juce::dsp::StateVariableTPTFilterType lastColorType { juce::dsp::StateVariableTPTFilterType::lowpass };
 
     void prepare(double sampleRate, int blockSize);
     void reset();

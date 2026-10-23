@@ -31,12 +31,16 @@ void ChannelStrip::prepare(double sampleRate, int blockSize)
         midFilter[ch].coefficients  = midEqCoeffs;
         highFilter[ch].coefficients = highEqCoeffs;
 
-        colorFilter[ch].prepare(spec);
-        colorFilter[ch].setType(juce::dsp::StateVariableTPTFilterType::lowpass);
-        colorFilter[ch].setResonance(0.707f);
-        colorFilter[ch].setCutoffFrequency(juce::jmin(20000.0f, static_cast<float>(sampleRate) * 0.49f));
+        colorLowFilter[ch].prepare(spec);
+        colorLowFilter[ch].setType(juce::dsp::StateVariableTPTFilterType::lowpass);
+        colorLowFilter[ch].setResonance(0.707f);
+        colorLowFilter[ch].setCutoffFrequency(juce::jmin(20000.0f, static_cast<float>(sampleRate) * 0.45f));
+
+        colorHighFilter[ch].prepare(spec);
+        colorHighFilter[ch].setType(juce::dsp::StateVariableTPTFilterType::highpass);
+        colorHighFilter[ch].setResonance(0.707f);
+        colorHighFilter[ch].setCutoffFrequency(juce::jmin(20.0f, static_cast<float>(sampleRate) * 0.45f));
     }
-    lastColorType = juce::dsp::StateVariableTPTFilterType::lowpass;
 
     // ~25 ms smoothing ramps, seeded with the current knob values (no jump on start).
     colorSmooth.reset(sampleRate, 0.025);
@@ -57,7 +61,8 @@ void ChannelStrip::reset()
         lowFilter[ch].reset();
         midFilter[ch].reset();
         highFilter[ch].reset();
-        colorFilter[ch].reset();
+        colorLowFilter[ch].reset();
+        colorHighFilter[ch].reset();
     }
 
     // Snap every smoother to its last target so a seek never replays a stale ramp.
@@ -129,28 +134,36 @@ void ChannelStrip::process(juce::AudioBuffer<float>& buffer, juce::AudioBuffer<f
         lastAppliedHighGain = highGain;
     }
 
-    // 3. Color filter: continuous bipolar sweep, no dead zone and no bypass branch.
-    const juce::dsp::StateVariableTPTFilterType colorType =
-        colKnob < 0.0f ? juce::dsp::StateVariableTPTFilterType::lowpass
-                       : juce::dsp::StateVariableTPTFilterType::highpass;
+    // 3. Color filter: dual SVF (LPF/HPF) with smoothstep crossfade at centre
+    //    to avoid cutoff jumps when crossing zero.
+    const float lpCutoffTarget = colKnob <= 0.0f
+        ? 20000.0f * std::pow(0.006f, -colKnob)
+        : 20000.0f;
+    const float hpCutoffTarget = colKnob >= 0.0f
+        ? 20.0f * std::pow(400.0f, colKnob)
+        : 20.0f;
 
-    float cutoff = colKnob < 0.0f
-        ? juce::jlimit(120.0f, 20000.0f, 20000.0f * std::pow(0.006f, -colKnob))  // LPF: 20 kHz -> 120 Hz
-        : juce::jlimit(20.0f, 8000.0f, 20.0f * std::pow(400.0f, colKnob));       // HPF: 20 Hz -> 8 kHz
-
-    // The SVF requires cutoff < Nyquist.
-    cutoff = juce::jmin(cutoff, static_cast<float>(sampleRate) * 0.49f);
-
-    if (colorType != lastColorType)
-    {
-        for (int ch = 0; ch < 2; ++ch)
-            colorFilter[ch].setType(colorType);
-
-        lastColorType = colorType;
-    }
+    const float lpCutoff = juce::jlimit(120.0f, 20000.0f, juce::jmin(lpCutoffTarget, static_cast<float>(sampleRate) * 0.45f));
+    const float hpCutoff = juce::jlimit(20.0f, 8000.0f, juce::jmin(hpCutoffTarget, static_cast<float>(sampleRate) * 0.45f));
 
     for (int ch = 0; ch < 2; ++ch)
-        colorFilter[ch].setCutoffFrequency(cutoff);
+    {
+        colorLowFilter[ch].setCutoffFrequency(lpCutoff);
+        colorHighFilter[ch].setCutoffFrequency(hpCutoff);
+    }
+
+    // smoothstep in |knob| < 0.06
+    float w = 0.0f;
+    if (colKnob >= 0.0f)
+    {
+        const float t = juce::jlimit(0.0f, 1.0f, colKnob / 0.06f);
+        w = t * t * (3.0f - 2.0f * t); // smoothstep
+    }
+    else
+    {
+        w = 0.0f;
+    }
+    const float wLow = 1.0f - w;
 
     int numChannels = juce::jmin(2, buffer.getNumChannels());
     for (int ch = 0; ch < numChannels; ++ch)
@@ -167,11 +180,14 @@ void ChannelStrip::process(juce::AudioBuffer<float>& buffer, juce::AudioBuffer<f
             s = lowFilter[ch].processSample(s);
             s = midFilter[ch].processSample(s);
             s = highFilter[ch].processSample(s);
-            s = colorFilter[ch].processSample(ch, s);
+            float yLow = colorLowFilter[ch].processSample(ch, s);
+            float yHigh = colorHighFilter[ch].processSample(ch, s);
+            s = wLow * yLow + w * yHigh;
             channelData[i] = s;
         }
 
-        colorFilter[ch].snapToZero();
+        colorLowFilter[ch].snapToZero();
+        colorHighFilter[ch].snapToZero();
     }
 
     // 4. Apply Trim / Gain (PFL Signal)
