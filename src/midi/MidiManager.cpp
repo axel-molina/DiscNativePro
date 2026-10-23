@@ -208,10 +208,7 @@ bool MidiManager::dispatchMappedAction(const MidiActionDefinition& def, const ju
     {
         if (message.isNoteOn())
         {
-            auto& d1 = engine.getDeck(0);
-            auto& d2 = engine.getDeck(1);
-            if (d2.isLoaded() && d2.getBpm() > 0.0 && d1.getOriginalBpm() > 0.0)
-                d1.setPitchPercent((float)(((d2.getBpm() / d1.getOriginalBpm()) - 1.0) * 100.0));
+            engine.syncDeckTo(0);
             return true;
         }
     }
@@ -279,10 +276,7 @@ bool MidiManager::dispatchMappedAction(const MidiActionDefinition& def, const ju
     {
         if (message.isNoteOn())
         {
-            auto& d1 = engine.getDeck(0);
-            auto& d2 = engine.getDeck(1);
-            if (d1.isLoaded() && d1.getBpm() > 0.0 && d2.getOriginalBpm() > 0.0)
-                d2.setPitchPercent((float)(((d1.getBpm() / d2.getOriginalBpm()) - 1.0) * 100.0));
+            engine.syncDeckTo(1);
             return true;
         }
     }

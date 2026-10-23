@@ -342,6 +342,18 @@ void AudioEngine::setTempoBlend(bool active)
     }
 }
 
+bool AudioEngine::syncDeckTo(int deckIndex)
+{
+    auto& self  = getDeck(deckIndex);
+    auto& other = getDeck(deckIndex == 0 ? 1 : 0);
+
+    if (!other.isLoaded() || other.getBpm() <= 0.0 || self.getOriginalBpm() <= 0.0)
+        return false;
+
+    self.setPitchPercent((float)(((other.getBpm() / self.getOriginalBpm()) - 1.0) * 100.0));
+    return true;
+}
+
 void AudioEngine::setCrossfader(float val)
 {
     val = juce::jlimit(-1.0f, 1.0f, val);
