@@ -415,18 +415,66 @@ void AudioEngine::alignBeatPhase(DeckPlayer& masterDeck, DeckPlayer& slaveDeck)
     double bpm = masterDeck.getBpm();
     if (bpm <= 0.0) bpm = 120.0;
     double beatInterval = 60.0 / bpm;
+    if (beatInterval <= 0.0) beatInterval = 0.5;
 
+    // Fase real por deck con offset del primer beat
     double masterTime = masterDeck.getPosition();
-    double masterPhase = std::fmod(masterTime, beatInterval);
+    double masterOffset = masterDeck.getFirstBeatOffset();
+    double masterPhase = std::fmod(masterTime - masterOffset, beatInterval);
     if (masterPhase < 0.0) masterPhase += beatInterval;
 
     double slaveTime = slaveDeck.getPosition();
-    double slavePhase = std::fmod(slaveTime, beatInterval);
+    double slaveOffset = slaveDeck.getFirstBeatOffset();
+    double slavePhase = std::fmod(slaveTime - slaveOffset, beatInterval);
     if (slavePhase < 0.0) slavePhase += beatInterval;
 
-    double correction = masterPhase - slavePhase;
-    if (correction > beatInterval * 0.5) correction -= beatInterval;
-    if (correction < -beatInterval * 0.5) correction += beatInterval;
+    double error = masterPhase - slavePhase;
+    if (error > beatInterval * 0.5) error -= beatInterval;
+    if (error < -beatInterval * 0.5) error += beatInterval;
 
-    slaveDeck.seekRelative(correction);
+    double errorMs = std::abs(error) * 1000.0;
+    double intervalMs = beatInterval * 1000.0;
+
+    // Híbrido: pequeño desfase -> nudge aditivo (pitchBend), no pisa pitchPercent
+    if (intervalMs > 0.0 && errorMs <= 15.0)
+    {
+        // proporcional hasta ~1%
+        double maxNudge = 0.01; // ±1%
+        double nudge = (error / (beatInterval * 0.5)) * maxNudge;
+        nudge = juce::jlimit(-maxNudge, maxNudge, nudge);
+        // deadband ~1ms
+        if (errorMs < 1.0)
+            nudge = 0.0;
+        slaveDeck.setPitchBend((float)nudge);
+        return;
+    }
+
+    // Desfase grande -> re-anclaje al próximo beat
+    if (error > 0.0)
+    {
+        // slave va retrasado respecto a master -> adelantar al próximo beat
+        double nextBeat = slaveOffset + std::ceil((slaveTime - slaveOffset) / beatInterval) * beatInterval;
+        if (nextBeat < slaveTime)
+            nextBeat += beatInterval;
+        double delta = nextBeat - slaveTime;
+        if (delta < 0.0) delta = 0.0;
+        // límite razonable
+        if (delta > beatInterval * 0.6)
+            delta = beatInterval * 0.25;
+        slaveDeck.seekRelative(delta);
+    }
+    else if (error < 0.0)
+    {
+        // slave va adelantado -> ir al beat actual o al anterior más cercano
+        double prevBeat = slaveOffset + std::floor((slaveTime - slaveOffset) / beatInterval) * beatInterval;
+        if (prevBeat > slaveTime - 1e-6)
+            prevBeat -= beatInterval;
+        if (prevBeat < 0.0)
+            prevBeat = slaveOffset >= 0.0 && slaveOffset < beatInterval ? slaveOffset : 0.0;
+        double delta = prevBeat - slaveTime;
+        slaveDeck.seekRelative(delta);
+    }
+
+    // cancelar nudge al hacer re-anclaje
+    slaveDeck.setPitchBend(0.0f);
 }
