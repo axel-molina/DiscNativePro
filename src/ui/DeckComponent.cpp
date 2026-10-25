@@ -1,4 +1,5 @@
 #include "DeckComponent.h"
+#include "BpmFormat.h"
 #include "YouTubeVideoComponent.h"
 #include "../services/YouTubeService.h"
 #include "../services/YouTubeAudioDownloader.h"
@@ -345,8 +346,8 @@ void DeckComponent::loadAudioFile(const juce::File& file)
         titleLabel.setText(cleanTitle, juce::dontSendNotification);
         artistLabel.setText(trackArtist, juce::dontSendNotification);
         double bpm = deck.getBpm();
-        bpmLabel.setText(juce::String(bpm, 1), juce::dontSendNotification);
-        pitchBpmLabel.setText(juce::String(bpm, 1), juce::dontSendNotification);
+        bpmLabel.setText(formatBpm(bpm), juce::dontSendNotification);
+        pitchBpmLabel.setText(formatBpm(bpm), juce::dontSendNotification);
         keyBadge.setText(deck.getTrackKey(), juce::dontSendNotification);
         auto keyCol = deck.getTrackKeyColour();
         keyBadge.setColour(juce::Label::textColourId, keyCol);
@@ -505,8 +506,8 @@ void DeckComponent::loadYouTubeVideo(const YouTubeSearchResult& result)
 
         titleLabel.setText(displayTitle, juce::dontSendNotification);
         artistLabel.setText(displayArtist, juce::dontSendNotification);
-        bpmLabel.setText("128.0", juce::dontSendNotification);
-        pitchBpmLabel.setText("128.0", juce::dontSendNotification);
+        bpmLabel.setText(formatBpm(128.0), juce::dontSendNotification);
+        pitchBpmLabel.setText(formatBpm(128.0), juce::dontSendNotification);
         timeRemainingLabel.setText(result.durationText.isNotEmpty() ? result.durationText : "--:--", juce::dontSendNotification);
         keyBadge.setText("YT", juce::dontSendNotification);
 
@@ -1019,7 +1020,7 @@ void DeckComponent::updateLabels()
     if (deck.isLoaded())
     {
         double curBpm = deck.getBpm();
-        juce::String bpmText = juce::String(curBpm, 1);
+        juce::String bpmText = formatBpm(curBpm);
         if (deck.isPitchClamped())
         {
             bpmText += " ! SYNC fuera de rango";
@@ -1032,14 +1033,14 @@ void DeckComponent::updateLabels()
             pitchBpmLabel.setColour(juce::Label::textColourId, juce::Colours::white);
         }
         bpmLabel.setText(bpmText, juce::dontSendNotification);
-        pitchBpmLabel.setText(juce::String(curBpm, 1), juce::dontSendNotification);
+        pitchBpmLabel.setText(formatBpm(curBpm), juce::dontSendNotification);
     }
     else
     {
         bpmLabel.setColour(juce::Label::textColourId, juce::Colours::white);
         pitchBpmLabel.setColour(juce::Label::textColourId, juce::Colours::white);
-        bpmLabel.setText("--", juce::dontSendNotification);
-        pitchBpmLabel.setText("--", juce::dontSendNotification);
+        bpmLabel.setText(formatBpm(0.0), juce::dontSendNotification);
+        pitchBpmLabel.setText(formatBpm(0.0), juce::dontSendNotification);
     }
 
     float currentRange = deck.getPitchRange();

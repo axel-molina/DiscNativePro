@@ -3,6 +3,41 @@
 #include "MediaFoundationAudioFormat_win.h"
 #endif
 
+namespace
+{
+    constexpr const char* tempoBlendProperty = "tempoBlend";
+
+    // Merge sobre el settings.json existente: se respetan las demas claves
+    // (p. ej. recordingDirectory) y solo se toca la propiedad propia.
+    bool readTempoBlendSetting()
+    {
+        auto file = AudioEngine::getSettingsFile();
+        if (!file.existsAsFile())
+            return false;
+
+        auto json = juce::JSON::parse(file);
+        if (!json.isObject() || !json.hasProperty(tempoBlendProperty))
+            return false;
+
+        return json[tempoBlendProperty];
+    }
+
+    void writeTempoBlendSetting(bool active)
+    {
+        auto file = AudioEngine::getSettingsFile();
+        juce::var json;
+        if (file.existsAsFile())
+            json = juce::JSON::parse(file);
+        if (!json.isObject())
+            json = juce::var(new juce::DynamicObject());
+
+        if (auto* obj = json.getDynamicObject())
+            obj->setProperty(tempoBlendProperty, active);
+
+        file.replaceWithText(juce::JSON::toString(json));
+    }
+}
+
 AudioEngine::AudioEngine()
     : deck1(formatManager, diskReaderThread),
       deck2(formatManager, diskReaderThread)
@@ -12,6 +47,10 @@ AudioEngine::AudioEngine()
 #if JUCE_WINDOWS
     formatManager.registerFormat(new MediaFoundationAudioFormat(), false);
 #endif
+
+    // Restaurar el estado guardado del Tempo Blend: arranca "armado" y actua en cuanto
+    // ambas bandejas tengan pista y BPM (con decks vacios applyTempoBlend sigue siendo no-op).
+    tempoBlendActive.store(readTempoBlendSetting());
 }
 
 AudioEngine::~AudioEngine()
@@ -336,6 +375,8 @@ void AudioEngine::audioDeviceIOCallbackWithContext(const float* const* /*inputCh
 void AudioEngine::setTempoBlend(bool active)
 {
     tempoBlendActive.store(active);
+    writeTempoBlendSetting(active);
+
     if (active)
     {
         applyTempoBlend(currentCrossfaderVal.load());

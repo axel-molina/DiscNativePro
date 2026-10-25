@@ -19,6 +19,7 @@ MainComponent::MainComponent()
       mixer(audioEngine),
       library(audioEngine.getFormatManager())
 {
+    tooltipWindow = std::make_unique<juce::TooltipWindow>(this, 700);
     // Inicialización pesada diferida a un tick del message loop: la ventana ya
     // está pintada cuando arranca el audio, así un dispositivo que tarde o se
     // cuelgue no deja la app sin ventana visible.
