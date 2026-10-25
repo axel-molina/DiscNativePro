@@ -558,16 +558,14 @@ int scoreTrackCandidate(const TrackItem& candidate,
     // 3. BPM proximity with Half-Time / Double-Time modular compatibility
     if (currentBpm > 20.0 && candidate.bpm > 20.0)
     {
-        double diffDirect = std::abs(candidate.bpm - currentBpm) / currentBpm;
-        double diffDouble = std::abs(candidate.bpm - (currentBpm * 2.0)) / (currentBpm * 2.0);
-        double diffHalf   = std::abs((candidate.bpm * 2.0) - currentBpm) / currentBpm;
-        double minDiff    = std::min({ diffDirect, diffDouble, diffHalf });
+        double candNorm = AudioEngine::normalizeBpmTo(candidate.bpm, currentBpm);
+        double diffDirect = std::abs(candNorm - currentBpm) / currentBpm;
 
-        if (minDiff <= 0.04)
+        if (diffDirect <= 0.04)
             score += 25;
-        else if (minDiff <= 0.08)
+        else if (diffDirect <= 0.08)
             score += 18;
-        else if (minDiff <= 0.15)
+        else if (diffDirect <= 0.15)
             score += 8;
     }
 

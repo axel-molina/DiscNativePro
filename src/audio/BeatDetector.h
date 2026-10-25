@@ -4,9 +4,9 @@
 
 struct BeatAnalysisResult
 {
-    double bpm { 124.0 };
+    double bpm { 0.0 };
     double offset { 0.0 };
-    double beatInterval { 0.4838 };
+    double beatInterval { 0.0 };
 };
 
 class BeatDetector

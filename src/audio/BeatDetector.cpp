@@ -3,10 +3,14 @@
 #include <vector>
 #include <map>
 #include <numeric>
+#include <algorithm>
 
 BeatAnalysisResult BeatDetector::analyze(juce::AudioFormatReader* reader)
 {
     BeatAnalysisResult defaultRes;
+    defaultRes.bpm = 0.0;
+    defaultRes.offset = 0.0;
+    defaultRes.beatInterval = 0.0;
     if (reader == nullptr || reader->lengthInSamples <= 0 || reader->sampleRate <= 0.0)
         return defaultRes;
 
@@ -91,7 +95,7 @@ BeatAnalysisResult BeatDetector::analyze(juce::AudioFormatReader* reader)
         return defaultRes;
 
     // Calculate BPM intervals
-    std::map<int, int> bpmHistogram;
+    std::map<long long, int> bpmHistogram;
     for (size_t i = 0; i + 1 < peaks.size(); ++i)
     {
         for (size_t j = 1; j <= 4 && (i + j) < peaks.size(); ++j)
@@ -108,29 +112,57 @@ BeatAnalysisResult BeatDetector::analyze(juce::AudioFormatReader* reader)
 
                 if (candidate >= 70.0 && candidate <= 180.0)
                 {
-                    int rounded = (int)std::round(candidate);
-                    bpmHistogram[rounded]++;
+                    long long bucket = std::llround(candidate * 10.0);
+                    if (bucket >= 700 && bucket <= 1800)
+                        bpmHistogram[bucket]++;
                 }
             }
         }
     }
 
-    int bestBpm = 124;
+    if (bpmHistogram.empty())
+        return defaultRes;
+
+    long long bestBucket = 1240;
     int maxCount = 0;
-    for (const auto& [candidateBpm, count] : bpmHistogram)
+    for (const auto& [bucketVal, count] : bpmHistogram)
     {
         if (count > maxCount)
         {
             maxCount = count;
-            bestBpm = candidateBpm;
+            bestBucket = bucketVal;
         }
     }
 
+    if (maxCount < 4)
+        return defaultRes;
+
+    // Parabolic refinement over neighbors
+    auto getCount = [&bpmHistogram](long long b) -> int {
+        auto it = bpmHistogram.find(b);
+        if (it == bpmHistogram.end()) return 0;
+        return it->second;
+    };
+    int cM1 = getCount(bestBucket - 1);
+    int c0  = getCount(bestBucket);
+    int cP1 = getCount(bestBucket + 1);
+    double refinedBpm = bestBucket / 10.0;
+    if (cM1 + cP1 - 2 * c0 != 0)
+    {
+        // p = 0.5*(cM1 - cP1)/(cM1 - 2*c0 + cP1)
+        double p = 0.5 * ((double)cM1 - (double)cP1) / ((double)cM1 - 2.0 * (double)c0 + (double)cP1);
+        if (p >= -0.5 && p <= 0.5)
+            refinedBpm = (bestBucket + p) / 10.0;
+    }
+
     BeatAnalysisResult result;
-    result.bpm = static_cast<double>(bestBpm);
+    result.bpm = refinedBpm;
+    if (result.bpm <= 0.0)
+        return defaultRes;
     result.beatInterval = 60.0 / result.bpm;
     double firstPeakSec = peaks[0] / effectiveRate;
     result.offset = std::fmod(firstPeakSec, result.beatInterval);
+    if (result.offset < 0.0) result.offset += result.beatInterval;
 
     return result;
 }

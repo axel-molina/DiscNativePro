@@ -1019,11 +1019,25 @@ void DeckComponent::updateLabels()
     if (deck.isLoaded())
     {
         double curBpm = deck.getBpm();
-        bpmLabel.setText(juce::String(curBpm, 1), juce::dontSendNotification);
+        juce::String bpmText = juce::String(curBpm, 1);
+        if (deck.isPitchClamped())
+        {
+            bpmText += " ! SYNC fuera de rango";
+            bpmLabel.setColour(juce::Label::textColourId, juce::Colour::fromRGB(245, 158, 11));
+            pitchBpmLabel.setColour(juce::Label::textColourId, juce::Colour::fromRGB(245, 158, 11));
+        }
+        else
+        {
+            bpmLabel.setColour(juce::Label::textColourId, juce::Colours::white);
+            pitchBpmLabel.setColour(juce::Label::textColourId, juce::Colours::white);
+        }
+        bpmLabel.setText(bpmText, juce::dontSendNotification);
         pitchBpmLabel.setText(juce::String(curBpm, 1), juce::dontSendNotification);
     }
     else
     {
+        bpmLabel.setColour(juce::Label::textColourId, juce::Colours::white);
+        pitchBpmLabel.setColour(juce::Label::textColourId, juce::Colours::white);
         bpmLabel.setText("--", juce::dontSendNotification);
         pitchBpmLabel.setText("--", juce::dontSendNotification);
     }

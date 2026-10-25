@@ -42,6 +42,7 @@ public:
     // Tempo / Pitch
     void setPitchPercent(float percent); // -8.0 to +8.0, etc.
     float getPitchPercent() const { return pitchPercent.load(); }
+    bool isPitchClamped() const { return pitchClamped.load(); }
     void setPitchBend(float bend); // Temporary nudge (e.g. +/- 0.05)
     void setPitchRange(float range) { pitchRange.store(juce::jmax(1.0f, range)); }
     float getPitchRange() const     { return pitchRange.load(); }
@@ -124,6 +125,7 @@ private:
     std::atomic<float> pitchPercent { 0.0f };
     std::atomic<float> pitchBend { 0.0f };
     std::atomic<float> pitchRange { 8.0f };
+    std::atomic<bool> pitchClamped { false };
     std::atomic<int> jogMode { 0 };
     std::atomic<bool> keylock { true };
 

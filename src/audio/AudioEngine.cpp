@@ -342,6 +342,26 @@ void AudioEngine::setTempoBlend(bool active)
     }
 }
 
+double AudioEngine::normalizeBpmTo(double bpm, double referenceBpm)
+{
+    if (bpm <= 0.0 || referenceBpm <= 0.0)
+        return bpm;
+    double best = bpm;
+    double bestDiff = std::abs(best - referenceBpm);
+    const double candidates[] = { bpm, bpm * 2.0, bpm / 2.0, bpm * 4.0, bpm / 4.0 };
+    for (double cand : candidates)
+    {
+        if (cand < 30.0 || cand > 300.0) continue;
+        double diff = std::abs(cand - referenceBpm);
+        if (diff < bestDiff - 1e-9)
+        {
+            bestDiff = diff;
+            best = cand;
+        }
+    }
+    return best;
+}
+
 bool AudioEngine::syncDeckTo(int deckIndex)
 {
     auto& self  = getDeck(deckIndex);
@@ -350,7 +370,8 @@ bool AudioEngine::syncDeckTo(int deckIndex)
     if (!other.isLoaded() || other.getBpm() <= 0.0 || self.getOriginalBpm() <= 0.0)
         return false;
 
-    self.setPitchPercent((float)(((other.getBpm() / self.getOriginalBpm()) - 1.0) * 100.0));
+    double otherBpm = normalizeBpmTo(other.getBpm(), self.getOriginalBpm());
+    self.setPitchPercent((float)(((otherBpm / self.getOriginalBpm()) - 1.0) * 100.0));
     return true;
 }
 
@@ -390,8 +411,14 @@ void AudioEngine::applyTempoBlend(float val)
 
     double b1 = deck1.getOriginalBpm();
     double b2 = deck2.getOriginalBpm();
-    if (b1 <= 0.0) b1 = 124.0;
-    if (b2 <= 0.0) b2 = 126.0;
+    if (b1 <= 0.0 || b2 <= 0.0)
+        return;
+
+    // Normalize to avoid half/double-time jumps
+    double b1n = normalizeBpmTo(b1, b2);
+    double b2n = normalizeBpmTo(b2, b1n);
+    b1 = b1n;
+    b2 = b2n;
 
     // Normalized crossfader: 0.0 (Deck 1) to 1.0 (Deck 2)
     double t = juce::jlimit(0.0, 1.0, (val + 1.0) / 2.0);

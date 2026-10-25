@@ -422,8 +422,11 @@ void DeckPlayer::seekRelative(double deltaSeconds)
 
 void DeckPlayer::setPitchPercent(float percent)
 {
-    pitchPercent.store(percent);
-    currentBpm.store(originalBpm.load() * (1.0 + (double)percent / 100.0));
+    float range = pitchRange.load();
+    float clamped = juce::jlimit(-range, range, percent);
+    pitchClamped.store(std::abs(percent - clamped) > 1e-6f);
+    pitchPercent.store(clamped);
+    currentBpm.store(originalBpm.load() * (1.0 + (double)clamped / 100.0));
     updatePlaybackSpeed();
 }
 

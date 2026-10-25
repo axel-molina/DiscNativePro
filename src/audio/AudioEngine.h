@@ -62,6 +62,8 @@ public:
     void applyTempoBlend(float crossfaderVal);
     void alignBeatPhase(DeckPlayer& masterDeck, DeckPlayer& slaveDeck);
 
+    static double normalizeBpmTo(double bpm, double referenceBpm);
+
     double getSampleRate() const { return currentSampleRate; }
     int getBlockSize() const     { return currentBlockSize; }
 
