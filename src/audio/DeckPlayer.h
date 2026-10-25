@@ -47,6 +47,7 @@ public:
     void setPitchPercent(float percent); // -8.0 to +8.0, etc.
     float getPitchPercent() const { return pitchPercent.load(); }
     void setPitchBend(float bend); // Temporary nudge (e.g. +/- 0.05)
+    float getPitchBend() const { return pitchBend.load(); }
     void setPitchRange(float range) { pitchRange.store(juce::jmax(1.0f, range)); }
     float getPitchRange() const     { return pitchRange.load(); }
 

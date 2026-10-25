@@ -127,6 +127,10 @@ void DeckPlayer::prepareToPlay(int samplesPerBlockExpected, double sampleRate)
         stretcher->prepare(sampleRate);
         updatePlaybackSpeed();
     }
+    else if (stretcher != nullptr)
+    {
+        stretcher->prepare(sampleRate);
+    }
 }
 
 void DeckPlayer::releaseResources()
@@ -438,8 +442,13 @@ void DeckPlayer::applyPendingSeek(double targetSec)
     double rate = 1.0;
     if (keylock.load())
         rate = juce::jlimit(0.02, 4.0, (double)1.0f + ((double)pitchPercent.load() / 100.0) + (double)pitchBend.load());
-    if (!stretcher->reanchorWithPreRoll(bufferingSource.get(), targetSample, rate))
+    if (stretcher->reanchorWithPreRoll(bufferingSource.get(), targetSample, rate))
+    {
+    }
+    else
+    {
         stretcher->reset();
+    }
 }
 
 double DeckPlayer::getPosition() const

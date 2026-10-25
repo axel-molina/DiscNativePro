@@ -60,7 +60,19 @@ public:
     bool syncDeckTo(int deckIndex);
     void setCrossfader(float val);
     void applyTempoBlend(float crossfaderVal);
-    void alignBeatPhase(DeckPlayer& masterDeck, DeckPlayer& slaveDeck);
+
+    // P3-bis / P3-ter: matematicas puras de alineacion de fase (estaticas y testeables)
+    // Error con signo entre dos fases dentro del mismo grid de beat, en [-I/2, +I/2).
+    // Positivo = el master va por delante del slave (hay que acelerar el slave).
+    static double wrappedPhaseError(double masterPhaseSec, double slavePhaseSec, double interval);
+
+    // Salto minimo SIEMPRE hacia delante que deja la fase del slave sobre la del
+    // master: delta = error + (error < 0 ? I : 0). Nunca negativo ni nulo.
+    static double quantizedSeekDelta(double errorSec, double interval);
+
+    // Marca el cruce de zona como pendiente; el controlador por bloque lo consume
+    // y decide nudge / re-anclaje. masterDeckIndex: 0 = deck1, 1 = deck2.
+    void armPhaseAlign(int masterDeckIndex);
 
     double getSampleRate() const { return currentSampleRate; }
     int getBlockSize() const     { return currentBlockSize; }
@@ -108,6 +120,22 @@ private:
     enum class CrossfaderZone { Deck1, Center, Deck2 };
     CrossfaderZone lastCrossfaderZone { CrossfaderZone::Center };
     mutable juce::File customRecordDir;
+
+    // P3-ter: controlador de fase por bloque (audio thread). Sin allocs ni locks nuevos.
+    enum class PhaseAlignState { Idle, Settle, Measure };
+    PhaseAlignState phaseAlignState { PhaseAlignState::Idle };
+    int phaseAlignMasterIndexVal { 0 };
+    int phaseAlignSettleBlocks { 0 };
+    int phaseAlignSeekCount { 0 };
+    static constexpr int phaseAlignSettleBlocksCount = 2;
+    static constexpr int phaseAlignMaxSeeks = 8;
+    static constexpr double phaseAlignDriftRearmSec = 0.025; // ~25 ms para auto re-armado
+
+    bool phaseAlignArmedFlag { false };
+    bool phaseNudgeActiveFlag { false };
+    float phaseAppliedNudgeVal { 0.0f }; // ultimo bend escrito por el controlador
+
+    void processPhaseAlign();
 
     std::atomic<bool> isShuttingDown { false };
     std::atomic<bool> isRecoveringDevice { false };
