@@ -132,8 +132,11 @@ void SettingsModalComponent::setupGeneralTab()
     bodyContent.addChildComponent(generalSectionDeck);
 
     loadLockToggle.setButtonText(juce::String::fromUTF8("Protección de carga (Load Lock): Bloquear carga si el deck reproduce en vivo"));
-    loadLockToggle.setToggleState(false, juce::dontSendNotification);
+    loadLockToggle.setToggleState(audioEngine.isLoadLockEnabled(), juce::dontSendNotification);
     loadLockToggle.setColour(juce::ToggleButton::textColourId, juce::Colours::white.withAlpha(0.85f));
+    loadLockToggle.onClick = [this]() {
+        audioEngine.setLoadLockEnabled(loadLockToggle.getToggleState());
+    };
     bodyContent.addChildComponent(loadLockToggle);
 
     jogModeLabel.setText(juce::String::fromUTF8("Modo Jog Wheel:"), juce::dontSendNotification);

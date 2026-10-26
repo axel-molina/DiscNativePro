@@ -55,6 +55,11 @@ public:
     // Tempo Blend & Crossfader
     void setTempoBlend(bool active);
     bool isTempoBlendActive() const { return tempoBlendActive.load(); }
+
+    // Load Lock: impide cargar en una bandeja que esta reproduciendo.
+    // Persistido en settings.json (misma clave/patron que tempoBlend).
+    void setLoadLockEnabled(bool enabled);
+    bool isLoadLockEnabled() const { return loadLockEnabled.load(); }
     // One-shot pitch match: deckIndex takes the current BPM of the other deck.
     // Returns false when the sync is not applicable (other deck unloaded / invalid BPM).
     bool syncDeckTo(int deckIndex);
@@ -106,6 +111,7 @@ private:
     std::atomic<int> cueChannelPair { 1 };    // Pair 1 = Ch 3-4 (Headphones on DDJ-SB2)
 
     std::atomic<bool> tempoBlendActive { false };
+    std::atomic<bool> loadLockEnabled { false };
     std::atomic<float> currentCrossfaderVal { 0.0f };
     enum class CrossfaderZone { Deck1, Center, Deck2 };
     CrossfaderZone lastCrossfaderZone { CrossfaderZone::Center };

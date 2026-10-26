@@ -310,7 +310,57 @@ void DeckComponent::languageChanged()
     repaint();
 }
 
-void DeckComponent::loadAudioFile(const juce::File& file)
+bool DeckComponent::shouldBlockLoad(LoadOrigin origin) const
+{
+    // AutoMix siempre carga en la bandeja libre: exento.
+    // Solo se bloquea si la bandeja de audio esta sonando ahora mismo (en pausa se carga).
+    return origin == LoadOrigin::User
+        && engine.isLoadLockEnabled()
+        && deck.isPlaying();
+}
+
+void DeckComponent::showLoadLockWarning(std::function<void(DeckComponent&)> forcedLoad)
+{
+    auto message = LanguageManager::trUtf8("La bandeja ", "Deck ")
+                 + juce::String(deckIndex + 1)
+                 + LanguageManager::trUtf8(" está reproduciendo. ¿Cargar de todos modos?",
+                                           " is playing. Load anyway?");
+
+    // AlertWindow manual: el LookAndFeel asigna Return al boton primario, asi que solo
+    // "Cancelar" declara atajos (Return y Escape). Enter jamas fuerza la carga.
+    auto* alert = new juce::AlertWindow(LanguageManager::trUtf8("Protección de carga", "Load Lock"),
+                                       message,
+                                       juce::MessageBoxIconType::WarningIcon,
+                                       this);
+    alert->addButton(LanguageManager::trUtf8("Forzar carga", "Force load"), 1);
+    alert->addButton(LanguageManager::trUtf8("Cancelar", "Cancel"), 0,
+                     juce::KeyPress(juce::KeyPress::returnKey),
+                     juce::KeyPress(juce::KeyPress::escapeKey));
+
+    // El AlertWindow da foco al primer boton: sin foco de teclado, "Forzar carga" solo responde al raton.
+    alert->getButton(0)->setWantsKeyboardFocus(false);
+
+    alert->enterModalState(true,
+                           juce::ModalCallbackFunction::create(
+                               [safe = juce::Component::SafePointer<DeckComponent>(this), forcedLoad](int result) {
+                                   if (safe != nullptr && result == 1)
+                                       forcedLoad(*safe);
+                               }),
+                           true);
+}
+
+void DeckComponent::loadAudioFile(const juce::File& file, LoadOrigin origin)
+{
+    if (shouldBlockLoad(origin))
+    {
+        showLoadLockWarning([file](DeckComponent& self) { self.loadAudioFileNow(file); });
+        return;
+    }
+
+    loadAudioFileNow(file);
+}
+
+void DeckComponent::loadAudioFileNow(const juce::File& file)
 {
     if (deck.loadFile(file))
     {
@@ -464,7 +514,18 @@ void DeckComponent::itemDropped(const SourceDetails& dragSourceDetails)
     repaint();
 }
 
-void DeckComponent::loadYouTubeVideo(const YouTubeSearchResult& result)
+void DeckComponent::loadYouTubeVideo(const YouTubeSearchResult& result, LoadOrigin origin)
+{
+    if (shouldBlockLoad(origin))
+    {
+        showLoadLockWarning([result](DeckComponent& self) { self.loadYouTubeVideoNow(result); });
+        return;
+    }
+
+    loadYouTubeVideoNow(result);
+}
+
+void DeckComponent::loadYouTubeVideoNow(const YouTubeSearchResult& result)
 {
     const bool autoplay = YouTubeService::isVideoAutoplayEnabled();
     const bool audioMode = YouTubeService::isAudioPlaybackMode();
@@ -553,7 +614,7 @@ void DeckComponent::loadYouTubeVideo(const YouTubeSearchResult& result)
     {
         isExtractingAudio = false;
         extractionProgress = 0.0f;
-        loadAudioFile(cachedFile);
+        loadAudioFileNow(cachedFile);
 
         // Keep clean YouTube title & artist
         titleLabel.setText(displayTitle, juce::dontSendNotification);
@@ -635,7 +696,7 @@ void DeckComponent::loadYouTubeVideo(const YouTubeSearchResult& result)
 
             if (success && file.existsAsFile())
             {
-                safe->loadAudioFile(file);
+                safe->loadAudioFileNow(file);
                 safe->titleLabel.setText(displayTitle, juce::dontSendNotification);
                 safe->artistLabel.setText(displayArtist, juce::dontSendNotification);
                 safe->jogWheel.setTrackInfo(displayTitle, safe->deck.getBpm(), safe->accent);
