@@ -118,6 +118,9 @@ private:
     juce::Slider pitchSlider;
     DjButton pitchBendDownButton;
     DjButton pitchBendUpButton;
+    // P5: el BPM se detecta en segundo plano; caché para refrescar el jog wheel
+    // una sola vez por pista (setTrackInfo regenera la portada).
+    double jogWheelBpmShown { -1.0 };
 
     // Lower Transport Controls Bar (3 clean groups matching screenshot)
     DjButton playButton;

@@ -357,6 +357,7 @@ void DeckComponent::loadAudioFile(const juce::File& file)
         overviewWaveform.updateWaveform();
 
         coverArtImage = CoverArtGenerator::getCoverForTrack(cleanTitle, 256);
+        jogWheelBpmShown = -1.0; // P5: el BPM real llega del worker de análisis
         jogWheel.setTrackInfo(cleanTitle, bpm, accent);
         refreshHotCueButtons();
 
@@ -1034,6 +1035,27 @@ void DeckComponent::updateLabels()
         }
         bpmLabel.setText(bpmText, juce::dontSendNotification);
         pitchBpmLabel.setText(formatBpm(curBpm), juce::dontSendNotification);
+
+        // P5: la tonalidad se detecta en segundo plano; el badge se refresca
+        // cuando llega (solo si cambió, sin repintar de más).
+        const juce::String currentKey = deck.getTrackKey();
+        if (keyBadge.getText() != currentKey)
+        {
+            keyBadge.setText(currentKey, juce::dontSendNotification);
+            const auto keyCol = deck.getTrackKeyColour();
+            keyBadge.setColour(juce::Label::textColourId, keyCol);
+            keyBadge.setColour(juce::Label::backgroundColourId, keyCol.withAlpha(0.15f));
+            keyBadge.setColour(juce::Label::outlineColourId, keyCol.withAlpha(0.35f));
+        }
+
+        // P5: el jog wheel se pintó con bpm=0 al cargar (análisis pendiente);
+        // se refresca una sola vez cuando llega el BPM detectado.
+        const double detectedBpm = deck.getOriginalBpm();
+        if (detectedBpm > 0.0 && std::abs(jogWheelBpmShown - detectedBpm) > 1e-9)
+        {
+            jogWheelBpmShown = detectedBpm;
+            jogWheel.setTrackInfo(titleLabel.getText(), deck.getBpm(), accent);
+        }
     }
     else
     {
