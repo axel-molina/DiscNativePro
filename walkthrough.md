@@ -382,3 +382,46 @@ El banco de persistencia intentaba aislarse con `HOME`, pero JUCE resuelve la ca
 ## 5. Pendiente
 - Prueba visual en la app: tooltip del Tempo Blend (con una y con dos bandejas), aviso ámbar de "pitch fuera de rango" (P4.1) y BPM iguales en JogWheel / labels / biblioteca.
 - Deuda técnica del P3 (lock en el callback de audio y riesgo del pre-roll) y merge de `phase-align-fix` a `main`.
+
+# Walkthrough — P5: carga de pista sin congelar la UI
+
+## 1. Causa (medida)
+`DeckPlayer::loadFile` corre en el **hilo de mensajes** y hacía tres análisis pesados. Medición con un WAV de 5 min estéreo (50 MB):
+
+| Etapa | Coste |
+|---|---|
+| `createReader` | 0.1 ms |
+| `BeatDetector::analyze` | 15.1 ms |
+| `KeyDetector::analyze` | 61.1 ms |
+| `extractWaveformOverview` (pasada completa) + fuentes | resto |
+| **`loadFile` total** | **177.8 ms** |
+
+Resultado: al cargar en una bandeja mientras la otra suena, la UI quedaba bloqueada ese tiempo (con MP3/M4A, más).
+
+## 2. Cambios (rama `axel-molina/async-load`, commit `e4cfedd`)
+- **`loadFile` en dos fases**: fase rápida (~7 ms) que crea el reader de reproducción, las fuentes, la duración, resets y `loaded = true` **sin analizadores**; la bandeja queda reproducible al instante.
+- **Worker dedicado**: `juce::ThreadPool` estático de 1 hilo, con **su propio `AudioFormatReader`** (los readers no son seguros para lectura concurrente con la reproducción).
+- **Publicación por etapas** en el hilo de mensajes (`MessageManager::callAsync`): overview **rápido de 2000 puntos** (ventanas cortas repartidas) → overview **completo de 8000** → **BPM** → **tonalidad**.
+- **Descartes**: `generation` se incrementa en cada carga y `alive` (shared_ptr) se apaga en el destructor; cargar A y enseguida B nunca publica datos de A.
+- **`BufferingAudioSource` con prefill desactivado** (6.º argumento): su `prepareToPlay` hacía un prefill síncrono con `Thread::sleep`.
+- **UI**: el badge de tonalidad y el jog wheel se refrescan cuando llega el resultado asíncrono (caché para no regenerar la portada en cada tick).
+
+## 3. Verificación (banco independiente, mismo WAV de 5 min)
+| Criterio | Antes | Después |
+|---|---|---|
+| `loadFile` (bloqueo del hilo de UI) | **177.8 ms** | **6.8 ms** |
+| Reproducible al instante | no | sí (`isLoaded()` y audio en el acto) |
+| Overview | solo completo | **2000 puntos primero**, luego 8000 |
+| BPM / tonalidad | síncronos | 128.003 y `8A / Am` (idénticos al análisis directo) |
+| Cancelación A→B | — | resultados finales de B, sin datos de A |
+| 6 cargas alternas | — | sin crash, último resultado correcto |
+
+Matiz honesto: los ~5-7 ms restantes son un `Thread::sleep(5)` **incondicional dentro de `BufferingAudioSource::prepareToPlay` de JUCE 8.0.6**; queda por debajo de un frame a 60 Hz. Eliminarlo exigiría preparar el pipeline fuera del hilo de mensajes con una compuerta en el callback de audio (riesgo de carrera), y se descartó.
+
+## 4. Notas
+- `DeckComponent.h` recibió 3 líneas (caché `jogWheelBpmShown`) fuera de la lista inicial del plan: necesarias para que el jog wheel no se quede en `--` al pasar el BPM a asíncrono.
+- La rama `async-load` se creó desde `p4-master-tempo`, así que incluye P4.1/P4.2.
+
+## 5. Pendiente
+- Prueba en vivo: reproducir en una bandeja y cargar en la otra → la UI debe seguir respondiendo, el waveform nuevo aparece rápido y se completa.
+- Deuda técnica del P3 y merges pendientes (`phase-align-fix`, `p4-master-tempo`, `async-load`).
