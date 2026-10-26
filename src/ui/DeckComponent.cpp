@@ -353,14 +353,15 @@ void DeckComponent::loadAudioFile(const juce::File& file, LoadOrigin origin)
 {
     if (shouldBlockLoad(origin))
     {
-        showLoadLockWarning([file](DeckComponent& self) { self.loadAudioFileNow(file); });
+        // P7: la carga forzada es una accion del usuario, asi que reproduce.
+        showLoadLockWarning([file](DeckComponent& self) { self.loadAudioFileNow(file, LoadOrigin::User); });
         return;
     }
 
-    loadAudioFileNow(file);
+    loadAudioFileNow(file, origin);
 }
 
-void DeckComponent::loadAudioFileNow(const juce::File& file)
+void DeckComponent::loadAudioFileNow(const juce::File& file, LoadOrigin origin)
 {
     if (deck.loadFile(file))
     {
@@ -415,6 +416,12 @@ void DeckComponent::loadAudioFileNow(const juce::File& file)
 
         if (onFileLoaded)
             onFileLoaded(file, bpm);
+
+        // P7: autoplay al cargar solo para cargas del usuario y fuera del modo video
+        // de YouTube (ese modo usa YouTubeService::isVideoAutoplayEnabled()).
+        // AutoMix carga con LoadOrigin::Automix: su precarga se queda en pausa.
+        if (origin == LoadOrigin::User && !isVideoMode && engine.isAutoplayOnLoadEnabled())
+            deck.play();
     }
 }
 
@@ -518,14 +525,14 @@ void DeckComponent::loadYouTubeVideo(const YouTubeSearchResult& result, LoadOrig
 {
     if (shouldBlockLoad(origin))
     {
-        showLoadLockWarning([result](DeckComponent& self) { self.loadYouTubeVideoNow(result); });
+        showLoadLockWarning([result](DeckComponent& self) { self.loadYouTubeVideoNow(result, LoadOrigin::User); });
         return;
     }
 
-    loadYouTubeVideoNow(result);
+    loadYouTubeVideoNow(result, origin);
 }
 
-void DeckComponent::loadYouTubeVideoNow(const YouTubeSearchResult& result)
+void DeckComponent::loadYouTubeVideoNow(const YouTubeSearchResult& result, LoadOrigin origin)
 {
     const bool autoplay = YouTubeService::isVideoAutoplayEnabled();
     const bool audioMode = YouTubeService::isAudioPlaybackMode();
@@ -614,7 +621,7 @@ void DeckComponent::loadYouTubeVideoNow(const YouTubeSearchResult& result)
     {
         isExtractingAudio = false;
         extractionProgress = 0.0f;
-        loadAudioFileNow(cachedFile);
+        loadAudioFileNow(cachedFile, origin);
 
         // Keep clean YouTube title & artist
         titleLabel.setText(displayTitle, juce::dontSendNotification);
@@ -690,13 +697,13 @@ void DeckComponent::loadYouTubeVideoNow(const YouTubeSearchResult& result)
             safe->extractionStatus = status;
             safe->repaint();
         },
-        [safe = juce::Component::SafePointer<DeckComponent>(this), vid = result.id, displayTitle, displayArtist, autoplay](const juce::File& file, bool success, const juce::String& error) {
+        [safe = juce::Component::SafePointer<DeckComponent>(this), vid = result.id, displayTitle, displayArtist, autoplay, origin](const juce::File& file, bool success, const juce::String& error) {
             if (safe == nullptr || safe->loadedVideoId != vid) return;
             safe->isExtractingAudio = false;
 
             if (success && file.existsAsFile())
             {
-                safe->loadAudioFileNow(file);
+                safe->loadAudioFileNow(file, origin);
                 safe->titleLabel.setText(displayTitle, juce::dontSendNotification);
                 safe->artistLabel.setText(displayArtist, juce::dontSendNotification);
                 safe->jogWheel.setTrackInfo(displayTitle, safe->deck.getBpm(), safe->accent);

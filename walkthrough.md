@@ -453,3 +453,34 @@ El toggle "Protección de carga (Load Lock)" de Preferencias era **decorativo**:
 ## 4. Pendiente
 - Prueba en vivo: con una bandeja sonando y el lock activo, soltar/cargar una pista → modal; "Cancelar" mantiene la pista, "Forzar carga" la cambia; en pausa carga directa; lock off sin cambios.
 - Merges pendientes (`phase-align-fix`, `p4-master-tempo`, `async-load`, `load-lock`).
+
+# Walkthrough — P7: Reproducir al cargar (Autoplay en bandeja)
+
+## 1. Objetivo
+Que una pista cargada en una bandeja **empiece a sonar sin pulsar PLAY**, como preferencia activada de fábrica y reversible, sin romper la precarga del AutoMix ni el modo vídeo de YouTube.
+
+## 2. Cambios (rama `axel-molina/autoplay-on-load`, desde `load-lock`)
+- **`AudioEngine`**: `readBoolSetting(property, defaultValue = false)` — el lector admite valor por defecto; nueva clave `autoplayOnLoad` (default **`true`**) con `isAutoplayOnLoadEnabled()` / `setAutoplayOnLoadEnabled()`, persistida con el mismo merge y restaurada en el constructor.
+- **`SettingsModalComponent`**: casilla "Reproducir al cargar (Autoplay en bandeja)" / "Autoplay on load" en Preferencias → General, debajo del Load Lock; arranca con el valor persistido, persiste en `onClick`, texto bilingüe y mismo layout/visibilidad.
+- **`DeckComponent`**: `LoadOrigin` baja a las funciones privadas (`loadAudioFileNow(file, origin)`, `loadYouTubeVideoNow(result, origin)`). Tras una carga correcta: si `origin == User` y la preferencia está activa y no es modo vídeo → `deck.play()`.
+  - **AutoMix exento**: precarga con `LoadOrigin::Automix` → sigue en pausa hasta su transición.
+  - **Modo vídeo de YouTube**: no se toca (usa `YouTubeService::isVideoAutoplayEnabled()`).
+  - **Modo audio de YouTube** (caché y extracción): pasa por `loadAudioFileNow(..., origin)` → suena.
+  - **Load Lock + "Forzar carga"**: la carga forzada pasa `LoadOrigin::User` → carga **y reproduce**.
+
+## 3. Verificación
+| Prueba (banco con backup/restore del `settings.json` real) | Resultado |
+|---|---|
+| Clave `autoplayOnLoad` ausente → `isAutoplayOnLoadEnabled() == true` (default ON) | OK |
+| Desactivar → JSON `false` y un `AudioEngine` nuevo lo restaura | OK |
+| Activar → JSON `true` y un `AudioEngine` nuevo lo restaura | OK |
+| Claves ajenas intactas tras el merge (`loadLock`, `language`, `waveLow1`) | OK |
+| `settings.json` real tras el banco | **restaurado byte a byte** (hash SHA-256 idéntico) |
+| Compilación `cmake --build build` | 0 errores, 0 warnings en los 6 ficheros tocados |
+
+## 4. Hallazgo del entorno (importante)
+El `AGENTS.md` manda relanzar `build/DiscNativePro_artefacts/Debug/DiscNativePro.app`, pero **ese binario es del 12 de octubre** (no contiene ni la cadena de versión actual). La configuración real de este `build/` es **Release** (`CMAKE_BUILD_TYPE=Release`), así que los relanzamientos anteriores abrían una app antigua. En este pase se relanzó el binario vigente: `build/DiscNativePro_artefacts/Release/DiscNativePro.app` (PID verificado). Conviene corregir la ruta en `AGENTS.md` o fijar el tipo de build.
+
+## 5. Pendiente
+- Prueba en vivo: cargar desde Finder/biblioteca en bandeja en pausa → suena; apagar la preferencia → queda en pausa; AutoMix → precarga en pausa; YouTube vídeo → respeta su autoplay; lock + forzar → carga y suena.
+- Merges pendientes (`phase-align-fix`, `p4-master-tempo`, `async-load`, `load-lock`, `autoplay-on-load`).

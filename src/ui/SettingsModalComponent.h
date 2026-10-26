@@ -73,6 +73,7 @@ private:
 
     juce::Label generalSectionDeck;
     juce::ToggleButton loadLockToggle;
+    juce::ToggleButton autoplayOnLoadToggle;
     juce::Label jogModeLabel;
     juce::ComboBox jogModeCombo;
     juce::Label pitchRangeLabel;

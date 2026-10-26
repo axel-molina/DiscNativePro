@@ -7,18 +7,21 @@ namespace
 {
     constexpr const char* tempoBlendProperty = "tempoBlend";
     constexpr const char* loadLockProperty = "loadLock";
+    constexpr const char* autoplayOnLoadProperty = "autoplayOnLoad";
 
     // Merge sobre el settings.json existente: se respetan las demas claves
     // (p. ej. recordingDirectory) y solo se toca la propiedad propia.
-    bool readBoolSetting(const char* property)
+    // defaultValue se devuelve cuando el fichero o la clave no existen
+    // (tempoBlend/loadLock: false; autoplayOnLoad: true, activado de fabrica).
+    bool readBoolSetting(const char* property, bool defaultValue = false)
     {
         auto file = AudioEngine::getSettingsFile();
         if (!file.existsAsFile())
-            return false;
+            return defaultValue;
 
         auto json = juce::JSON::parse(file);
         if (!json.isObject() || !json.hasProperty(property))
-            return false;
+            return defaultValue;
 
         return json[property];
     }
@@ -55,6 +58,9 @@ AudioEngine::AudioEngine()
 
     // Load Lock: con la clave ausente queda desactivado (comportamiento historico).
     loadLockEnabled.store(readBoolSetting(loadLockProperty));
+
+    // Autoplay al cargar: activado de fabrica (default ON) y persistido.
+    autoplayOnLoadEnabled.store(readBoolSetting(autoplayOnLoadProperty, true));
 }
 
 AudioEngine::~AudioEngine()
@@ -391,6 +397,12 @@ void AudioEngine::setLoadLockEnabled(bool enabled)
 {
     loadLockEnabled.store(enabled);
     writeBoolSetting(loadLockProperty, enabled);
+}
+
+void AudioEngine::setAutoplayOnLoadEnabled(bool enabled)
+{
+    autoplayOnLoadEnabled.store(enabled);
+    writeBoolSetting(autoplayOnLoadProperty, enabled);
 }
 
 double AudioEngine::normalizeBpmTo(double bpm, double referenceBpm)

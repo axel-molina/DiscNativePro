@@ -76,8 +76,8 @@ private:
     // P6: guarda centralizada del Load Lock + carga real separada de la publica.
     bool shouldBlockLoad(LoadOrigin origin) const;
     void showLoadLockWarning(std::function<void(DeckComponent&)> forcedLoad);
-    void loadAudioFileNow(const juce::File& file);
-    void loadYouTubeVideoNow(const struct YouTubeSearchResult& result);
+    void loadAudioFileNow(const juce::File& file, LoadOrigin origin);
+    void loadYouTubeVideoNow(const struct YouTubeSearchResult& result, LoadOrigin origin);
 
     void updateLabels();
     void updateKeyLockButton();
