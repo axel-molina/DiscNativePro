@@ -869,3 +869,32 @@ Eliminar versiones hardcodeadas y usar la versión calculada por CMake como fuen
 - Grep final: sin `1.0.0-dev` ni `v1.0.0` hardcodeados en `src/` ni `installer/` (los textos restantes de versiones en walkthrough son históricos/documentales).
 - Auto-Relaunch: `pkill` + `open build/DiscNativePro_artefacts/Release/DiscNativePro.app` → `pgrep` PID `67942` activo.
 - `src/audio/AudioEngine.cpp` no fue modificado en esta rama (fuera de alcance).
+
+---
+
+# Integración final en `main` (P1–P7 + Modo Ondas + versión 1.3.0)
+
+## 1. Orden de integración
+| Fase | Rama | Commit de merge | Conflictos resueltos |
+|---|---|---|---|
+| P4.1 + P4.2 + P5 + P6 + P7 | `axel-molina/autoplay-on-load` | `9ea6946` | ninguno |
+| P3 | `axel-molina/phase-align-fix` | `d7cc7b8` | `DeckPlayer.cpp`, `walkthrough.md` |
+| Modo Ondas | `axel-molina/waves-view` | `b84d18c` | `walkthrough.md` + firmas de tema/deck |
+| Versión 1.3.0 | `axel-molina/feature-version-alignment` | `074094b` | `src/Main.cpp`, `walkthrough.md` |
+
+Todos los merges con `--no-ff` para conservar la historia por fase. Tag `pre-merge-p3-p7` en el `main` previo.
+
+## 2. Decisiones de resolución
+- **P3 sobre P5**: se mantiene la carga asíncrona; el offset del primer beat se publica desde el worker y el controlador espera BPM > 0 en ambos decks. Tres fallos reales corregidos al validar el merge (ver sección P3 §4): inversa `setPosition`/`getPosition` con Key Lock, nudge fraccional en el stretcher y guard de BPM.
+- **Ondas sobre temas por bandeja**: `DeckScrollWaveform` recibe `deckIndex` y `OverviewWaveform` recibe `deckNum`.
+- **Versión**: `#error` si falta `DISCNATIVEPRO_VERSION` (sin fallback `1.0.0-dev`) y se conserva la instancia única de `main`; CMake aporta `1.3.0` al binario, `Info.plist` y al instalador.
+
+## 3. Verificación final
+- `cmake --build build` → **0 errores**; 0 warnings nuevos en ficheros tocados. Los 5 warnings restantes son previos y ajenos (`AsyncFolderScanner` ×3, `SoundCloudService`, `UsbLibraryView`), más los de Harfbuzz dentro de JUCE.
+- `Info.plist` del bundle Release: `CFBundleShortVersionString` = `CFBundleVersion` = **1.3.0**; `strings` del binario contiene `1.3.0`; sin `1.0.0-dev` en `src/`, `installer/` ni `CMakeLists.txt`.
+- Harnesses (pistas reales): `run_phase_real` converge a **0.67–1.77 ms** con nudge liberado; `run_pos_merged` invariante **−0.0 ms** antes y después del seek; `run_math_merged` 5043 casos / 0 fallos; `run_autoplay` persistencia 5/5 con `settings.json` restaurado byte a byte.
+- App Release relanzada tras cada fase; `settings.json` conserva `viewMode`, temas por bandeja, `tempoBlend` y `loadLock`. `autoplayOnLoad` no está escrito todavía: su valor por defecto es ON (y se escribe en cuanto se toca el ajuste).
+
+## 4. Pendiente (fuera del merge)
+- Prueba de escucha manual: cruce de zona con dos temas reales (el controlador tarda ~23 s por diseño en corregir desfases de 1–15 ms), gesto de scrub en la onda expandida y autoplay desde Finder/YouTube.
+- Deuda documentada en cada fase (lock del callback de audio, pre-roll dentro del callback, `ScrollingWaveform` con grid fijo a 124 BPM).
