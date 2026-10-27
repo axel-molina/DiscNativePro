@@ -99,6 +99,7 @@ target_sources(DiscNativePro
         src/services/SoundCloudService.cpp
         src/ui/TopBarComponent.h
         src/ui/TopBarComponent.cpp
+        src/ui/BpmFormat.h
         src/ui/DjKnob.h
         src/ui/VuMeter.h
         src/ui/JogWheel.h

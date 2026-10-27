@@ -1,4 +1,5 @@
 #include "LibraryComponent.h"
+#include "BpmFormat.h"
 #include "DeckComponent.h"
 #include "YouTubeLibraryView.h"
 #include "UsbLibraryView.h"
@@ -198,7 +199,7 @@ public:
                 g.fillRoundedRectangle(badgeArea.toFloat(), 3.0f);
                 g.setColour(juce::Colour::fromRGB(0, 229, 255));
                 g.setFont(juce::FontOptions(9.0f, juce::Font::bold));
-                g.drawText(juce::String(track.bpm, 0), badgeArea, juce::Justification::centred, false);
+                g.drawText(formatBpm(track.bpm), badgeArea, juce::Justification::centred, false);
             }
 
             // Title + Artist
@@ -1529,7 +1530,7 @@ void LibraryComponent::paintCell(juce::Graphics& g, int rowNumber, int columnId,
         case 7: // BPM
             g.setColour(juce::Colours::white);
             g.setFont(juce::FontOptions(12.0f, juce::Font::bold));
-            g.drawText(track.bpm > 0.0 ? juce::String(track.bpm, 1) : "--", cellBounds, juce::Justification::centred, false);
+            g.drawText(formatBpm(track.bpm), cellBounds, juce::Justification::centred, false);
             break;
 
         case 8: // Key

@@ -132,9 +132,20 @@ void SettingsModalComponent::setupGeneralTab()
     bodyContent.addChildComponent(generalSectionDeck);
 
     loadLockToggle.setButtonText(juce::String::fromUTF8("Protección de carga (Load Lock): Bloquear carga si el deck reproduce en vivo"));
-    loadLockToggle.setToggleState(false, juce::dontSendNotification);
+    loadLockToggle.setToggleState(audioEngine.isLoadLockEnabled(), juce::dontSendNotification);
     loadLockToggle.setColour(juce::ToggleButton::textColourId, juce::Colours::white.withAlpha(0.85f));
+    loadLockToggle.onClick = [this]() {
+        audioEngine.setLoadLockEnabled(loadLockToggle.getToggleState());
+    };
     bodyContent.addChildComponent(loadLockToggle);
+
+    autoplayOnLoadToggle.setButtonText(juce::String::fromUTF8("Reproducir al cargar (Autoplay en bandeja)"));
+    autoplayOnLoadToggle.setToggleState(audioEngine.isAutoplayOnLoadEnabled(), juce::dontSendNotification);
+    autoplayOnLoadToggle.setColour(juce::ToggleButton::textColourId, juce::Colours::white.withAlpha(0.85f));
+    autoplayOnLoadToggle.onClick = [this]() {
+        audioEngine.setAutoplayOnLoadEnabled(autoplayOnLoadToggle.getToggleState());
+    };
+    bodyContent.addChildComponent(autoplayOnLoadToggle);
 
     jogModeLabel.setText(juce::String::fromUTF8("Modo Jog Wheel:"), juce::dontSendNotification);
     jogModeLabel.setFont(juce::FontOptions(11.0f, juce::Font::plain));
@@ -410,6 +421,7 @@ void SettingsModalComponent::refreshLanguage()
 
     generalSectionDeck.setText(LanguageManager::trUtf8("Comportamiento de Decks", "Deck Behavior"), juce::dontSendNotification);
     loadLockToggle.setButtonText(LanguageManager::trUtf8("Protección de carga (Load Lock): Bloquear carga si el deck reproduce en vivo", "Load Lock: Prevent loading tracks into playing decks"));
+    autoplayOnLoadToggle.setButtonText(LanguageManager::trUtf8("Reproducir al cargar (Autoplay en bandeja)", "Autoplay on load"));
     jogModeLabel.setText(LanguageManager::trUtf8("Modo Jog Wheel:", "Jog Wheel Mode:"), juce::dontSendNotification);
     int curJog = jogModeCombo.getSelectedId();
     jogModeCombo.clear(juce::dontSendNotification);
@@ -1383,6 +1395,7 @@ void SettingsModalComponent::updateTabVisibility()
     languageCombo.setVisible(isGeneral);
     generalSectionDeck.setVisible(isGeneral);
     loadLockToggle.setVisible(isGeneral);
+    autoplayOnLoadToggle.setVisible(isGeneral);
     jogModeLabel.setVisible(isGeneral);
     jogModeCombo.setVisible(isGeneral);
     pitchRangeLabel.setVisible(isGeneral);
@@ -1871,6 +1884,8 @@ void SettingsModalComponent::resized()
         generalSectionDeck.setBounds(gArea.removeFromTop(18));
         gArea.removeFromTop(4);
         loadLockToggle.setBounds(gArea.removeFromTop(22));
+        gArea.removeFromTop(4);
+        autoplayOnLoadToggle.setBounds(gArea.removeFromTop(22));
         gArea.removeFromTop(4);
 
         auto row1 = gArea.removeFromTop(24);

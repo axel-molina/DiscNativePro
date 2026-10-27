@@ -2,13 +2,38 @@
 #include "BeatDetector.h"
 #include "KeyDetector.h"
 #include "StretchAdapter.h"
+#include <juce_events/juce_events.h>
 #include <cmath>
 #include <cstring>
 #include <vector>
 
+namespace
+{
+// P5: pool dedicado de 1 hilo. El análisis (decodificación + onsets + key)
+// nunca corre en el hilo de mensajes ni compite con el streaming de disco
+// (TimeSliceThread) ni con el callback de audio.
+juce::ThreadPool& analysisPool()
+{
+    static juce::ThreadPool pool(1);
+    return pool;
+}
+
+// Normaliza una banda a su máximo: los temas con master bajo muestran picos
+// igual que los altos (beneficia al overview y al vertical).
+void normaliseBand(std::vector<float>& band)
+{
+    float maxV = 1e-6f;
+    for (const float v : band)
+        maxV = juce::jmax(maxV, v);
+    for (float& v : band)
+        v /= maxV;
+}
+} // namespace
+
 DeckPlayer::DeckPlayer(juce::AudioFormatManager& fm, juce::TimeSliceThread& thread)
     : formatManager(fm), diskThread(thread),
-      stretcher(std::make_unique<StretchAdapter>())
+      stretcher(std::make_unique<StretchAdapter>()),
+      analysis(std::make_shared<AnalysisShared>())
 {
     for (size_t i = 0; i < hotCues.size(); ++i)
     {
@@ -22,6 +47,12 @@ DeckPlayer::DeckPlayer(juce::AudioFormatManager& fm, juce::TimeSliceThread& thre
 }
 DeckPlayer::~DeckPlayer()
 {
+    // Ningún trabajo pendiente vuelve a tocar este deck (ver publishIfCurrent).
+    // El DeckPlayer se destruye en el hilo de mensajes, igual que las
+    // publicaciones diferidas, así que la bandera basta como barrera.
+    if (analysis != nullptr)
+        analysis->alive.store(false);
+
     releaseResources();
 }
 
@@ -34,76 +65,173 @@ bool DeckPlayer::loadFile(const juce::File& audioFile)
     if (reader == nullptr)
         return false;
 
-    const juce::ScopedLock sl(lock);
+    // P5: segundo reader, exclusivo del worker de análisis. Los
+    // AudioFormatReader no son seguros para lecturas concurrentes con la
+    // reproducción, así que ambos caminos nunca comparten handle.
+    std::shared_ptr<juce::AudioFormatReader> analysisReader(formatManager.createReaderFor(audioFile));
 
-    // Stop and clear previous pipeline
-    playing.store(false);
-    loaded.store(false);
+    // Toda carga invalida el trabajo anterior: sus resultados se descartan.
+    const int generation = analysis->generation.fetch_add(1) + 1;
 
-    resamplingSource.reset();
-    bufferingSource.reset();
-    readerSource.reset();
-
-    currentFile = audioFile;
-
-    // Metadata extraction
-    trackTitle = reader->metadataValues.getValue("title", audioFile.getFileNameWithoutExtension());
-    trackArtist = reader->metadataValues.getValue("artist", "Artista Local");
-    trackKey = "--";
-    trackCamelot = "--";
-
-    double duration = (double)reader->lengthInSamples / reader->sampleRate;
-    trackDurationSeconds.store(duration);
-    cuePositionSeconds.store(0.0);
-
-    // Native C++ BPM and transient analysis
-    auto beatRes = BeatDetector::analyze(reader);
-    originalBpm.store(beatRes.bpm);
-    currentBpm.store(beatRes.bpm);
-
-    // Native C++ Pro Harmonic Key Detection (Camelot + Musical key)
-    auto keyRes = KeyDetector::analyze(reader);
-    trackKey = (keyRes.formattedKey.isNotEmpty() && keyRes.formattedKey != "--") ? keyRes.formattedKey : keyRes.camelot;
-    trackCamelot = keyRes.camelot;
-
-    // Extract 3-band waveform overview peaks
-    extractWaveformOverview(reader);
-
-    // Reset hot cues
-    for (size_t i = 0; i < hotCues.size(); ++i)
     {
-        hotCues[i].store(0.0);
-        hotCuesActive[i].store(false);
+        const juce::ScopedLock sl(lock);
+
+        // Stop and clear previous pipeline
+        playing.store(false);
+        loaded.store(false);
+
+        resamplingSource.reset();
+        bufferingSource.reset();
+        readerSource.reset();
+
+        currentFile = audioFile;
+
+        // Metadata extraction
+        trackTitle = reader->metadataValues.getValue("title", audioFile.getFileNameWithoutExtension());
+        trackArtist = reader->metadataValues.getValue("artist", "Artista Local");
+        trackKey = "--";
+        trackCamelot = "--";
+
+        double duration = (double)reader->lengthInSamples / reader->sampleRate;
+        trackDurationSeconds.store(duration);
+        cuePositionSeconds.store(0.0);
+
+        // Fase rápida: sin analizadores ni waveform. BPM/peaks quedan vacíos
+        // hasta que el worker publique (la UI muestra "--" y el waveform se
+        // rellena en cuanto llega el overview rápido).
+        originalBpm.store(0.0);
+        currentBpm.store(0.0);
+        peaksLow.clear();
+        peaksMid.clear();
+        peaksHigh.clear();
+
+        // Reset hot cues
+        for (size_t i = 0; i < hotCues.size(); ++i)
+        {
+            hotCues[i].store(0.0);
+            hotCuesActive[i].store(false);
+        }
+        loopActive.store(false);
+
+        // Build the streaming audio pipeline
+        // 1. AudioFormatReaderSource takes ownership of reader
+        numSrcChannels = (int)reader->numChannels;
+        readerSource = std::make_unique<juce::AudioFormatReaderSource>(reader, true);
+
+        // 2. BufferingAudioSource reads ahead in background thread (approx 4 seconds of buffer)
+        // Memory footprint is tiny (~1-2MB) even for 2-hour long sets!
+        constexpr int bufferSize = 32768 * 4;
+        // ponytail: prefill desactivado (6.º argumento). El prefills por defecto
+        // duerme ~10 ms en prepareToPlay (2 tandas de 5 ms) y eso es justo el
+        // bloqueo que P5 elimina. El hilo de disco llena el buffer en paralelo
+        // en cuanto el deck suena; el peor caso es un bloque de silencio si se
+        // pulsa PLAY en el mismo milisegundo de la carga.
+        bufferingSource = std::make_unique<juce::BufferingAudioSource>(readerSource.get(), diskThread, false, bufferSize, 2, false);
+
+        // 3. ResamplingAudioSource allows smooth pitch / tempo changes (+/- 8%, etc.)
+        resamplingSource = std::make_unique<juce::ResamplingAudioSource>(bufferingSource.get(), false, 2);
+
+        if (currentSampleRate > 0.0)
+        {
+            int blockSize = expectedSamplesPerBlock > 0 ? expectedSamplesPerBlock : 512;
+            bufferingSource->prepareToPlay(blockSize, currentSampleRate);
+            resamplingSource->prepareToPlay(blockSize, currentSampleRate);
+            stretcher->prepare(currentSampleRate);
+        }
+
+        stretcher->reset();
+        updatePlaybackSpeed();
+
+        loaded.store(true);
     }
-    loopActive.store(false);
 
-    // Build the streaming audio pipeline
-    // 1. AudioFormatReaderSource takes ownership of reader
-    numSrcChannels = (int)reader->numChannels;
-    readerSource = std::make_unique<juce::AudioFormatReaderSource>(reader, true);
-
-    // 2. BufferingAudioSource reads ahead in background thread (approx 4 seconds of buffer)
-    // Memory footprint is tiny (~1-2MB) even for 2-hour long sets!
-    constexpr int bufferSize = 32768 * 4;
-    bufferingSource = std::make_unique<juce::BufferingAudioSource>(readerSource.get(), diskThread, false, bufferSize);
-
-    // 3. ResamplingAudioSource allows smooth pitch / tempo changes (+/- 8%, etc.)
-    resamplingSource = std::make_unique<juce::ResamplingAudioSource>(bufferingSource.get(), false, 2);
-
-    if (currentSampleRate > 0.0)
-    {
-        int blockSize = expectedSamplesPerBlock > 0 ? expectedSamplesPerBlock : 512;
-        bufferingSource->prepareToPlay(blockSize, currentSampleRate);
-        resamplingSource->prepareToPlay(blockSize, currentSampleRate);
-        stretcher->prepare(currentSampleRate);
-    }
-
-    stretcher->reset();
-    updatePlaybackSpeed();
-
-    loaded.store(true);
+    // Fase de análisis: worker propio, resultados publicados en el hilo de mensajes.
+    startAnalysis(std::move(analysisReader), generation);
 
     return true;
+}
+
+void DeckPlayer::startAnalysis(std::shared_ptr<juce::AudioFormatReader> analysisReader, int generation)
+{
+    if (analysisReader == nullptr || analysis == nullptr)
+        return;
+
+    auto shared = analysis;
+    analysisPool().addJob([this, shared, reader = std::move(analysisReader), generation]()
+    {
+        auto isCurrent = [&shared, generation]()
+        {
+            return shared->alive.load() && shared->generation.load() == generation;
+        };
+
+        // 1) Overview rápido (~2000 puntos, ventanas cortas repartidas): la
+        //    bandeja pinta un waveform real en milisegundos.
+        {
+            std::vector<float> low, mid, high;
+            computeQuickOverview(reader.get(), 2000, low, mid, high);
+            if (!isCurrent())
+                return;
+            publishIfCurrent(shared, generation, [this, low, mid, high]() mutable
+            {
+                peaksLow = std::move(low);
+                peaksMid = std::move(mid);
+                peaksHigh = std::move(high);
+            });
+        }
+
+        // 2) Overview completo (8000 puntos, una pasada secuencial).
+        {
+            std::vector<float> low, mid, high;
+            computeFullOverview(reader.get(), 8000, low, mid, high);
+            if (!isCurrent())
+                return;
+            publishIfCurrent(shared, generation, [this, low, mid, high]() mutable
+            {
+                peaksLow = std::move(low);
+                peaksMid = std::move(mid);
+                peaksHigh = std::move(high);
+            });
+        }
+
+        // 3) BPM (solo el átomo: el label ya se refresca en el timer de la UI).
+        const auto beatRes = BeatDetector::analyze(reader.get());
+        if (!isCurrent())
+            return;
+        publishIfCurrent(shared, generation, [this, bpm = beatRes.bpm]()
+        {
+            originalBpm.store(bpm);
+            currentBpm.store(bpm * (1.0 + (double)pitchPercent.load() / 100.0));
+        });
+
+        // 4) Tonalidad (Camelot + musical).
+        const auto keyRes = KeyDetector::analyze(reader.get());
+        if (!isCurrent())
+            return;
+        publishIfCurrent(shared, generation,
+                         [this,
+                          key = (keyRes.formattedKey.isNotEmpty() && keyRes.formattedKey != "--")
+                                    ? keyRes.formattedKey
+                                    : keyRes.camelot,
+                          camelot = keyRes.camelot]()
+        {
+            const juce::ScopedLock sl(lock);
+            trackKey = key;
+            trackCamelot = camelot;
+        });
+    });
+}
+
+void DeckPlayer::publishIfCurrent(const std::shared_ptr<AnalysisShared>& shared, int generation,
+                                  std::function<void()> publishFn)
+{
+    // callAsync preserva el orden (rápido antes que completo) y los pintores son
+    // del hilo de mensajes: allí se asignan peaks, BPM y tonalidad sin carreras.
+    juce::MessageManager::callAsync([shared, generation, publish = std::move(publishFn)]() mutable
+    {
+        if (!shared->alive.load() || shared->generation.load() != generation)
+            return; // deck destruido u otra pista cargada: resultado obsoleto
+        publish();
+    });
 }
 
 void DeckPlayer::prepareToPlay(int samplesPerBlockExpected, double sampleRate)
@@ -422,8 +550,11 @@ void DeckPlayer::seekRelative(double deltaSeconds)
 
 void DeckPlayer::setPitchPercent(float percent)
 {
-    pitchPercent.store(percent);
-    currentBpm.store(originalBpm.load() * (1.0 + (double)percent / 100.0));
+    float range = pitchRange.load();
+    float clamped = juce::jlimit(-range, range, percent);
+    pitchClamped.store(std::abs(percent - clamped) > 1e-6f);
+    pitchPercent.store(clamped);
+    currentBpm.store(originalBpm.load() * (1.0 + (double)clamped / 100.0));
     updatePlaybackSpeed();
 }
 
@@ -545,16 +676,71 @@ juce::Colour DeckPlayer::getTrackKeyColour() const
     return KeyDetector::getCamelotColour(trackKey);
 }
 
-void DeckPlayer::extractWaveformOverview(juce::AudioFormatReader* reader)
+void DeckPlayer::computeQuickOverview(juce::AudioFormatReader* reader, size_t numPoints,
+                                     std::vector<float>& low, std::vector<float>& mid,
+                                     std::vector<float>& high)
+{
+    // Overview rápido: ventanas cortas repartidas por la pista. Coste
+    // proporcional a numPoints (2000 lecturas de ~21 ms a 48 kHz), no a la
+    // duración total: sirve para pintar algo real mientras llega el completo.
+    low.assign(numPoints, 0.0f);
+    mid.assign(numPoints, 0.0f);
+    high.assign(numPoints, 0.0f);
+
+    if (reader == nullptr || reader->lengthInSamples <= 0 || numPoints == 0)
+        return;
+
+    const int64_t totalSamples = reader->lengthInSamples;
+    const int numCh = juce::jmax(1, (int)reader->numChannels);
+    const int window = (int)juce::jmin<int64_t>(1024, totalSamples);
+    if (window <= 0)
+        return;
+
+    juce::AudioBuffer<float> windowBuf(numCh, window);
+
+    for (size_t p = 0; p < numPoints; ++p)
+    {
+        const int64_t pos = (int64_t)((double)p / (double)numPoints * (double)totalSamples);
+        const int n = (int)juce::jmin<int64_t>((int64_t)window, totalSamples - pos);
+        if (n <= 0 || !reader->read(&windowBuf, 0, n, pos, true, true))
+            break;
+
+        const float* left = windowBuf.getReadPointer(0);
+        const float* right = (numCh > 1) ? windowBuf.getReadPointer(1) : nullptr;
+
+        double peak = 0.0, sum = 0.0;
+        for (int i = 0; i < n; ++i)
+        {
+            double v = std::abs((double)left[i]);
+            if (right != nullptr)
+                v = (v + std::abs((double)right[i])) * 0.5;
+            peak = juce::jmax(peak, v);
+            sum += v;
+        }
+        const double avg = sum / (double)n;
+
+        // Misma matemática de bandas que el overview completo.
+        low[p]  = (float)juce::jlimit(0.0, 1.0, peak * 0.95);
+        mid[p]  = (float)juce::jlimit(0.0, 1.0, avg * 1.5);
+        high[p] = (float)juce::jlimit(0.0, 1.0, (peak - avg) * 1.25);
+    }
+
+    normaliseBand(low);
+    normaliseBand(mid);
+    normaliseBand(high);
+}
+
+void DeckPlayer::computeFullOverview(juce::AudioFormatReader* reader, size_t numPoints,
+                                     std::vector<float>& low, std::vector<float>& mid,
+                                     std::vector<float>& high)
 {
     // Alta resolución para el vertical con zoom (8000 pts ≈ 100 KB).
     // Una sola pasada secuencial: sin seeks dispersos, óptimo en MP3.
-    const size_t numPoints = 8000;
-    peaksLow.assign(numPoints, 0.0f);
-    peaksMid.assign(numPoints, 0.0f);
-    peaksHigh.assign(numPoints, 0.0f);
+    low.assign(numPoints, 0.0f);
+    mid.assign(numPoints, 0.0f);
+    high.assign(numPoints, 0.0f);
 
-    if (reader == nullptr || reader->lengthInSamples <= 0)
+    if (reader == nullptr || reader->lengthInSamples <= 0 || numPoints == 0)
         return;
 
     int64_t totalSamples = reader->lengthInSamples;
@@ -598,26 +784,14 @@ void DeckPlayer::extractWaveformOverview(juce::AudioFormatReader* reader)
     {
         float peak = (float)ptPeak[p];
         float avg = ptCount[p] > 0 ? (float)(ptSum[p] / (double)ptCount[p]) : 0.0f;
-        peaksLow[p]  = juce::jlimit(0.0f, 1.0f, peak * 0.95f);
-        peaksMid[p]  = juce::jlimit(0.0f, 1.0f, avg * 1.5f);
-        peaksHigh[p] = juce::jlimit(0.0f, 1.0f, (peak - avg) * 1.25f);
+        low[p]  = juce::jlimit(0.0f, 1.0f, peak * 0.95f);
+        mid[p]  = juce::jlimit(0.0f, 1.0f, avg * 1.5f);
+        high[p] = juce::jlimit(0.0f, 1.0f, (peak - avg) * 1.25f);
     }
 
-    // Normaliza cada banda a su máximo: los temas con master bajo muestran
-    // picos igual que los altos (beneficia al overview y al vertical).
-    float maxL = 1e-6f, maxM = 1e-6f, maxH = 1e-6f;
-    for (size_t p = 0; p < numPoints; ++p)
-    {
-        maxL = juce::jmax(maxL, peaksLow[p]);
-        maxM = juce::jmax(maxM, peaksMid[p]);
-        maxH = juce::jmax(maxH, peaksHigh[p]);
-    }
-    for (size_t p = 0; p < numPoints; ++p)
-    {
-        peaksLow[p] /= maxL;
-        peaksMid[p] /= maxM;
-        peaksHigh[p] /= maxH;
-    }
+    normaliseBand(low);
+    normaliseBand(mid);
+    normaliseBand(high);
 }
 
 

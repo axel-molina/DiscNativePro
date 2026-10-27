@@ -6,7 +6,9 @@
 #include <juce_core/juce_core.h>
 #include <array>
 #include <atomic>
+#include <functional>
 #include <memory>
+#include <vector>
 
 class StretchAdapter; // PIMPL: signalsmith-stretch (pesado) no contamina los TUs que incluyen esto
 
@@ -42,6 +44,7 @@ public:
     // Tempo / Pitch
     void setPitchPercent(float percent); // -8.0 to +8.0, etc.
     float getPitchPercent() const { return pitchPercent.load(); }
+    bool isPitchClamped() const { return pitchClamped.load(); }
     void setPitchBend(float bend); // Temporary nudge (e.g. +/- 0.05)
     void setPitchRange(float range) { pitchRange.store(juce::jmax(1.0f, range)); }
     float getPitchRange() const     { return pitchRange.load(); }
@@ -124,6 +127,7 @@ private:
     std::atomic<float> pitchPercent { 0.0f };
     std::atomic<float> pitchBend { 0.0f };
     std::atomic<float> pitchRange { 8.0f };
+    std::atomic<bool> pitchClamped { false };
     std::atomic<int> jogMode { 0 };
     std::atomic<bool> keylock { true };
 
@@ -155,10 +159,32 @@ private:
     std::array<std::atomic<double>, 4> hotCues;
     std::array<std::atomic<bool>, 4> hotCuesActive;
 
+    // Los peaks solo se escriben en el hilo de mensajes (los pintores son de
+    // mensajes); el worker de análisis nunca toca estos vectores.
     std::vector<float> peaksLow;
     std::vector<float> peaksMid;
     std::vector<float> peaksHigh;
-    void extractWaveformOverview(juce::AudioFormatReader* reader);
+
+    // P5: análisis en segundo plano. El worker usa su propio reader (un
+    // AudioFormatReader no es seguro para lectura concurrente) y publica los
+    // resultados en el hilo de mensajes.
+    struct AnalysisShared
+    {
+        std::atomic<bool> alive { true };  // el destructor lo pone a false
+        std::atomic<int> generation { 0 }; // ++ en cada loadFile: descarta trabajos viejos
+    };
+
+    std::shared_ptr<AnalysisShared> analysis;
+
+    void startAnalysis(std::shared_ptr<juce::AudioFormatReader> analysisReader, int generation);
+    static void computeQuickOverview(juce::AudioFormatReader* reader, size_t numPoints,
+                                     std::vector<float>& low, std::vector<float>& mid,
+                                     std::vector<float>& high);
+    static void computeFullOverview(juce::AudioFormatReader* reader, size_t numPoints,
+                                    std::vector<float>& low, std::vector<float>& mid,
+                                    std::vector<float>& high);
+    static void publishIfCurrent(const std::shared_ptr<AnalysisShared>& shared, int generation,
+                                 std::function<void()> publishFn);
 
     double currentSampleRate { 44100.0 };
 

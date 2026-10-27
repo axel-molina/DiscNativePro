@@ -1,4 +1,5 @@
 #include "DeckComponent.h"
+#include "BpmFormat.h"
 #include "YouTubeVideoComponent.h"
 #include "../services/YouTubeService.h"
 #include "../services/YouTubeAudioDownloader.h"
@@ -309,7 +310,58 @@ void DeckComponent::languageChanged()
     repaint();
 }
 
-void DeckComponent::loadAudioFile(const juce::File& file)
+bool DeckComponent::shouldBlockLoad(LoadOrigin origin) const
+{
+    // AutoMix siempre carga en la bandeja libre: exento.
+    // Solo se bloquea si la bandeja de audio esta sonando ahora mismo (en pausa se carga).
+    return origin == LoadOrigin::User
+        && engine.isLoadLockEnabled()
+        && deck.isPlaying();
+}
+
+void DeckComponent::showLoadLockWarning(std::function<void(DeckComponent&)> forcedLoad)
+{
+    auto message = LanguageManager::trUtf8("La bandeja ", "Deck ")
+                 + juce::String(deckIndex + 1)
+                 + LanguageManager::trUtf8(" está reproduciendo. ¿Cargar de todos modos?",
+                                           " is playing. Load anyway?");
+
+    // AlertWindow manual: el LookAndFeel asigna Return al boton primario, asi que solo
+    // "Cancelar" declara atajos (Return y Escape). Enter jamas fuerza la carga.
+    auto* alert = new juce::AlertWindow(LanguageManager::trUtf8("Protección de carga", "Load Lock"),
+                                       message,
+                                       juce::MessageBoxIconType::WarningIcon,
+                                       this);
+    alert->addButton(LanguageManager::trUtf8("Forzar carga", "Force load"), 1);
+    alert->addButton(LanguageManager::trUtf8("Cancelar", "Cancel"), 0,
+                     juce::KeyPress(juce::KeyPress::returnKey),
+                     juce::KeyPress(juce::KeyPress::escapeKey));
+
+    // El AlertWindow da foco al primer boton: sin foco de teclado, "Forzar carga" solo responde al raton.
+    alert->getButton(0)->setWantsKeyboardFocus(false);
+
+    alert->enterModalState(true,
+                           juce::ModalCallbackFunction::create(
+                               [safe = juce::Component::SafePointer<DeckComponent>(this), forcedLoad](int result) {
+                                   if (safe != nullptr && result == 1)
+                                       forcedLoad(*safe);
+                               }),
+                           true);
+}
+
+void DeckComponent::loadAudioFile(const juce::File& file, LoadOrigin origin)
+{
+    if (shouldBlockLoad(origin))
+    {
+        // P7: la carga forzada es una accion del usuario, asi que reproduce.
+        showLoadLockWarning([file](DeckComponent& self) { self.loadAudioFileNow(file, LoadOrigin::User); });
+        return;
+    }
+
+    loadAudioFileNow(file, origin);
+}
+
+void DeckComponent::loadAudioFileNow(const juce::File& file, LoadOrigin origin)
 {
     if (deck.loadFile(file))
     {
@@ -345,8 +397,8 @@ void DeckComponent::loadAudioFile(const juce::File& file)
         titleLabel.setText(cleanTitle, juce::dontSendNotification);
         artistLabel.setText(trackArtist, juce::dontSendNotification);
         double bpm = deck.getBpm();
-        bpmLabel.setText(juce::String(bpm, 1), juce::dontSendNotification);
-        pitchBpmLabel.setText(juce::String(bpm, 1), juce::dontSendNotification);
+        bpmLabel.setText(formatBpm(bpm), juce::dontSendNotification);
+        pitchBpmLabel.setText(formatBpm(bpm), juce::dontSendNotification);
         keyBadge.setText(deck.getTrackKey(), juce::dontSendNotification);
         auto keyCol = deck.getTrackKeyColour();
         keyBadge.setColour(juce::Label::textColourId, keyCol);
@@ -356,6 +408,7 @@ void DeckComponent::loadAudioFile(const juce::File& file)
         overviewWaveform.updateWaveform();
 
         coverArtImage = CoverArtGenerator::getCoverForTrack(cleanTitle, 256);
+        jogWheelBpmShown = -1.0; // P5: el BPM real llega del worker de análisis
         jogWheel.setTrackInfo(cleanTitle, bpm, accent);
         refreshHotCueButtons();
 
@@ -363,6 +416,12 @@ void DeckComponent::loadAudioFile(const juce::File& file)
 
         if (onFileLoaded)
             onFileLoaded(file, bpm);
+
+        // P7: autoplay al cargar solo para cargas del usuario y fuera del modo video
+        // de YouTube (ese modo usa YouTubeService::isVideoAutoplayEnabled()).
+        // AutoMix carga con LoadOrigin::Automix: su precarga se queda en pausa.
+        if (origin == LoadOrigin::User && !isVideoMode && engine.isAutoplayOnLoadEnabled())
+            deck.play();
     }
 }
 
@@ -462,7 +521,18 @@ void DeckComponent::itemDropped(const SourceDetails& dragSourceDetails)
     repaint();
 }
 
-void DeckComponent::loadYouTubeVideo(const YouTubeSearchResult& result)
+void DeckComponent::loadYouTubeVideo(const YouTubeSearchResult& result, LoadOrigin origin)
+{
+    if (shouldBlockLoad(origin))
+    {
+        showLoadLockWarning([result](DeckComponent& self) { self.loadYouTubeVideoNow(result, LoadOrigin::User); });
+        return;
+    }
+
+    loadYouTubeVideoNow(result, origin);
+}
+
+void DeckComponent::loadYouTubeVideoNow(const YouTubeSearchResult& result, LoadOrigin origin)
 {
     const bool autoplay = YouTubeService::isVideoAutoplayEnabled();
     const bool audioMode = YouTubeService::isAudioPlaybackMode();
@@ -505,8 +575,8 @@ void DeckComponent::loadYouTubeVideo(const YouTubeSearchResult& result)
 
         titleLabel.setText(displayTitle, juce::dontSendNotification);
         artistLabel.setText(displayArtist, juce::dontSendNotification);
-        bpmLabel.setText("128.0", juce::dontSendNotification);
-        pitchBpmLabel.setText("128.0", juce::dontSendNotification);
+        bpmLabel.setText(formatBpm(128.0), juce::dontSendNotification);
+        pitchBpmLabel.setText(formatBpm(128.0), juce::dontSendNotification);
         timeRemainingLabel.setText(result.durationText.isNotEmpty() ? result.durationText : "--:--", juce::dontSendNotification);
         keyBadge.setText("YT", juce::dontSendNotification);
 
@@ -551,7 +621,7 @@ void DeckComponent::loadYouTubeVideo(const YouTubeSearchResult& result)
     {
         isExtractingAudio = false;
         extractionProgress = 0.0f;
-        loadAudioFile(cachedFile);
+        loadAudioFileNow(cachedFile, origin);
 
         // Keep clean YouTube title & artist
         titleLabel.setText(displayTitle, juce::dontSendNotification);
@@ -627,13 +697,13 @@ void DeckComponent::loadYouTubeVideo(const YouTubeSearchResult& result)
             safe->extractionStatus = status;
             safe->repaint();
         },
-        [safe = juce::Component::SafePointer<DeckComponent>(this), vid = result.id, displayTitle, displayArtist, autoplay](const juce::File& file, bool success, const juce::String& error) {
+        [safe = juce::Component::SafePointer<DeckComponent>(this), vid = result.id, displayTitle, displayArtist, autoplay, origin](const juce::File& file, bool success, const juce::String& error) {
             if (safe == nullptr || safe->loadedVideoId != vid) return;
             safe->isExtractingAudio = false;
 
             if (success && file.existsAsFile())
             {
-                safe->loadAudioFile(file);
+                safe->loadAudioFileNow(file, origin);
                 safe->titleLabel.setText(displayTitle, juce::dontSendNotification);
                 safe->artistLabel.setText(displayArtist, juce::dontSendNotification);
                 safe->jogWheel.setTrackInfo(displayTitle, safe->deck.getBpm(), safe->accent);
@@ -1019,13 +1089,48 @@ void DeckComponent::updateLabels()
     if (deck.isLoaded())
     {
         double curBpm = deck.getBpm();
-        bpmLabel.setText(juce::String(curBpm, 1), juce::dontSendNotification);
-        pitchBpmLabel.setText(juce::String(curBpm, 1), juce::dontSendNotification);
+        juce::String bpmText = formatBpm(curBpm);
+        if (deck.isPitchClamped())
+        {
+            bpmText += " ! SYNC fuera de rango";
+            bpmLabel.setColour(juce::Label::textColourId, juce::Colour::fromRGB(245, 158, 11));
+            pitchBpmLabel.setColour(juce::Label::textColourId, juce::Colour::fromRGB(245, 158, 11));
+        }
+        else
+        {
+            bpmLabel.setColour(juce::Label::textColourId, juce::Colours::white);
+            pitchBpmLabel.setColour(juce::Label::textColourId, juce::Colours::white);
+        }
+        bpmLabel.setText(bpmText, juce::dontSendNotification);
+        pitchBpmLabel.setText(formatBpm(curBpm), juce::dontSendNotification);
+
+        // P5: la tonalidad se detecta en segundo plano; el badge se refresca
+        // cuando llega (solo si cambió, sin repintar de más).
+        const juce::String currentKey = deck.getTrackKey();
+        if (keyBadge.getText() != currentKey)
+        {
+            keyBadge.setText(currentKey, juce::dontSendNotification);
+            const auto keyCol = deck.getTrackKeyColour();
+            keyBadge.setColour(juce::Label::textColourId, keyCol);
+            keyBadge.setColour(juce::Label::backgroundColourId, keyCol.withAlpha(0.15f));
+            keyBadge.setColour(juce::Label::outlineColourId, keyCol.withAlpha(0.35f));
+        }
+
+        // P5: el jog wheel se pintó con bpm=0 al cargar (análisis pendiente);
+        // se refresca una sola vez cuando llega el BPM detectado.
+        const double detectedBpm = deck.getOriginalBpm();
+        if (detectedBpm > 0.0 && std::abs(jogWheelBpmShown - detectedBpm) > 1e-9)
+        {
+            jogWheelBpmShown = detectedBpm;
+            jogWheel.setTrackInfo(titleLabel.getText(), deck.getBpm(), accent);
+        }
     }
     else
     {
-        bpmLabel.setText("--", juce::dontSendNotification);
-        pitchBpmLabel.setText("--", juce::dontSendNotification);
+        bpmLabel.setColour(juce::Label::textColourId, juce::Colours::white);
+        pitchBpmLabel.setColour(juce::Label::textColourId, juce::Colours::white);
+        bpmLabel.setText(formatBpm(0.0), juce::dontSendNotification);
+        pitchBpmLabel.setText(formatBpm(0.0), juce::dontSendNotification);
     }
 
     float currentRange = deck.getPitchRange();

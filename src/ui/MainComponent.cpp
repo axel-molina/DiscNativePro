@@ -19,6 +19,7 @@ MainComponent::MainComponent()
       mixer(audioEngine),
       library(audioEngine.getFormatManager())
 {
+    tooltipWindow = std::make_unique<juce::TooltipWindow>(this, 700);
     // Inicialización pesada diferida a un tick del message loop: la ventana ya
     // está pintada cuando arranca el audio, así un dispositivo que tarde o se
     // cuelgue no deja la app sin ventana visible.
@@ -156,9 +157,9 @@ MainComponent::MainComponent()
         if (nextIndex >= 0 && nextIndex < (int)automixPlaylist.size())
         {
             if (freeDeck == 0)
-                deck1.loadAudioFile(automixPlaylist[static_cast<size_t>(nextIndex)].file);
+                deck1.loadAudioFile(automixPlaylist[static_cast<size_t>(nextIndex)].file, DeckComponent::LoadOrigin::Automix);
             else
-                deck2.loadAudioFile(automixPlaylist[static_cast<size_t>(nextIndex)].file);
+                deck2.loadAudioFile(automixPlaylist[static_cast<size_t>(nextIndex)].file, DeckComponent::LoadOrigin::Automix);
         }
     };
     library.onOpenSettings = [this](int targetTab) {
@@ -299,9 +300,9 @@ void MainComponent::timerCallback()
             if (nextIndex < (int)automixPlaylist.size())
             {
                 if (freeDeck == 0)
-                    deck1.loadAudioFile(automixPlaylist[static_cast<size_t>(nextIndex)].file);
+                    deck1.loadAudioFile(automixPlaylist[static_cast<size_t>(nextIndex)].file, DeckComponent::LoadOrigin::Automix);
                 else
-                    deck2.loadAudioFile(automixPlaylist[static_cast<size_t>(nextIndex)].file);
+                    deck2.loadAudioFile(automixPlaylist[static_cast<size_t>(nextIndex)].file, DeckComponent::LoadOrigin::Automix);
             }
         }
 
@@ -449,9 +450,9 @@ void MainComponent::startAutomix(const std::vector<TrackItem>& tracks)
 
         // Preload first automix track into the other (idle) deck in paused/cue state
         if (otherDeck == 0)
-            deck1.loadAudioFile(automixPlaylist[0].file);
+            deck1.loadAudioFile(automixPlaylist[0].file, DeckComponent::LoadOrigin::Automix);
         else
-            deck2.loadAudioFile(automixPlaylist[0].file);
+            deck2.loadAudioFile(automixPlaylist[0].file, DeckComponent::LoadOrigin::Automix);
 
         automixActiveDeck = playingDeck;
         automixCurrentIndex = -1; // Indicates current playing track is user's original song; next transition will play automixPlaylist[0]
@@ -462,13 +463,13 @@ void MainComponent::startAutomix(const std::vector<TrackItem>& tracks)
         // Cold start from silence: load track 0 in Deck 1 and start immediately
         automixActiveDeck = 0;
         automixCurrentIndex = 0;
-        deck1.loadAudioFile(automixPlaylist[0].file);
+        deck1.loadAudioFile(automixPlaylist[0].file, DeckComponent::LoadOrigin::Automix);
         audioEngine.getDeck(0).play();
         audioEngine.setCrossfader(-1.0f);
 
         if (automixPlaylist.size() >= 2)
         {
-            deck2.loadAudioFile(automixPlaylist[1].file);
+            deck2.loadAudioFile(automixPlaylist[1].file, DeckComponent::LoadOrigin::Automix);
         }
 
         library.setAutomixPlayingIndex(0);
@@ -558,16 +559,14 @@ int scoreTrackCandidate(const TrackItem& candidate,
     // 3. BPM proximity with Half-Time / Double-Time modular compatibility
     if (currentBpm > 20.0 && candidate.bpm > 20.0)
     {
-        double diffDirect = std::abs(candidate.bpm - currentBpm) / currentBpm;
-        double diffDouble = std::abs(candidate.bpm - (currentBpm * 2.0)) / (currentBpm * 2.0);
-        double diffHalf   = std::abs((candidate.bpm * 2.0) - currentBpm) / currentBpm;
-        double minDiff    = std::min({ diffDirect, diffDouble, diffHalf });
+        double candNorm = AudioEngine::normalizeBpmTo(candidate.bpm, currentBpm);
+        double diffDirect = std::abs(candNorm - currentBpm) / currentBpm;
 
-        if (minDiff <= 0.04)
+        if (diffDirect <= 0.04)
             score += 25;
-        else if (minDiff <= 0.08)
+        else if (diffDirect <= 0.08)
             score += 18;
-        else if (minDiff <= 0.15)
+        else if (diffDirect <= 0.15)
             score += 8;
     }
 

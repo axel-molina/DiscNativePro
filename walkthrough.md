@@ -322,3 +322,165 @@ Ganancia real medida (RMS de la salida para una sine unidad; ideal 0.7071):
 ## 4. Notas
 - El clic residual de `b007879` se detectó con el harness (no se habría visto en una escucha rápida), lo que justifica mantener esta prueba como criterio de aceptación para cambios de DSP.
 - El harness vive fuera del repo (scratchpad temporal) y se enlaza contra los objetos JUCE del build.
+
+# Walkthrough — P4.1: BPM decimal, half/double-time y pitch range
+
+## 1. Causa
+Tres causas del "master tempo se va solo":
+1. **BPM entero**: `BeatDetector` acumulaba el histograma en buckets de 1 BPM (`round(candidate)`), así que un error de ±0.5 BPM quedaba fijo (~1.3 s de deriva en 5 min); además, si no detectaba nada, devolvía un **124 inventado**.
+2. **Sin half/double-time**: `applyTempoBlend` casaba BPMs directos, mientras el scorer de AutoMix sí usaba compatibilidad half/double → un track detectado a la mitad pedía pitch ~±100 %.
+3. **Pitch range ignorado**: `setPitchPercent` guardaba cualquier valor; el rango configurado (±8/±16/±50) solo se usaba para pintar el slider.
+
+## 2. Cambios (rama `axel-molina/p4-master-tempo`, commit `55262e7`)
+- **`BeatDetector`**: histograma con **buckets de 0.1 BPM** + **refinado del pico por interpolación parabólica**; se elimina el fallback a 124 (si no hay detección fiable, `bpm = 0.0` = desconocido, y la UI muestra `--`).
+- **`AudioEngine::normalizeBpmTo(bpm, reference)`** [NEW, estático y testeable]: elige entre `{x1, x2, ÷2, x4, ÷4}` la variante con menor desvío; lo usan `applyTempoBlend` (normaliza b2 contra b1 antes de interpolar), `syncDeckTo` y el scorer de AutoMix (lógica compartida, sin duplicar).
+- **`applyTempoBlend`**: **no-op** si falta el BPM de algún deck (nada de 124/126 inventados).
+- **`DeckPlayer::setPitchPercent`**: clampea al `pitchRange` configurado y expone `isPitchClamped()`; `currentBpm` se calcula con el pitch clampeado.
+- **`DeckComponent`**: aviso visual (color ámbar en el label de BPM + sufijo `! SYNC fuera de rango`) cuando el pitch está clampeado.
+
+## 3. Verificación (banco determinista, enlazado contra los objetos del build)
+| Prueba | Resultado |
+|---|---|
+| `normalizeBpmTo` (87↔174, 64↔128, 256↔128, 90 vs 175) | 6/6 correctos (el caso 90 vs 175 elige 180 por menor desvío) |
+| Pitch range: rango 8, pedido +20 | aplicado **+8.00**, `isPitchClamped() == true` |
+| Pitch range: rango 8, pedido −3 | aplicado **−3.00**, `isPitchClamped() == false` |
+| BPM de señales "four-on-the-floor" de **128.0 / 126.4 / 128.7** | detectados **128.00 / 126.40 / 128.70** (error 0.00) |
+| Señal sin pulsos | **BPM 0.0** (antes: 124 inventado) |
+
+Nota del banco: el detector trabaja sobre energía (media móvil de 100 ms) y thresholds dinámicos, así que requiere material con pulsos reales; un click-track seco no produce picos.
+
+## 4. Pendiente (P4.2)
+Feedback y persistencia del Tempo Blend (no-op silencioso, botón desincronizado cuando AutoMix lo activa, sin persistir) y unificar los displays de BPM (JogWheel redondea a entero mientras los labels usan 1 decimal). Prueba visual pendiente en la app del aviso ámbar de "pitch fuera de rango".
+
+# Walkthrough — P4.2: estado y feedback del Tempo Blend + BPM unificado
+
+## 1. Causa
+1. **No-op silencioso**: `applyTempoBlend` sale sin hacer nada si falta una bandeja o un BPM, y nadie lo explica.
+2. **Doble verdad del botón**: `MainComponent::startAutomix` enciende el blend por código y el botón de la columna central no se enteraba → se veía apagado mientras estaba activo (y pulsarlo lo invertía).
+3. **Sin persistencia**: el estado se perdía al cerrar la app.
+4. **BPM inconsistente**: el JogWheel redondeaba a entero (y mostraba "33 RPM" sin detección) mientras los labels usaban 1 decimal y la biblioteca formateaba por su cuenta.
+
+## 2. Cambios (rama `axel-molina/p4-master-tempo`, commit `eb1fda3`)
+- **`AudioEngine`**: helpers `readTempoBlendSetting()`/`writeTempoBlendSetting()` con el mismo merge sobre `settings.json` (solo toca `tempoBlend`, conserva el resto de claves); `setTempoBlend()` guarda y el constructor restaura (con decks vacíos sigue siendo no-op, queda armado).
+- **`CenterColumnComponent`**: `syncTempoBlendState()` lee `isTempoBlendActive()` y sincroniza el toggle con `dontSendNotification` (nunca re-dispara el `onClick`), llamado en el constructor, tras el clic y en el timer con una firma barata para no repintar 60 veces por segundo; `buildTempoBlendTooltip()` explica el estado y el motivo del no-op ("falta la bandeja N sin pista" / "sin BPM detectado").
+- **`BpmFormat.h`** [NEW] + `JogWheel`, `DeckComponent`, `LibraryComponent`: `formatBpm()` → 1 decimal, `--` si es desconocido (el JogWheel deja de mostrar "33 RPM").
+- **`MainComponent`**: se crea un `juce::TooltipWindow` — **no había ninguno en la app**, así que los 25 `setTooltip` existentes (incluido el nuevo del Tempo Blend) nunca se mostraban.
+
+## 3. Verificación
+| Prueba | Resultado |
+|---|---|
+| Persistencia: activar → `tempoBlend: true` en el JSON, resto de claves preservado | OK |
+| Persistencia: `AudioEngine` nuevo restaura el estado | OK |
+| Persistencia: desactivar y recrear | OK (apagado) |
+| `formatBpm`: `126.44 → "126.4"`, `0.0 → "--"`, negativo → `"--"`, `120.0 → "120.0"` | OK |
+| Botón con una sola verdad | revisión de código (sincronización sin re-disparar el click) + comprobación visual |
+
+## 4. Incidente de la verificación (importante)
+El banco de persistencia intentaba aislarse con `HOME`, pero JUCE resuelve la carpeta de datos de la app al **home real**, así que el test **sobrescribió el `settings.json` del usuario**. Se detuvo, se guardó el fichero dañado como evidencia y se **reconstruyó** el fichero con los valores documentados en los logs de la sesión (IA, YouTube, idioma, `viewMode` y la paleta de wave). Quedan por revisar en Preferencias: carpeta de grabaciones (vuelve al valor por defecto), posible carpeta de descargas de YouTube, modelos de otros proveedores y, si había colores por bandeja distintos, ambos arrancan ahora de la paleta común. Las API keys (Keychain), la biblioteca, el mapeo MIDI y las miniaturas no se vieron afectados.
+**Regla nueva**: cualquier prueba que toque `settings.json` hará copia de seguridad y restauración del fichero real; nunca "aislamiento" por `HOME`.
+
+## 5. Pendiente
+- Prueba visual en la app: tooltip del Tempo Blend (con una y con dos bandejas), aviso ámbar de "pitch fuera de rango" (P4.1) y BPM iguales en JogWheel / labels / biblioteca.
+- Deuda técnica del P3 (lock en el callback de audio y riesgo del pre-roll) y merge de `phase-align-fix` a `main`.
+
+# Walkthrough — P5: carga de pista sin congelar la UI
+
+## 1. Causa (medida)
+`DeckPlayer::loadFile` corre en el **hilo de mensajes** y hacía tres análisis pesados. Medición con un WAV de 5 min estéreo (50 MB):
+
+| Etapa | Coste |
+|---|---|
+| `createReader` | 0.1 ms |
+| `BeatDetector::analyze` | 15.1 ms |
+| `KeyDetector::analyze` | 61.1 ms |
+| `extractWaveformOverview` (pasada completa) + fuentes | resto |
+| **`loadFile` total** | **177.8 ms** |
+
+Resultado: al cargar en una bandeja mientras la otra suena, la UI quedaba bloqueada ese tiempo (con MP3/M4A, más).
+
+## 2. Cambios (rama `axel-molina/async-load`, commit `e4cfedd`)
+- **`loadFile` en dos fases**: fase rápida (~7 ms) que crea el reader de reproducción, las fuentes, la duración, resets y `loaded = true` **sin analizadores**; la bandeja queda reproducible al instante.
+- **Worker dedicado**: `juce::ThreadPool` estático de 1 hilo, con **su propio `AudioFormatReader`** (los readers no son seguros para lectura concurrente con la reproducción).
+- **Publicación por etapas** en el hilo de mensajes (`MessageManager::callAsync`): overview **rápido de 2000 puntos** (ventanas cortas repartidas) → overview **completo de 8000** → **BPM** → **tonalidad**.
+- **Descartes**: `generation` se incrementa en cada carga y `alive` (shared_ptr) se apaga en el destructor; cargar A y enseguida B nunca publica datos de A.
+- **`BufferingAudioSource` con prefill desactivado** (6.º argumento): su `prepareToPlay` hacía un prefill síncrono con `Thread::sleep`.
+- **UI**: el badge de tonalidad y el jog wheel se refrescan cuando llega el resultado asíncrono (caché para no regenerar la portada en cada tick).
+
+## 3. Verificación (banco independiente, mismo WAV de 5 min)
+| Criterio | Antes | Después |
+|---|---|---|
+| `loadFile` (bloqueo del hilo de UI) | **177.8 ms** | **6.8 ms** |
+| Reproducible al instante | no | sí (`isLoaded()` y audio en el acto) |
+| Overview | solo completo | **2000 puntos primero**, luego 8000 |
+| BPM / tonalidad | síncronos | 128.003 y `8A / Am` (idénticos al análisis directo) |
+| Cancelación A→B | — | resultados finales de B, sin datos de A |
+| 6 cargas alternas | — | sin crash, último resultado correcto |
+
+Matiz honesto: los ~5-7 ms restantes son un `Thread::sleep(5)` **incondicional dentro de `BufferingAudioSource::prepareToPlay` de JUCE 8.0.6**; queda por debajo de un frame a 60 Hz. Eliminarlo exigiría preparar el pipeline fuera del hilo de mensajes con una compuerta en el callback de audio (riesgo de carrera), y se descartó.
+
+## 4. Notas
+- `DeckComponent.h` recibió 3 líneas (caché `jogWheelBpmShown`) fuera de la lista inicial del plan: necesarias para que el jog wheel no se quede en `--` al pasar el BPM a asíncrono.
+- La rama `async-load` se creó desde `p4-master-tempo`, así que incluye P4.1/P4.2.
+
+## 5. Pendiente
+- Prueba en vivo: reproducir en una bandeja y cargar en la otra → la UI debe seguir respondiendo, el waveform nuevo aparece rápido y se completa.
+- Deuda técnica del P3 y merges pendientes (`phase-align-fix`, `p4-master-tempo`, `async-load`).
+
+# Walkthrough — P6: Protección de carga (Load Lock)
+
+## 1. Causa
+El toggle "Protección de carga (Load Lock)" de Preferencias era **decorativo**: no tenía `onClick`, no se persistía y ningún camino de carga lo consultaba (`grep` de `loadLock` solo devolvía el propio componente). Mismo patrón que el botón SYNC antes de P1.
+
+## 2. Cambios (rama `axel-molina/load-lock`, commit `c7a03ec`)
+- **`AudioEngine`**: helpers genéricos `readBoolSetting`/`writeBoolSetting` (merge sobre `settings.json`, se conservan las demás claves); nueva clave `loadLock` con `isLoadLockEnabled()`/`setLoadLockEnabled()`, restaurada en el constructor (clave ausente → `false`).
+- **`SettingsModalComponent`**: el toggle arranca con el valor persistido y lo guarda al pulsarlo.
+- **`DeckComponent`**: `enum class LoadOrigin { User, Automix }`; `loadAudioFile(file, origin = User)` y `loadYouTubeVideo(result, origin = User)` con guarda centralizada (`shouldBlockLoad`): bloquea **solo** si es del usuario, el lock está activo y **esa bandeja está reproduciendo**. Si bloquea, muestra un **modal asíncrono** (`AlertWindow` + `enterModalState`, sin `runModalLoop`) con "Forzar carga" y "Cancelar"; las cargas reales viven en `loadAudioFileNow()` / `loadYouTubeVideoNow()` (las rutas internas de YouTube usan las versiones `Now` para no re-disparar el aviso).
+- **`MainComponent`**: las 8 cargas del AutoMix pasan `LoadOrigin::Automix` (exento).
+- **Teclado del modal** (revisado contra el código de JUCE 8.0.6): `LookAndFeel_V2::createAlertWindow` asigna Return al botón primario, así que se construye el `AlertWindow` a mano:
+  - "Forzar carga" → `returnValue = 1`, **sin atajos** y **sin foco de teclado** (`Button::keyPressed` dispara `triggerClick` con Return si el botón tiene foco; `AlertWindow` da foco al primero).
+  - "Cancelar" → `returnValue = 0`, con Return y Escape.
+  - Resultado: Enter y Escape **cancelan**; forzar exige un clic deliberado.
+
+## 3. Verificación
+| Prueba | Resultado |
+|---|---|
+| Persistencia: activar → `loadLock: true`, `AudioEngine` nuevo lo restaura | OK |
+| Persistencia: desactivar → queda `false` | OK |
+| `settings.json` real del usuario tras el banco | **restaurado byte a byte** (hash idéntico; el banco hace backup/restore, sin "aislamiento" por `HOME`) |
+| Semántica de botones (código de JUCE revisado) | Forzar = 1, Cancelar = 0, Return/Escape → 0 |
+| Caminos cubiertos (revisión) | Finder, drop interno, biblioteca, YouTube/SoundCloud entran por las rutas guardadas; AutoMix exento |
+
+## 4. Pendiente
+- Prueba en vivo: con una bandeja sonando y el lock activo, soltar/cargar una pista → modal; "Cancelar" mantiene la pista, "Forzar carga" la cambia; en pausa carga directa; lock off sin cambios.
+- Merges pendientes (`phase-align-fix`, `p4-master-tempo`, `async-load`, `load-lock`).
+
+# Walkthrough — P7: Reproducir al cargar (Autoplay en bandeja)
+
+## 1. Objetivo
+Que una pista cargada en una bandeja **empiece a sonar sin pulsar PLAY**, como preferencia activada de fábrica y reversible, sin romper la precarga del AutoMix ni el modo vídeo de YouTube.
+
+## 2. Cambios (rama `axel-molina/autoplay-on-load`, desde `load-lock`)
+- **`AudioEngine`**: `readBoolSetting(property, defaultValue = false)` — el lector admite valor por defecto; nueva clave `autoplayOnLoad` (default **`true`**) con `isAutoplayOnLoadEnabled()` / `setAutoplayOnLoadEnabled()`, persistida con el mismo merge y restaurada en el constructor.
+- **`SettingsModalComponent`**: casilla "Reproducir al cargar (Autoplay en bandeja)" / "Autoplay on load" en Preferencias → General, debajo del Load Lock; arranca con el valor persistido, persiste en `onClick`, texto bilingüe y mismo layout/visibilidad.
+- **`DeckComponent`**: `LoadOrigin` baja a las funciones privadas (`loadAudioFileNow(file, origin)`, `loadYouTubeVideoNow(result, origin)`). Tras una carga correcta: si `origin == User` y la preferencia está activa y no es modo vídeo → `deck.play()`.
+  - **AutoMix exento**: precarga con `LoadOrigin::Automix` → sigue en pausa hasta su transición.
+  - **Modo vídeo de YouTube**: no se toca (usa `YouTubeService::isVideoAutoplayEnabled()`).
+  - **Modo audio de YouTube** (caché y extracción): pasa por `loadAudioFileNow(..., origin)` → suena.
+  - **Load Lock + "Forzar carga"**: la carga forzada pasa `LoadOrigin::User` → carga **y reproduce**.
+
+## 3. Verificación
+| Prueba (banco con backup/restore del `settings.json` real) | Resultado |
+|---|---|
+| Clave `autoplayOnLoad` ausente → `isAutoplayOnLoadEnabled() == true` (default ON) | OK |
+| Desactivar → JSON `false` y un `AudioEngine` nuevo lo restaura | OK |
+| Activar → JSON `true` y un `AudioEngine` nuevo lo restaura | OK |
+| Claves ajenas intactas tras el merge (`loadLock`, `language`, `waveLow1`) | OK |
+| `settings.json` real tras el banco | **restaurado byte a byte** (hash SHA-256 idéntico) |
+| Compilación `cmake --build build` | 0 errores, 0 warnings en los 6 ficheros tocados |
+
+## 4. Hallazgo del entorno (importante)
+El `AGENTS.md` manda relanzar `build/DiscNativePro_artefacts/Debug/DiscNativePro.app`, pero **ese binario es del 12 de octubre** (no contiene ni la cadena de versión actual). La configuración real de este `build/` es **Release** (`CMAKE_BUILD_TYPE=Release`), así que los relanzamientos anteriores abrían una app antigua. En este pase se relanzó el binario vigente: `build/DiscNativePro_artefacts/Release/DiscNativePro.app` (PID verificado). Conviene corregir la ruta en `AGENTS.md` o fijar el tipo de build.
+
+## 5. Pendiente
+- Prueba en vivo: cargar desde Finder/biblioteca en bandeja en pausa → suena; apagar la preferencia → queda en pausa; AutoMix → precarga en pausa; YouTube vídeo → respeta su autoplay; lock + forzar → carga y suena.
+- Merges pendientes (`phase-align-fix`, `p4-master-tempo`, `async-load`, `load-lock`, `autoplay-on-load`).

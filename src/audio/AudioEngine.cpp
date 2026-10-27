@@ -3,6 +3,45 @@
 #include "MediaFoundationAudioFormat_win.h"
 #endif
 
+namespace
+{
+    constexpr const char* tempoBlendProperty = "tempoBlend";
+    constexpr const char* loadLockProperty = "loadLock";
+    constexpr const char* autoplayOnLoadProperty = "autoplayOnLoad";
+
+    // Merge sobre el settings.json existente: se respetan las demas claves
+    // (p. ej. recordingDirectory) y solo se toca la propiedad propia.
+    // defaultValue se devuelve cuando el fichero o la clave no existen
+    // (tempoBlend/loadLock: false; autoplayOnLoad: true, activado de fabrica).
+    bool readBoolSetting(const char* property, bool defaultValue = false)
+    {
+        auto file = AudioEngine::getSettingsFile();
+        if (!file.existsAsFile())
+            return defaultValue;
+
+        auto json = juce::JSON::parse(file);
+        if (!json.isObject() || !json.hasProperty(property))
+            return defaultValue;
+
+        return json[property];
+    }
+
+    void writeBoolSetting(const char* property, bool value)
+    {
+        auto file = AudioEngine::getSettingsFile();
+        juce::var json;
+        if (file.existsAsFile())
+            json = juce::JSON::parse(file);
+        if (!json.isObject())
+            json = juce::var(new juce::DynamicObject());
+
+        if (auto* obj = json.getDynamicObject())
+            obj->setProperty(property, value);
+
+        file.replaceWithText(juce::JSON::toString(json));
+    }
+}
+
 AudioEngine::AudioEngine()
     : deck1(formatManager, diskReaderThread),
       deck2(formatManager, diskReaderThread)
@@ -12,6 +51,16 @@ AudioEngine::AudioEngine()
 #if JUCE_WINDOWS
     formatManager.registerFormat(new MediaFoundationAudioFormat(), false);
 #endif
+
+    // Restaurar el estado guardado del Tempo Blend: arranca "armado" y actua en cuanto
+    // ambas bandejas tengan pista y BPM (con decks vacios applyTempoBlend sigue siendo no-op).
+    tempoBlendActive.store(readBoolSetting(tempoBlendProperty));
+
+    // Load Lock: con la clave ausente queda desactivado (comportamiento historico).
+    loadLockEnabled.store(readBoolSetting(loadLockProperty));
+
+    // Autoplay al cargar: activado de fabrica (default ON) y persistido.
+    autoplayOnLoadEnabled.store(readBoolSetting(autoplayOnLoadProperty, true));
 }
 
 AudioEngine::~AudioEngine()
@@ -336,10 +385,44 @@ void AudioEngine::audioDeviceIOCallbackWithContext(const float* const* /*inputCh
 void AudioEngine::setTempoBlend(bool active)
 {
     tempoBlendActive.store(active);
+    writeBoolSetting(tempoBlendProperty, active);
+
     if (active)
     {
         applyTempoBlend(currentCrossfaderVal.load());
     }
+}
+
+void AudioEngine::setLoadLockEnabled(bool enabled)
+{
+    loadLockEnabled.store(enabled);
+    writeBoolSetting(loadLockProperty, enabled);
+}
+
+void AudioEngine::setAutoplayOnLoadEnabled(bool enabled)
+{
+    autoplayOnLoadEnabled.store(enabled);
+    writeBoolSetting(autoplayOnLoadProperty, enabled);
+}
+
+double AudioEngine::normalizeBpmTo(double bpm, double referenceBpm)
+{
+    if (bpm <= 0.0 || referenceBpm <= 0.0)
+        return bpm;
+    double best = bpm;
+    double bestDiff = std::abs(best - referenceBpm);
+    const double candidates[] = { bpm, bpm * 2.0, bpm / 2.0, bpm * 4.0, bpm / 4.0 };
+    for (double cand : candidates)
+    {
+        if (cand < 30.0 || cand > 300.0) continue;
+        double diff = std::abs(cand - referenceBpm);
+        if (diff < bestDiff - 1e-9)
+        {
+            bestDiff = diff;
+            best = cand;
+        }
+    }
+    return best;
 }
 
 bool AudioEngine::syncDeckTo(int deckIndex)
@@ -350,7 +433,8 @@ bool AudioEngine::syncDeckTo(int deckIndex)
     if (!other.isLoaded() || other.getBpm() <= 0.0 || self.getOriginalBpm() <= 0.0)
         return false;
 
-    self.setPitchPercent((float)(((other.getBpm() / self.getOriginalBpm()) - 1.0) * 100.0));
+    double otherBpm = normalizeBpmTo(other.getBpm(), self.getOriginalBpm());
+    self.setPitchPercent((float)(((otherBpm / self.getOriginalBpm()) - 1.0) * 100.0));
     return true;
 }
 
@@ -390,8 +474,14 @@ void AudioEngine::applyTempoBlend(float val)
 
     double b1 = deck1.getOriginalBpm();
     double b2 = deck2.getOriginalBpm();
-    if (b1 <= 0.0) b1 = 124.0;
-    if (b2 <= 0.0) b2 = 126.0;
+    if (b1 <= 0.0 || b2 <= 0.0)
+        return;
+
+    // Normalize to avoid half/double-time jumps
+    double b1n = normalizeBpmTo(b1, b2);
+    double b2n = normalizeBpmTo(b2, b1n);
+    b1 = b1n;
+    b2 = b2n;
 
     // Normalized crossfader: 0.0 (Deck 1) to 1.0 (Deck 2)
     double t = juce::jlimit(0.0, 1.0, (val + 1.0) / 2.0);

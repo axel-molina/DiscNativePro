@@ -41,10 +41,10 @@ CenterColumnComponent::CenterColumnComponent(AudioEngine& engine)
     tempoBlendButton.setColour(juce::TextButton::textColourOffId, juce::Colour::fromRGB(142, 149, 165));
     tempoBlendButton.setClickingTogglesState(true);
     tempoBlendButton.onClick = [this]() {
-        bool on = tempoBlendButton.getToggleState();
-        audioEngine.setTempoBlend(on);
-        tempoBlendButton.setColour(juce::TextButton::buttonColourId, on ? juce::Colour::fromRGB(37, 99, 235).withAlpha(0.25f) : juce::Colour::fromRGB(24, 27, 35));
-        tempoBlendButton.setColour(juce::TextButton::textColourOffId, on ? juce::Colour::fromRGB(147, 197, 253) : juce::Colour::fromRGB(142, 149, 165));
+        // El boton solo ordena al motor; la parte visual la resuelve syncTempoBlendState()
+        // leyendo isTempoBlendActive(), para que AutoMix no pueda dejarlo mintiendo.
+        audioEngine.setTempoBlend(tempoBlendButton.getToggleState());
+        syncTempoBlendState();
     };
     addAndMakeVisible(tempoBlendButton);
 
@@ -66,6 +66,7 @@ CenterColumnComponent::CenterColumnComponent(AudioEngine& engine)
     };
     addAndMakeVisible(crossfader);
 
+    syncTempoBlendState();
     startTimerHz(60);
 }
 
@@ -95,6 +96,69 @@ void CenterColumnComponent::timerCallback()
     {
         crossfader.setValue(mixer.getCrossfader(), juce::dontSendNotification);
     }
+
+    // El motor es la unica verdad del Tempo Blend (AutoMix tambien lo cambia por codigo)
+    syncTempoBlendState();
+}
+
+void CenterColumnComponent::updateTempoBlendAppearance(bool active)
+{
+    tempoBlendButton.setColour(juce::TextButton::buttonColourId,
+                               active ? juce::Colour::fromRGB(37, 99, 235).withAlpha(0.25f)
+                                      : juce::Colour::fromRGB(24, 27, 35));
+    tempoBlendButton.setColour(juce::TextButton::textColourOffId,
+                               active ? juce::Colour::fromRGB(147, 197, 253)
+                                      : juce::Colour::fromRGB(142, 149, 165));
+}
+
+juce::String CenterColumnComponent::buildTempoBlendTooltip() const
+{
+    juce::String tip = audioEngine.isTempoBlendActive()
+        ? "Tempo Blend ON: las dos bandejas comparten el BPM segun el crossfader."
+        : "Tempo Blend OFF: activalo para igualar el BPM de ambas bandejas con el crossfader.";
+
+    // Motivos por los que applyTempoBlend queda en no-op (mismos requisitos que el motor)
+    juce::StringArray missing;
+    for (int i = 0; i < 2; ++i)
+    {
+        const auto& deck = audioEngine.getDeck(i);
+        if (!deck.isLoaded())
+            missing.add("la bandeja " + juce::String(i + 1) + " sin pista");
+        else if (deck.getOriginalBpm() <= 0.0)
+            missing.add("la bandeja " + juce::String(i + 1) + " sin BPM detectado");
+    }
+
+    if (!missing.isEmpty())
+        tip += " No aplicable ahora: falta " + missing.joinIntoString(" y ") + ".";
+
+    return tip;
+}
+
+void CenterColumnComponent::syncTempoBlendState()
+{
+    const bool active = audioEngine.isTempoBlendActive();
+
+    // El motor es la unica verdad: AutoMix puede encender/apagar el blend sin pasar por el boton.
+    // dontSendNotification evita re-disparar onClick (que invertiria el estado que acabamos de leer).
+    if (tempoBlendButton.getToggleState() != active)
+        tempoBlendButton.setToggleState(active, juce::dontSendNotification);
+
+    // Firma barata del contexto (activo + pista/BPM por bandeja): solo se rehace el tooltip
+    // y el repintado de colores cuando algo cambia de verdad, no 60 veces por segundo.
+    int signature = active ? 1 : 0;
+    for (int i = 0; i < 2; ++i)
+    {
+        const auto& deck = audioEngine.getDeck(i);
+        const int readiness = deck.isLoaded() ? (deck.getOriginalBpm() > 0.0 ? 3 : 2) : 0;
+        signature |= readiness << (1 + i * 2);
+    }
+
+    if (signature == tempoBlendSignature)
+        return;
+
+    tempoBlendSignature = signature;
+    updateTempoBlendAppearance(active);
+    tempoBlendButton.setTooltip(buildTempoBlendTooltip());
 }
 
 void CenterColumnComponent::paint(juce::Graphics& g)

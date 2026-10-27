@@ -1,4 +1,5 @@
 #include "JogWheel.h"
+#include "BpmFormat.h"
 #include "CoverArtGenerator.h"
 #include <cmath>
 
@@ -257,10 +258,12 @@ void JogWheel::paint(juce::Graphics& g)
             g.setColour(accent);
             g.fillRoundedRectangle(center.x - 12.0f, center.y - 2.5f, 24.0f, 2.0f, 1.0f);
 
-            // BPM Text
+            // BPM Text (formato unico: 1 decimal, "--" si no hay deteccion)
             g.setColour(juce::Colours::white.withAlpha(0.85f));
             g.setFont(juce::FontOptions(7.5f));
-            juce::String bpmText = (trackBpm > 0.0) ? juce::String((int)std::round(trackBpm)) + " BPM" : "33 RPM";
+            juce::String bpmText = formatBpm(trackBpm);
+            if (trackBpm > 0.0)
+                bpmText += " BPM";
             g.drawText(bpmText,
                        juce::Rectangle<float>(center.x - labelRadius, center.y + 1.5f, labelDia, 11.0f),
                        juce::Justification::centred, false);

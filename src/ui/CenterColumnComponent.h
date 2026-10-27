@@ -19,6 +19,10 @@ public:
     void timerCallback() override;
 
 private:
+    void syncTempoBlendState();
+    void updateTempoBlendAppearance(bool active);
+    juce::String buildTempoBlendTooltip() const;
+
     AudioEngine& audioEngine;
     DjMixer& mixer;
 
@@ -37,6 +41,8 @@ private:
     juce::Label deck2Label;
     juce::Slider crossfader;
     DjLookAndFeel djLookAndFeel;
+
+    int tempoBlendSignature = -1;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(CenterColumnComponent)
 };

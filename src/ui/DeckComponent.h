@@ -41,8 +41,11 @@ public:
     void itemDragExit(const SourceDetails& dragSourceDetails) override;
     void itemDropped(const SourceDetails& dragSourceDetails) override;
 
-    void loadAudioFile(const juce::File& file);
-    void loadYouTubeVideo(const struct YouTubeSearchResult& result);
+    // P6: origen explicito de la carga. AutoMix queda exento del Load Lock.
+    enum class LoadOrigin { User, Automix };
+
+    void loadAudioFile(const juce::File& file, LoadOrigin origin = LoadOrigin::User);
+    void loadYouTubeVideo(const struct YouTubeSearchResult& result, LoadOrigin origin = LoadOrigin::User);
     bool isVideoModeActive() const { return isVideoMode; }
     bool isVideoPlayingActive() const { return isVideoPlaying; }
     void setVideoVolume(float effectiveVolume);
@@ -70,6 +73,12 @@ public:
     std::function<void(const juce::File& file, double detectedBpm)> onFileLoaded;
 
 private:
+    // P6: guarda centralizada del Load Lock + carga real separada de la publica.
+    bool shouldBlockLoad(LoadOrigin origin) const;
+    void showLoadLockWarning(std::function<void(DeckComponent&)> forcedLoad);
+    void loadAudioFileNow(const juce::File& file, LoadOrigin origin);
+    void loadYouTubeVideoNow(const struct YouTubeSearchResult& result, LoadOrigin origin);
+
     void updateLabels();
     void updateKeyLockButton();
     void formatTime(double seconds, char* buffer, size_t bufferSize);
@@ -118,6 +127,9 @@ private:
     juce::Slider pitchSlider;
     DjButton pitchBendDownButton;
     DjButton pitchBendUpButton;
+    // P5: el BPM se detecta en segundo plano; caché para refrescar el jog wheel
+    // una sola vez por pista (setTrackInfo regenera la portada).
+    double jogWheelBpmShown { -1.0 };
 
     // Lower Transport Controls Bar (3 clean groups matching screenshot)
     DjButton playButton;

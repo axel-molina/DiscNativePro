@@ -9,6 +9,8 @@
 #include "FxPanelComponent.h"
 #include "SamplerPanelComponent.h"
 #include "../services/UpdateService.h"
+#include <juce_gui_basics/juce_gui_basics.h>
+#include <memory>
 
 class MainComponent : public juce::Component,
                       public juce::DragAndDropContainer,
@@ -41,6 +43,7 @@ private:
     bool isFxPanelVisible { true };
     bool isSamplerPanelVisible { false };
     juce::Component::SafePointer<juce::DialogWindow> settingsWindow;
+    std::unique_ptr<juce::TooltipWindow> tooltipWindow;
 
     // Automix orchestration state
     std::vector<TrackItem> automixPlaylist;
