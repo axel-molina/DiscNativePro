@@ -146,13 +146,13 @@ BeatAnalysisResult BeatDetector::analyze(juce::AudioFormatReader* reader)
     int cM1 = getCount(bestBucket - 1);
     int c0  = getCount(bestBucket);
     int cP1 = getCount(bestBucket + 1);
-    double refinedBpm = bestBucket / 10.0;
+    double refinedBpm = (double) bestBucket / 10.0;
     if (cM1 + cP1 - 2 * c0 != 0)
     {
         // p = 0.5*(cM1 - cP1)/(cM1 - 2*c0 + cP1)
         double p = 0.5 * ((double)cM1 - (double)cP1) / ((double)cM1 - 2.0 * (double)c0 + (double)cP1);
         if (p >= -0.5 && p <= 0.5)
-            refinedBpm = (bestBucket + p) / 10.0;
+            refinedBpm = ((double) bestBucket + p) / 10.0;
     }
 
     BeatAnalysisResult result;
