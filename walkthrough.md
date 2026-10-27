@@ -622,3 +622,37 @@ Semántica: **un seek manual manda**. El Tempo Blend sigue igualando el BPM, per
 
 ## 4. Pendiente
 - Prueba manual: con las dos pistas sonando y Tempo Blend ON, arrastrar la mitad izquierda mueve **solo** el disco izquierdo y viceversa.
+
+---
+
+# Walkthrough — Opción A: el controlador de fase nunca salta sobre una bandeja audible
+
+## 1. Causa
+Con Tempo Blend ON, mover el crossfader producía saltos audibles "en la otra canción":
+
+1. Cada movimiento del fader llama a `applyTempoBlend()` → `setPitchPercent()` en **las dos** bandejas (`AudioEngine.cpp:548-549`). El tempo de ambas cambia continuamente mientras se mueve el fader.
+2. Ese cambio de tempo altera la fase → el controlador la ve crecer.
+3. Al superar 15 ms (`phaseReanchorSec`) hacía un **seek duro** de hasta medio beat (≈234 ms), repetible hasta 8 veces (`AudioEngine.cpp:729`, `:708`).
+4. Además, al entrar al centro se armaba el ciclo `Settle → Measure → seek` justo cuando **las dos pistas ya son audibles**.
+
+El seek cae siempre en la slave, que es "la otra canción" respecto al master.
+
+## 2. Cambios (`src/audio/AudioEngine.cpp`)
+- Nueva constante `phaseSilentXf = 0.9f`: con crossfader constante-potencia, a `|x| >= 0.9` el otro deck queda a ~−22 dB (inaudible).
+- `slaveInaudible`: el seek duro **solo** se permite si la bandeja a alinear está muteada por el crossfader.
+- Si la bandeja es audible, el desfase se corrige **siempre con nudge** (bend ≤ 1 %). Se quitó el `if (errorAbs <= phaseReanchorSec)` que dejaba los desfases grandes sin corregir cuando no había seek.
+- Con el fader aparcado en un lado, el **master pasa a ser la bandeja que suena** (`|x| >= 0.9`), así el seek —cuando toca— cae siempre en la muteada.
+- Tempo Blend: **desactivado de fábrica** (`readBoolSetting(tempoBlendProperty, false)`); solo se enciende si el usuario lo activa.
+
+## 3. Verificación
+- `cmake --build build` → **0 errores**, 0 warnings en los ficheros tocados.
+- Banco nuevo `run_fader_jump` (pista 128 BPM en deck 1, 120 BPM en deck 2, Tempo Blend ON, fader de −1 a 0 en pasos de 0.05, muestreo cada 10 ms):
+  - **antes**: deck 2 (audible) salta **+478.7 ms** → FALLO;
+  - **después**: salto máximo **12.3 ms** (cuantización del bloque de audio) → OK.
+  - Solo se exige invariante a las bandejas audibles (ganancia > 0.1); la muteada puede seekearse.
+- `run_phase_real`: converge a **0.93 ms** con el bend liberado (el seek sigue disponible con la slave muteada, que es el caso del banco).
+- `run_seek_isolation`: deck 2 no se mueve al seekear deck 1 y viceversa (±3 ms); el controlador se rearma por crossfader y ahora corrige con nudge (+0.00132).
+- `run_pause_seek` y `run_pos_merged`: verdes.
+
+## 4. Compromiso asumido (Opción A)
+Si las dos pistas son audibles y están desfasadas más de ~15 ms, la corrección es un bend de ±1 %: tarda ~20 s en quitar 100 ms. No hay saltos, pero durante ese rato se oye el flam entre bombos. La alternativa (Opción B) era nudge siempre, también sin saltos, con la misma lentitud.

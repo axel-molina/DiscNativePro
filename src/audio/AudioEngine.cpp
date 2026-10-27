@@ -12,6 +12,9 @@ constexpr double phaseReanchorSec     = 0.015; // 15 ms -> por encima, re-anclaj
 constexpr double phaseMaxNudge        = 0.01;  // +/-1 % de pitchBend
 constexpr double phaseDriftRearmSec   = 0.025; // ~25 ms para auto re-armado estando enclavado
 constexpr double phaseAbortNudgeTol   = 1e-5;
+// Crossfader constante-potencia: a |x|>=0.9 el otro deck esta a ~-22 dB, o sea
+// inaudible. Solo ahi se permite un seek de alineacion (ver processPhaseAlign).
+constexpr float  phaseSilentXf        = 0.9f;
 
 // Grid del master: la alineacion significa que el beat del slave caiga donde cae
 // el del master. Con tempos iguales (caso del Tempo Blend) ambas medidas coinciden;
@@ -91,9 +94,9 @@ AudioEngine::AudioEngine()
     formatManager.registerFormat(new MediaFoundationAudioFormat(), false);
 #endif
 
-    // Restaurar el estado guardado del Tempo Blend: arranca "armado" y actua en cuanto
-    // ambas bandejas tengan pista y BPM (con decks vacios applyTempoBlend sigue siendo no-op).
-    tempoBlendActive.store(readBoolSetting(tempoBlendProperty));
+    // Tempo Blend: desactivado de fabrica (opt-in del DJ). Solo se activa si el
+    // usuario lo dejo encendido en los ajustes.
+    tempoBlendActive.store(readBoolSetting(tempoBlendProperty, false));
 
     // Load Lock: con la clave ausente queda desactivado (comportamiento historico).
     loadLockEnabled.store(readBoolSetting(loadLockProperty));
@@ -599,10 +602,19 @@ void AudioEngine::processPhaseAlign()
         phaseAlignSeekCount = 0;
     }
 
-    const int masterIdx = phaseAlignMasterIndexVal;
-    const int slaveIdx  = masterIdx == 0 ? 1 : 0;
+    // Opcion A: si el fader esta aparcado en un lado, el master es la bandeja
+    // que suena. Asi el seek (cuando toque) cae siempre en la muteada.
+    const float xf = currentCrossfaderVal.load();
+    const int masterIdx = (std::abs(xf) >= phaseSilentXf)
+                              ? ((xf < 0.0f) ? 0 : 1)
+                              : phaseAlignMasterIndexVal;
+    const int slaveIdx = (masterIdx == 0) ? 1 : 0;
     auto& masterDeck = getDeck(masterIdx);
     auto& slaveDeck  = getDeck(slaveIdx);
+
+    // Un seek solo es aceptable si la bandeja a mover NO se oye. Si suena, la
+    // fase se corrige con nudge (bend <=1 %), nunca con un salto audible.
+    const bool slaveInaudible = (slaveIdx == 0) ? (xf >= phaseSilentXf) : (xf <= -phaseSilentXf);
 
     // Intervencion manual del transporte: si el usuario mueve una bandeja (onda,
     // MIDI, jog), el controlador se desarma. Antes el rearme por deriva (>25 ms)
@@ -702,8 +714,9 @@ void AudioEngine::processPhaseAlign()
             return;
         }
 
-        // Desfase grande (>15 ms): UN seek por iteracion si |error|>15 ms
-        if (errorAbs > phaseReanchorSec)
+        // Desfase grande (>15 ms): UN seek por iteracion, SOLO si la bandeja
+        // esta muteada (inaudible). Si suena, cae al nudge de abajo.
+        if (errorAbs > phaseReanchorSec && slaveInaudible)
         {
             if (phaseAlignSeekCount >= phaseAlignMaxSeeks)
             {
@@ -733,19 +746,18 @@ void AudioEngine::processPhaseAlign()
             return;
         }
 
-        // Zona intermedia (1 ms < |error| <= 15 ms): nudge aditivo <=1 % si |error|<=15 ms
-        if (errorAbs <= phaseReanchorSec)
+        // Nudge aditivo <=1 %: correccion sin salto. Se aplica siempre que no
+        // se haya seekeado, incluidos los desfases grandes de una bandeja que
+        // suena (el seek ahi seria audible).
+        float nudge = phaseNudgeFor(error, beatInterval);
+        nudge = static_cast<float>(juce::jlimit(-phaseMaxNudge, phaseMaxNudge, (double)nudge));
+        if (std::abs((double)nudge - (double)phaseAppliedNudgeVal) > 1e-7)
         {
-            float nudge = phaseNudgeFor(error, beatInterval);
-            nudge = static_cast<float>(juce::jlimit(-phaseMaxNudge, phaseMaxNudge, (double)nudge));
-            if (std::abs((double)nudge - (double)phaseAppliedNudgeVal) > 1e-7)
-            {
-                slaveDeck.setPitchBend(nudge);
-                phaseAppliedNudgeVal = nudge;
-            }
-            phaseNudgeActiveFlag = std::abs((double)nudge) > 1e-7;
-            // seguir midiendo - stay in Measure
-            return;
+            slaveDeck.setPitchBend(nudge);
+            phaseAppliedNudgeVal = nudge;
         }
+        phaseNudgeActiveFlag = std::abs((double)nudge) > 1e-7;
+        // seguir midiendo - stay in Measure
+        return;
     }
 }
