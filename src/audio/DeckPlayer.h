@@ -41,11 +41,16 @@ public:
     double getPosition() const;
     double getLengthInSeconds() const { return trackDurationSeconds.load(); }
 
+    // Beat phase (P3)
+    double getFirstBeatOffset() const { return firstBeatOffsetSeconds.load(); }
+    double getBeatPhase() const;
+
     // Tempo / Pitch
     void setPitchPercent(float percent); // -8.0 to +8.0, etc.
     float getPitchPercent() const { return pitchPercent.load(); }
     bool isPitchClamped() const { return pitchClamped.load(); }
     void setPitchBend(float bend); // Temporary nudge (e.g. +/- 0.05)
+    float getPitchBend() const { return pitchBend.load(); }
     void setPitchRange(float range) { pitchRange.store(juce::jmax(1.0f, range)); }
     float getPitchRange() const     { return pitchRange.load(); }
 
@@ -123,6 +128,14 @@ private:
     std::atomic<double> cuePositionSeconds { 0.0 };
     std::atomic<double> originalBpm { 0.0 };
     std::atomic<double> currentBpm { 0.0 };
+    std::atomic<double> firstBeatOffsetSeconds { 0.0 };
+
+    // Seek seguro (sin lock, sin reset en el llamante)
+    std::atomic<bool> seekPending { false };
+    std::atomic<double> seekTargetSec { 0.0 };
+    std::atomic<juce::int64> playbackPosSamples { 0 };
+
+    void applyPendingSeek(double targetSec);
 
     std::atomic<float> pitchPercent { 0.0f };
     std::atomic<float> pitchBend { 0.0f };

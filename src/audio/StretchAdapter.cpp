@@ -22,6 +22,54 @@ void StretchAdapter::prepare(double sr)
 void StretchAdapter::reset()
 {
     stretch.reset();
+    inputCarry = 0.0;
+}
+
+bool StretchAdapter::reanchorWithPreRoll(juce::AudioSource* src, juce::int64 targetSample, double rate)
+{
+    if (src == nullptr || !prepared)
+        return false;
+
+    int seekLen = stretch.seekLength();
+    if (seekLen <= 0)
+        return false;
+
+    if (seekLen > tmpSize)
+    {
+        if (seekLen > 8192)
+            return false;
+    }
+
+    juce::int64 preRollStart = targetSample - (juce::int64)seekLen;
+    if (preRollStart < 0)
+        preRollStart = 0;
+
+    // intentar posicionar si es BufferingAudioSource
+    if (auto* buffering = dynamic_cast<juce::BufferingAudioSource*>(src))
+    {
+        buffering->setNextReadPosition(preRollStart);
+    }
+
+    if ((int)cachedSeekLen < seekLen)
+        cachedSeekLen = seekLen;
+
+    int M = juce::jlimit(1, tmpSize, seekLen);
+    if (M != seekLen)
+        return false;
+
+    juce::AudioSourceChannelInfo readInfo(&tmp, 0, M);
+    src->getNextAudioBlock(readInfo);
+
+    float* inPtrs[2] = { tmp.getWritePointer(0), tmp.getWritePointer(1) };
+    stretch.seek(inPtrs, M, rate < 0.02 ? 0.02 : (rate > 4.0 ? 4.0 : rate));
+
+    if (auto* buffering = dynamic_cast<juce::BufferingAudioSource*>(src))
+    {
+        buffering->setNextReadPosition(targetSample);
+    }
+
+    inputCarry = 0.0; // el cursor queda exacto en targetSample
+    return true;
 }
 
 void StretchAdapter::render(juce::AudioSource* src, int srcChannels,
@@ -34,7 +82,12 @@ void StretchAdapter::render(juce::AudioSource* src, int srcChannels,
     if (rate < 0.02) rate = 0.02;
     if (rate > 4.0)  rate = 4.0;
 
-    int M = juce::jlimit(1, tmpSize, (int)std::round((double)numSamples * rate));
+    // P3: la entrada se consume con acumulador fraccionario. Con redondeo por
+    // bloque, un pitchBend pequeno (< 1/(2*numSamples), ~0.1 % con 512 samples)
+    // no cambia M y el nudge del controlador de fase no tiene efecto.
+    const double exact = (double)numSamples * rate + inputCarry;
+    int M = juce::jlimit(1, tmpSize, (int)std::floor(exact));
+    inputCarry = juce::jlimit(0.0, 1.0, exact - (double)M);
 
     juce::AudioSourceChannelInfo readInfo(&tmp, 0, M);
     src->getNextAudioBlock(readInfo);

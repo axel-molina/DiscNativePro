@@ -2,6 +2,45 @@
 #if JUCE_WINDOWS
 #include "MediaFoundationAudioFormat_win.h"
 #endif
+#include <cmath>
+
+namespace
+{
+// P3-ter: umbrales del controlador de fase
+constexpr double phaseDeadbandSec     = 0.001; // 1 ms -> nudge liberado (convergido)
+constexpr double phaseReanchorSec     = 0.015; // 15 ms -> por encima, re-anclaje al beat
+constexpr double phaseMaxNudge        = 0.01;  // +/-1 % de pitchBend
+constexpr double phaseDriftRearmSec   = 0.025; // ~25 ms para auto re-armado estando enclavado
+constexpr double phaseAbortNudgeTol   = 1e-5;
+
+// Grid del master: la alineacion significa que el beat del slave caiga donde cae
+// el del master. Con tempos iguales (caso del Tempo Blend) ambas medidas coinciden;
+// con tempos muy distintos la alineacion es transitoria por diseno y el controlador
+// la re-evalua cada bloque.
+double deckBeatInterval(const DeckPlayer& deck)
+{
+    double bpm = deck.getBpm();
+    if (bpm <= 0.0) bpm = 120.0;
+    const double interval = 60.0 / bpm;
+    return interval > 0.0 ? interval : 0.5;
+}
+
+double deckPhaseSeconds(const DeckPlayer& deck, double interval)
+{
+    double phase = std::fmod(deck.getPosition() - deck.getFirstBeatOffset(), interval);
+    if (phase < 0.0) phase += interval;
+    return phase;
+}
+
+// Nudge proporcional al error, saturado a +/-1 % de pitch (aditivo).
+float phaseNudgeFor(double errorSec, double interval)
+{
+    const double half = interval * 0.5;
+    if (half <= 0.0) return 0.0f;
+    const double nudge = (errorSec / half) * phaseMaxNudge;
+    return static_cast<float>(juce::jlimit(-phaseMaxNudge, phaseMaxNudge, nudge));
+}
+} // namespace
 
 namespace
 {
@@ -315,6 +354,10 @@ void AudioEngine::audioDeviceIOCallbackWithContext(const float* const* /*inputCh
     deck2Buffer.clear(0, numSamples);
     cueBuffer.clear(0, numSamples);
 
+    // 0. Controlador de fase (P3-bis): una sola evaluacion por bloque, sin allocs.
+    //    Escribe pitchBend (aditivo) o publica un seek; los decks ya lo consumen abajo.
+    processPhaseAlign();
+
     // 1. Fetch audio from streaming deck sources
     juce::AudioSourceChannelInfo d1Info(&deck1Buffer, 0, numSamples);
     deck1.getNextAudioBlock(d1Info);
@@ -451,19 +494,28 @@ void AudioEngine::setCrossfader(float val)
                                                      : CrossfaderZone::Center;
 
         // Check for zone transition into center to align beat phase cleanly
+        int masterToAlign = -1;
         if (lastCrossfaderZone == CrossfaderZone::Deck1 && currentZone == CrossfaderZone::Center
             && deck1.isPlaying() && deck2.isPlaying())
         {
-            alignBeatPhase(deck1, deck2);
+            masterToAlign = 0;
         }
         else if (lastCrossfaderZone == CrossfaderZone::Deck2 && currentZone == CrossfaderZone::Center
                  && deck1.isPlaying() && deck2.isPlaying())
         {
-            alignBeatPhase(deck2, deck1);
+            masterToAlign = 1;
         }
         lastCrossfaderZone = currentZone;
 
+        // El blend primero: deja asentado el pitchPercent que sirve de referencia al
+        // controlador para detectar una intervencion manual del pitch.
         applyTempoBlend(val);
+
+        if (masterToAlign >= 0)
+        {
+            // P3-ter: el cruce de zona SOLO arma (armPhaseAlign).
+            armPhaseAlign(masterToAlign);
+        }
     }
 }
 
@@ -497,26 +549,175 @@ void AudioEngine::applyTempoBlend(float val)
     deck2.setPitchPercent((float)pitchPercent2);
 }
 
-void AudioEngine::alignBeatPhase(DeckPlayer& masterDeck, DeckPlayer& slaveDeck)
+// Helpers puros y testeables (P3-bis)
+double AudioEngine::wrappedPhaseError(double masterPhaseSec, double slavePhaseSec, double interval)
 {
-    if (!masterDeck.isLoaded() || !slaveDeck.isLoaded()) return;
-    if (masterDeck.isScratching() || slaveDeck.isScratching()) return; // no pelear con la mano
+    if (interval <= 0.0) return 0.0;
+    double error = masterPhaseSec - slavePhaseSec;
+    if (error > interval * 0.5) error -= interval;
+    if (error < -interval * 0.5) error += interval;
+    return error;
+}
 
-    double bpm = masterDeck.getBpm();
-    if (bpm <= 0.0) bpm = 120.0;
-    double beatInterval = 60.0 / bpm;
+double AudioEngine::quantizedSeekDelta(double errorSec, double interval)
+{
+    if (interval <= 0.0) return 0.0;
+    // error < 0 => slave adelantado: hay que saltar al siguiente ciclo del grid del master
+    // para caer exactamente en la fase del master. Siempre hacia delante.
+    double delta = errorSec + (errorSec < 0.0 ? interval : 0.0);
+    if (delta < 0.0) delta = 0.0;
+    return delta;
+}
 
-    double masterTime = masterDeck.getPosition();
-    double masterPhase = std::fmod(masterTime, beatInterval);
-    if (masterPhase < 0.0) masterPhase += beatInterval;
+void AudioEngine::armPhaseAlign(int masterDeckIndex)
+{
+    phaseAlignMasterIndexVal = masterDeckIndex == 0 ? 0 : 1;
+    phaseAlignState = PhaseAlignState::Settle;
+    phaseAlignSettleBlocks = 0;
+    phaseAlignSeekCount = 0;
+    phaseAlignArmedFlag = true;
+    phaseNudgeActiveFlag = false;
+    phaseAppliedNudgeVal = 0.0f;
+}
 
-    double slaveTime = slaveDeck.getPosition();
-    double slavePhase = std::fmod(slaveTime, beatInterval);
-    if (slavePhase < 0.0) slavePhase += beatInterval;
+void AudioEngine::processPhaseAlign()
+{
+    if (!tempoBlendActive.load()) return;
+    if (!deck1.isLoaded() || !deck2.isLoaded()) return;
 
-    double correction = masterPhase - slavePhase;
-    if (correction > beatInterval * 0.5) correction -= beatInterval;
-    if (correction < -beatInterval * 0.5) correction += beatInterval;
+    // P3 sobre P5: el BPM y el offset llegan del worker de analisis. Hasta que
+    // ambos decks los tengan, el grid caeria al fallback de 120 BPM y el
+    // controlador podria seekear/nudgear sobre un compas equivocado.
+    if (deck1.getBpm() <= 0.0 || deck2.getBpm() <= 0.0) return;
 
-    slaveDeck.seekRelative(correction);
+    if (phaseAlignState == PhaseAlignState::Idle && phaseAlignArmedFlag)
+    {
+        phaseAlignState = PhaseAlignState::Settle;
+        phaseAlignSettleBlocks = 0;
+        phaseAlignSeekCount = 0;
+    }
+
+    const int masterIdx = phaseAlignMasterIndexVal;
+    const int slaveIdx  = masterIdx == 0 ? 1 : 0;
+    auto& masterDeck = getDeck(masterIdx);
+    auto& slaveDeck  = getDeck(slaveIdx);
+
+    if (!masterDeck.isPlaying() || !slaveDeck.isPlaying()) return;
+    if (masterDeck.isScratching() || slaveDeck.isScratching()) return;
+
+    // Abortar por intervencion del usuario: comparar getPitchBend() con el ultimo nudge escrito por el controlador
+    if (phaseNudgeActiveFlag)
+    {
+        const float pb = slaveDeck.getPitchBend();
+        if (std::abs(pb - phaseAppliedNudgeVal) > phaseAbortNudgeTol)
+        {
+            slaveDeck.setPitchBend(0.0f);
+            phaseAppliedNudgeVal = 0.0f;
+            phaseNudgeActiveFlag = false;
+            phaseAlignState = PhaseAlignState::Idle;
+            phaseAlignArmedFlag = false;
+            phaseAlignSeekCount = 0;
+            return;
+        }
+    }
+
+    const double beatInterval = deckBeatInterval(masterDeck);
+    const double masterPhase  = deckPhaseSeconds(masterDeck, beatInterval);
+    const double slavePhase   = deckPhaseSeconds(slaveDeck,  beatInterval);
+    const double error        = wrappedPhaseError(masterPhase, slavePhase, beatInterval);
+    const double errorAbs     = std::abs(error);
+
+    // Auto re-armado si la deriva supera ~25 ms estando enclavado (Idle)
+    if (phaseAlignState == PhaseAlignState::Idle && phaseAlignArmedFlag == false)
+    {
+        if (errorAbs > phaseDriftRearmSec)
+        {
+            phaseAlignArmedFlag = true;
+            phaseAlignState = PhaseAlignState::Settle;
+            phaseAlignSettleBlocks = 0;
+            phaseAlignSeekCount = 0;
+        }
+        else
+        {
+            return;
+        }
+    }
+
+    if (phaseAlignState == PhaseAlignState::Settle)
+    {
+        if (phaseNudgeActiveFlag)
+        {
+            slaveDeck.setPitchBend(0.0f);
+            phaseAppliedNudgeVal = 0.0f;
+            phaseNudgeActiveFlag = false;
+        }
+        ++phaseAlignSettleBlocks;
+        if (phaseAlignSettleBlocks >= phaseAlignSettleBlocksCount)
+            phaseAlignState = PhaseAlignState::Measure;
+        return;
+    }
+
+    if (phaseAlignState == PhaseAlignState::Measure)
+    {
+        // Convergido
+        if (errorAbs < phaseDeadbandSec)
+        {
+            if (phaseNudgeActiveFlag || std::abs(slaveDeck.getPitchBend()) > 1e-6f)
+            {
+                slaveDeck.setPitchBend(0.0f);
+                phaseAppliedNudgeVal = 0.0f;
+                phaseNudgeActiveFlag = false;
+            }
+            phaseAlignState = PhaseAlignState::Idle;
+            phaseAlignArmedFlag = false;
+            phaseAlignSeekCount = 0;
+            return;
+        }
+
+        // Desfase grande (>15 ms): UN seek por iteracion si |error|>15 ms
+        if (errorAbs > phaseReanchorSec)
+        {
+            if (phaseAlignSeekCount >= phaseAlignMaxSeeks)
+            {
+                if (phaseNudgeActiveFlag)
+                {
+                    slaveDeck.setPitchBend(0.0f);
+                    phaseAppliedNudgeVal = 0.0f;
+                    phaseNudgeActiveFlag = false;
+                }
+                phaseAlignState = PhaseAlignState::Idle;
+                phaseAlignArmedFlag = false;
+                phaseAlignSeekCount = 0;
+                return;
+            }
+            if (phaseNudgeActiveFlag)
+            {
+                slaveDeck.setPitchBend(0.0f);
+                phaseAppliedNudgeVal = 0.0f;
+                phaseNudgeActiveFlag = false;
+            }
+            const double delta = quantizedSeekDelta(error, beatInterval);
+            if (delta > 0.0)
+                slaveDeck.seekRelative(delta);
+            ++phaseAlignSeekCount;
+            phaseAlignState = PhaseAlignState::Settle;
+            phaseAlignSettleBlocks = 0;
+            return;
+        }
+
+        // Zona intermedia (1 ms < |error| <= 15 ms): nudge aditivo <=1 % si |error|<=15 ms
+        if (errorAbs <= phaseReanchorSec)
+        {
+            float nudge = phaseNudgeFor(error, beatInterval);
+            nudge = static_cast<float>(juce::jlimit(-phaseMaxNudge, phaseMaxNudge, (double)nudge));
+            if (std::abs((double)nudge - (double)phaseAppliedNudgeVal) > 1e-7)
+            {
+                slaveDeck.setPitchBend(nudge);
+                phaseAppliedNudgeVal = nudge;
+            }
+            phaseNudgeActiveFlag = std::abs((double)nudge) > 1e-7;
+            // seguir midiendo - stay in Measure
+            return;
+        }
+    }
 }

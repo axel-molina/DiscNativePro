@@ -323,6 +323,44 @@ Ganancia real medida (RMS de la salida para una sine unidad; ideal 0.7071):
 - El clic residual de `b007879` se detectó con el harness (no se habría visto en una escucha rápida), lo que justifica mantener esta prueba como criterio de aceptación para cambios de DSP.
 - El harness vive fuera del repo (scratchpad temporal) y se enlaza contra los objetos JUCE del build.
 
+# Walkthrough — P3: Alineación de fase del master tempo y seek seguro
+
+## 1. Causa
+Reporte: "master tempo, no funciona bien". Tres problemas encadenados:
+1. **La fase se medía desde `t=0`**: `alignBeatPhase` usaba `position mod (60/bpm)` sin el offset del primer beat, que `BeatDetector` ya calculaba pero `DeckPlayer::loadFile` descartaba.
+2. **Seek duro**: `setPosition` hacía `stretcher->reset()` bajo un `CriticalSection` que el hilo de audio tomaba durante todo el bloque (bloqueo entre hilos) y con un clic de continuidad; además el mismo `reset()` corría en el borde de cada loop.
+3. **Sin convergencia**: la alineación se disparaba una vez por cruce de zona del crossfader; no había nudge progresivo ni liberación.
+
+## 2. Cambios (rama `axel-molina/phase-align-fix`)
+- **`054e4a8`** — `DeckPlayer`: `setPosition()` publica un flag atómico (sin lock ni reset en el hilo llamante) y el hilo de audio lo aplica al inicio del bloque con `reanchorWithPreRoll()` (`stretch.seek()` con pre-roll, con fallback a `reset()`); loop y fin de pista por el mismo camino; `getPosition()` lee una posición atómica; nuevo `getBeatPhase()` con el offset del primer beat (`firstBeatOffsetSeconds`, antes descartado). `StretchAdapter::reanchorWithPreRoll()`.
+- **`aacf560`** — `AudioEngine`: controlador por bloque con máquina de estados `Idle → Settle → Measure` (sin allocs ni locks nuevos): `Settle` ignora 2 bloques tras cada seek para no medir error obsoleto; `Measure` itera cada bloque hasta la deadband (1 ms), con **nudge aditivo ≤ 1 %** (no pisa el `pitchPercent` de `applyTempoBlend`) y **un seek por iteración** (`delta = error + k·I`, salto mínimo hacia delante) con contador de seguridad; al converger **libera siempre el `pitchBend`**; **auto re-armado** si la deriva supera ~25 ms estando enclavado; el cruce de zona **solo arma**; aborto por intervención comparando `getPitchBend()` con el último nudge escrito. Se elimina `alignBeatPhase` (sin consumidores).
+
+## 3. Verificación
+**Matemática (helpers estáticos, 5043 casos):** 0 fallos. Antes el re-anclaje dejaba 56–119 ms de error; con `delta = error + k·I` el residual es 0.00 ms en todos los casos.
+
+**Banco determinista sin dispositivo** (`DeckPlayer` propio + `TimeSliceThread` + WAV sintético de click-track, bombeando bloques a ritmo real):
+- **Invariante de posición**: localizando el onset del click en el audio renderizado y comparándolo con `getPosition()` → **−0.0 ms de error antes y después de un seek** (la aguja apunta a lo que suena).
+- **Seek sin clic**: delta máximo alrededor del seek = **0.1139** frente al natural de la señal (0.114) → sin discontinuidad.
+- Lección medida: la latencia del stretcher (140.0 ms) **no** la elimina el pre-roll; `getPosition()` debe seguir restándola siempre (el experimento `stretchLagSeconds` se descartó tras medir +140 ms de error).
+
+**Banco del controlador (con dispositivo):** donde actuó, convergió a **3–8 ms** con el nudge liberado (sin desviación permanente). El nudge está limitado a ±1 % (~4.7 ms/s a 124 BPM), así que corregir 150 ms requiere ~30 s y el banco solo esperaba ~5 s; un caso no llegó a armarse porque la manipulación con pausa/seek altera la transición de zona. **Pendiente: prueba de escucha en la app con tracks reales.**
+
+## 4. Resolución P3 sobre P5 (merge en `main`)
+Al integrar P3 sobre la carga asíncrona de P5 aparecieron dos fallos que la rama original no podía ver (allí el BPM se calculaba en el hilo de UI, en la misma llamada a `loadFile`):
+1. **El controlador no tenía grid**: el BPM y el offset llegan ahora del worker de análisis vía `MessageManager::callAsync`. Se publica también `firstBeatOffsetSeconds` en ese callback y `processPhaseAlign()` **no actúa hasta que ambos decks tienen BPM > 0** (si no, medía contra el fallback de 120 BPM).
+2. **`setPosition()` y `getPosition()` no eran inversas con Key Lock**: `getPosition()` descuenta la latencia del stretcher (140 ms medidos), pero el cursor de lectura no la compensaba, así que cada seek relativo se anulaba: el error quedaba clavado en exactamente 140.00 ms y el controlador no convergía. `applyPendingSeek()` suma ahora `stretcher->getLatencySeconds()` al destino cuando Key Lock está activo.
+3. **El nudge fino no tenía efecto**: `StretchAdapter::render()` calculaba la entrada como `round(numSamples * rate)`; con bloques de 512 samples cualquier `pitchBend` menor que ~0.1 % redondeaba al mismo número de samples y no cambiaba la velocidad (el nudge de 10 ms de error vale 0.043 %). Ahora la entrada se consume con **acumulador fraccionario** (`inputCarry`), que además se resetea en `reset()` y en `reanchorWithPreRoll()`.
+
+**Verificación tras el merge (pistas reales, `Demo Track 1.mp3`, 128.000 BPM):**
+- `run_phase_real`: análisis publicado en ~1.8 s; el controlador converge de 268 ms a **0.67–1.77 ms** con el `pitchBend` liberado a 0 (constante de tiempo del nudge ~23 s por diseño, no un fallo). Seek a 30.000 s con Key Lock: posición real **13 ms** por debajo del valor esperado por reloj.
+- `run_pos_merged`: invariante de posición (onset audible vs `getPosition()`) **−0.0 ms antes y después del seek**; delta máximo en el seek 0.1139 frente al natural 0.114.
+- `run_math_merged`: 5043 casos, 0 fallos.
+
+## 5. Deuda y siguientes fases
+- **Deuda técnica**: el callback de audio sigue tomando el `CriticalSection` de `DeckPlayer` (seguro, pero es el patrón a eliminar) y el pre-roll lee ~6.2–6.7k frames dentro del callback (posible bloqueo si el búfer no está listo; `stretch.seek()` puede realocar).
+- **P4**: BPM entero en `BeatDetector` (±0.5 BPM → deriva), half/double-time en `applyTempoBlend`, pitch range ignorado, feedback/persistencia del Tempo Blend y displays de BPM inconsistentes.
+- Código muerto con datos falsos: `ScrollingWaveform` dibuja el grid a 124 BPM fijos y `DynamicBeatgrid.h` no se usa.
+
 # Walkthrough — P4.1: BPM decimal, half/double-time y pitch range
 
 ## 1. Causa

@@ -44,6 +44,10 @@ DeckPlayer::DeckPlayer(juce::AudioFormatManager& fm, juce::TimeSliceThread& thre
     scratchRing.clear();
     scratchTail.setSize(2, scratchTailSize);
     scratchTail.clear();
+    playbackPosSamples.store(0);
+    seekPending.store(false);
+    seekTargetSec.store(0.0);
+    firstBeatOffsetSeconds.store(0.0);
 }
 DeckPlayer::~DeckPlayer()
 {
@@ -95,6 +99,13 @@ bool DeckPlayer::loadFile(const juce::File& audioFile)
         double duration = (double)reader->lengthInSamples / reader->sampleRate;
         trackDurationSeconds.store(duration);
         cuePositionSeconds.store(0.0);
+
+        // P3 sobre P5: la pista nueva no hereda seek pendiente, fase ni
+        // posicion de la anterior (el analisis llega despues y repone el offset).
+        seekPending.store(false);
+        seekTargetSec.store(0.0);
+        playbackPosSamples.store(0);
+        firstBeatOffsetSeconds.store(0.0);
 
         // Fase rápida: sin analizadores ni waveform. BPM/peaks quedan vacíos
         // hasta que el worker publique (la UI muestra "--" y el waveform se
@@ -193,14 +204,16 @@ void DeckPlayer::startAnalysis(std::shared_ptr<juce::AudioFormatReader> analysis
             });
         }
 
-        // 3) BPM (solo el átomo: el label ya se refresca en el timer de la UI).
+        // 3) BPM + offset del primer beat (solo atomos: el label se refresca en
+        //    el timer de la UI y el controlador de fase lee el offset).
         const auto beatRes = BeatDetector::analyze(reader.get());
         if (!isCurrent())
             return;
-        publishIfCurrent(shared, generation, [this, bpm = beatRes.bpm]()
+        publishIfCurrent(shared, generation, [this, bpm = beatRes.bpm, offset = beatRes.offset]()
         {
             originalBpm.store(bpm);
             currentBpm.store(bpm * (1.0 + (double)pitchPercent.load() / 100.0));
+            firstBeatOffsetSeconds.store(offset);
         });
 
         // 4) Tonalidad (Camelot + musical).
@@ -249,6 +262,10 @@ void DeckPlayer::prepareToPlay(int samplesPerBlockExpected, double sampleRate)
         resamplingSource->prepareToPlay(samplesPerBlockExpected, sampleRate);
         stretcher->prepare(sampleRate);
         updatePlaybackSpeed();
+    }
+    else if (stretcher != nullptr)
+    {
+        stretcher->prepare(sampleRate);
     }
 }
 
@@ -384,6 +401,12 @@ void DeckPlayer::getNextAudioBlock(const juce::AudioSourceChannelInfo& bufferToF
         return; // sin loop-wrap ni auto-stop durante el toque
     }
 
+    // Seek seguro: aplicar al inicio del bloque si hay uno pendiente
+    if (seekPending.exchange(false))
+    {
+        applyPendingSeek(seekTargetSec.load());
+    }
+
     // Process audio block from streaming reader.
     // Key Lock ON: tempo por stretch (pitch intacto). OFF: resample clásico.
     if (keylock.load())
@@ -402,6 +425,13 @@ void DeckPlayer::getNextAudioBlock(const juce::AudioSourceChannelInfo& bufferToF
     }
     writeScratchRing(bufferToFill); // historial para la reversa del scratch
 
+    // Actualizar posición atómica sin lock para getPosition
+    if (bufferingSource != nullptr && currentSampleRate > 0.0)
+    {
+        auto rp = bufferingSource->getNextReadPosition();
+        playbackPosSamples.store(rp);
+    }
+
     // Handle Active Loop
     if (loopActive.load() && !scratchTouch.load() && bufferingSource != nullptr)
     {
@@ -411,7 +441,8 @@ void DeckPlayer::getNextAudioBlock(const juce::AudioSourceChannelInfo& bufferToF
 
         if (currentPos >= (start + length))
         {
-            setPosition(start);
+            seekPending.store(true);
+            seekTargetSec.store(start);
         }
     }
 
@@ -419,7 +450,8 @@ void DeckPlayer::getNextAudioBlock(const juce::AudioSourceChannelInfo& bufferToF
     if (!scratchTouch.load() && trackDurationSeconds.load() > 0.0 && getPosition() >= trackDurationSeconds.load())
     {
         playing.store(false);
-        setPosition(trackDurationSeconds.load());
+        seekPending.store(true);
+        seekTargetSec.store(trackDurationSeconds.load());
     }
 }
 
@@ -514,26 +546,76 @@ void DeckPlayer::setCuePosition()
 
 void DeckPlayer::setPosition(double seconds)
 {
-    const juce::ScopedLock sl(lock);
-    if (bufferingSource != nullptr && currentSampleRate > 0.0)
+    if (currentSampleRate <= 0.0)
+        return;
+    double dur = trackDurationSeconds.load();
+    double target = seconds;
+    if (dur > 0.0)
+        target = juce::jlimit(0.0, dur, target);
+    else
+        target = juce::jmax(0.0, target);
+    seekTargetSec.store(target);
+    seekPending.store(true);
+}
+
+void DeckPlayer::applyPendingSeek(double targetSec)
+{
+    if (bufferingSource == nullptr || currentSampleRate <= 0.0 || stretcher == nullptr)
+        return;
+    double sr = currentSampleRate;
+    double dur = trackDurationSeconds.load();
+    double target = targetSec;
+    if (dur > 0.0)
+        target = juce::jlimit(0.0, dur, target);
+    else
+        target = juce::jmax(0.0, target);
+
+    // P3: con Key Lock, getPosition() descuenta la latencia del stretcher, asi
+    // que el cursor de lectura tiene que compensarla. Sin esto setPosition() y
+    // getPosition() no son inversas y cada seek relativo se anula (el
+    // controlador de fase queda clavado a la latencia del stretcher).
+    if (keylock.load())
+        target += stretcher->getLatencySeconds();
+
+    int64_t targetSample = (int64_t)(target * sr);
+    targetSample = juce::jmax((int64_t)0, targetSample);
+    bufferingSource->setNextReadPosition(targetSample);
+    playbackPosSamples.store(targetSample);
+
+    double rate = 1.0;
+    if (keylock.load())
+        rate = juce::jlimit(0.02, 4.0, (double)1.0f + ((double)pitchPercent.load() / 100.0) + (double)pitchBend.load());
+    if (stretcher->reanchorWithPreRoll(bufferingSource.get(), targetSample, rate))
     {
-        int64_t samplePos = (int64_t)(seconds * currentSampleRate);
-        bufferingSource->setNextReadPosition(juce::jmax((int64_t)0, samplePos));
-        stretcher->reset(); // el stretch no arrastra estado tras un salto
+    }
+    else
+    {
+        stretcher->reset();
     }
 }
 
 double DeckPlayer::getPosition() const
 {
-    const juce::ScopedLock sl(lock);
-    if (bufferingSource != nullptr && currentSampleRate > 0.0)
-    {
-        double pos = (double)bufferingSource->getNextReadPosition() / currentSampleRate;
-        if (keylock.load())
-            pos -= stretcher->getLatencySeconds(); // aguja = lo que suena
-        return juce::jmax(0.0, pos);
-    }
-    return 0.0;
+    if (currentSampleRate <= 0.0)
+        return 0.0;
+    double pos = (double)playbackPosSamples.load() / currentSampleRate;
+    if (keylock.load() && stretcher != nullptr)
+        pos -= stretcher->getLatencySeconds();
+    if (pos < 0.0) pos = 0.0;
+    return pos;
+}
+
+double DeckPlayer::getBeatPhase() const
+{
+    double bpm = getBpm();
+    if (bpm <= 0.0) bpm = 120.0;
+    double interval = 60.0 / bpm;
+    if (interval <= 0.0) interval = 0.5;
+    double offset = firstBeatOffsetSeconds.load();
+    double pos = getPosition();
+    double phase = std::fmod(pos - offset, interval);
+    if (phase < 0.0) phase += interval;
+    return phase / interval;
 }
 
 void DeckPlayer::seekRelative(double deltaSeconds)

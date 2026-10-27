@@ -43,6 +43,9 @@ public:
     void render(juce::AudioSource* src, int srcChannels,
                 float* const* dst, int dstChannels, int numSamples);
 
+    // Re-anclaje con pre-roll (P3) - solo hilo de audio
+    bool reanchorWithPreRoll(juce::AudioSource* src, juce::int64 targetSample, double rate);
+
     double getLatencySeconds() const { return latencySec.load(); }
 
 private:
@@ -53,6 +56,8 @@ private:
     std::atomic<double> latencySec { 0.0 };
     double sampleRate { 44100.0 };
     bool prepared { false };
+    juce::int64 cachedSeekLen { 0 };
+    double inputCarry { 0.0 }; // resto fraccionario de samples de entrada (P3)
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(StretchAdapter)
 };
