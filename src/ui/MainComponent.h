@@ -4,7 +4,6 @@
 #include "../midi/MidiManager.h"
 #include "TopBarComponent.h"
 #include "DeckComponent.h"
-#include "WavesViewComponent.h"
 #include "MixerComponent.h"
 #include "LibraryComponent.h"
 #include "FxPanelComponent.h"
@@ -40,15 +39,6 @@ private:
     DeckComponent deck2;
     MixerComponent mixer;
     LibraryComponent library;
-    WavesViewComponent wavesView;
-
-    // Selector de vista del TopBar: 2 Bandejas (default) u Ondas, persistente
-    // en settings.json ("viewMode": "decks" | "waves") y conmutable en caliente.
-    TopBarComponent::ViewMode currentViewMode { TopBarComponent::ViewMode::TwoDecks };
-    void setViewMode(TopBarComponent::ViewMode mode);
-    void applyViewMode();
-    static TopBarComponent::ViewMode loadViewModeFromSettings();
-    static void saveViewModeToSettings(TopBarComponent::ViewMode mode);
 
     bool isFxPanelVisible { true };
     bool isSamplerPanelVisible { false };

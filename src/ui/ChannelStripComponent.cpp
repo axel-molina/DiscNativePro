@@ -73,20 +73,6 @@ ChannelStripComponent::~ChannelStripComponent()
     volumeFader.setLookAndFeel(nullptr);
 }
 
-void ChannelStripComponent::setWavesMode(bool waves)
-{
-    if (wavesMode == waves)
-        return;
-
-    wavesMode = waves;
-    if (!wavesMode)
-        addAndMakeVisible(volumeFader);
-    vuMeter.setVisible(!wavesMode);
-
-    resized();
-    repaint();
-}
-
 void ChannelStripComponent::timerCallback()
 {
     vuMeter.setLevels(strip.meterPeakLeft.load(), strip.meterPeakRight.load());
@@ -148,27 +134,6 @@ void ChannelStripComponent::resized()
     // 1. Header Badge (24px)
     headerBadge.setBounds(totalArea.removeFromTop(24).reduced(6, 2));
     totalArea.removeFromTop(8); // leaves gap at y = 32 for the top separator
-
-    if (wavesMode)
-    {
-        // Ondas: EQ compacto con el CUE justo debajo (sin el hueco del fader/VU)
-        faderSeparatorY = 0.0f;
-        int availH = totalArea.getHeight();
-        int knobSpacing = 3;
-        int knobH = juce::jlimit(26, 40, (availH - 40) / 4);
-        int blockH = (knobH * 4) + (knobSpacing * 3) + 4 + 24;
-        auto block = totalArea.withSizeKeepingCentre(totalArea.getWidth(), blockH);
-        highKnob.setBounds(block.removeFromTop(knobH).reduced(2, 1));
-        block.removeFromTop(knobSpacing);
-        midKnob.setBounds(block.removeFromTop(knobH).reduced(2, 1));
-        block.removeFromTop(knobSpacing);
-        lowKnob.setBounds(block.removeFromTop(knobH).reduced(2, 1));
-        block.removeFromTop(knobSpacing);
-        filterKnob.setBounds(block.removeFromTop(knobH).reduced(2, 1));
-        block.removeFromTop(4);
-        cueButton.setBounds(block.reduced(4, 1));
-        return;
-    }
 
     // 2. Bottom CUE button (24px)
     cueButton.setBounds(totalArea.removeFromBottom(24).reduced(4, 1));

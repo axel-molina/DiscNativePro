@@ -66,16 +66,6 @@ public:
     juce::String getVideoId() const { return loadedVideoId; }
     bool isLoaded() const { return deck.isLoaded() || isVideoMode; }
 
-    // Vista Ondas (selector de vista del TopBar): oculta el plato (jog + carátula),
-    // la cabecera y la onda interna; los datos se muestran en WavesViewComponent.
-    void setWavesMode(bool active);
-    bool isWavesMode() const { return wavesMode; }
-
-    // Datos de pista para las tiras de WavesViewComponent (modo Ondas)
-    double getCurrentSeconds() const;
-    double getTotalSeconds() const;
-    float getPitchOffsetPercent() const;
-
     static juce::String sanitizeTrackString(const juce::String& text);
     static juce::String stripTrackNumberPrefix(const juce::String& filename);
     static bool splitArtistTitle(const juce::String& in, juce::String& outArtist, juce::String& outTitle);
@@ -92,8 +82,6 @@ private:
     void updateLabels();
     void updateKeyLockButton();
     void formatTime(double seconds, char* buffer, size_t bufferSize);
-    void updateJogVisibility();
-    void resizedWavesMode();
     // Resuelve título/autor reales cuando solo tenemos el ID (drag yt:ID).
     // No bloquea: carga inmediata + actualización async si el video sigue cargado.
     void resolveVideoMetadataAsync(const juce::String& videoId);
@@ -103,7 +91,6 @@ private:
     AudioEngine& engine;
     juce::Colour accent;
     bool isDragOver { false };
-    bool wavesMode { false };
     bool isVideoMode { false };
     bool isVideoPlaying { false };
     bool isExtractingAudio { false };

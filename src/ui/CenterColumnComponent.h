@@ -18,10 +18,6 @@ public:
     void resized() override;
     void timerCallback() override;
 
-    // Modo Ondas: la onda vertical se oculta y el centro aloja los faders de
-    // volumen de cada bandeja (re-padreados desde MixerComponent).
-    void setWavesMode(bool active, juce::Slider* fader1, juce::Slider* fader2);
-
 private:
     void syncTempoBlendState();
     void updateTempoBlendAppearance(bool active);
@@ -35,11 +31,8 @@ private:
     VuMeter masterMeter;
     DjKnob phonesKnob { "PHONES", juce::Colour::fromRGB(156, 163, 175) };
 
-    // Middle section: Dual Vertical Waveform (u ondas: faders de volumen externos)
+    // Middle section: Dual Vertical Waveform
     VerticalWaveform verticalWaveform;
-    bool wavesMode { false };
-    juce::Slider* externalFader1 { nullptr };
-    juce::Slider* externalFader2 { nullptr };
 
     // Bottom section: Crossfader Controls
     juce::Label deck1Label;

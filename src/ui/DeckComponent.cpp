@@ -379,7 +379,7 @@ void DeckComponent::loadAudioFileNow(const juce::File& file, LoadOrigin origin)
             videoPlayer->stop();
             videoPlayer->setVisible(false);
         }
-        updateJogVisibility();
+        jogWheel.setVisible(true);
 
         // Garantizar que CoreAudio este activo para el streaming del deck
         engine.ensureAudioDeviceRunning();
@@ -441,21 +441,24 @@ bool DeckComponent::isInterestedInFileDrag(const juce::StringArray& files)
 void DeckComponent::fileDragEnter(const juce::StringArray&, int, int)
 {
     isDragOver = true;
-    updateJogVisibility();
+    if (!isVideoMode)
+        jogWheel.setVisible(false);
     repaint();
 }
 
 void DeckComponent::fileDragExit(const juce::StringArray&)
 {
     isDragOver = false;
-    updateJogVisibility();
+    if (!isVideoMode)
+        jogWheel.setVisible(true);
     repaint();
 }
 
 void DeckComponent::filesDropped(const juce::StringArray& files, int /*x*/, int /*y*/)
 {
     isDragOver = false;
-    updateJogVisibility();
+    if (!isVideoMode)
+        jogWheel.setVisible(true);
     for (const auto& f : files)
     {
         juce::File file(f);
@@ -476,21 +479,24 @@ bool DeckComponent::isInterestedInDragSource(const SourceDetails& dragSourceDeta
 void DeckComponent::itemDragEnter(const SourceDetails&)
 {
     isDragOver = true;
-    updateJogVisibility();
+    if (!isVideoMode)
+        jogWheel.setVisible(false);
     repaint();
 }
 
 void DeckComponent::itemDragExit(const SourceDetails&)
 {
     isDragOver = false;
-    updateJogVisibility();
+    if (!isVideoMode)
+        jogWheel.setVisible(true);
     repaint();
 }
 
 void DeckComponent::itemDropped(const SourceDetails& dragSourceDetails)
 {
     isDragOver = false;
-    updateJogVisibility();
+    if (!isVideoMode)
+        jogWheel.setVisible(true);
     juce::String desc = dragSourceDetails.description.toString();
     if (desc.startsWith("yt:"))
     {
@@ -553,8 +559,8 @@ void DeckComponent::loadYouTubeVideoNow(const YouTubeSearchResult& result, LoadO
         }
 
         videoPlayer->loadVideo(result.id, result.title, autoplay);
-        videoPlayer->setVisible(!wavesMode);
-        updateJogVisibility();
+        videoPlayer->setVisible(true);
+        jogWheel.setVisible(false);
 
         auto displayTitle = result.title.isNotEmpty() ? result.title : ("YouTube Video (" + result.id + ")");
         auto displayArtist = result.artist.isNotEmpty() ? result.artist : "YouTube DJ";
@@ -592,7 +598,7 @@ void DeckComponent::loadYouTubeVideoNow(const YouTubeSearchResult& result, LoadO
         videoPlayer->stop();
         videoPlayer->setVisible(false);
     }
-    updateJogVisibility();
+    jogWheel.setVisible(true);
 
     auto displayTitle = result.title.isNotEmpty() ? result.title : ("YouTube Video (" + result.id + ")");
     auto displayArtist = result.artist.isNotEmpty() ? result.artist : "YouTube DJ";
@@ -1016,50 +1022,6 @@ void DeckComponent::formatTime(double seconds, char* buffer, size_t bufferSize)
     std::snprintf(buffer, bufferSize, "%02d:%02d.%1d", mins, secs, tenths);
 }
 
-void DeckComponent::updateJogVisibility()
-{
-    // El plato solo se muestra en modo 2 Bandejas, sin vídeo y sin arrastre encima
-    jogWheel.setVisible(!wavesMode && !isVideoMode && !isDragOver);
-}
-
-void DeckComponent::setWavesMode(bool active)
-{
-    if (wavesMode == active)
-        return;
-
-    wavesMode = active;
-
-    // Cabecera, onda interna y reproductor de vídeo quedan ocultos: la vista de
-    // ondas (WavesViewComponent) muestra los datos a todo el ancho de la app.
-    titleLabel.setVisible(!wavesMode);
-    artistLabel.setVisible(!wavesMode);
-    bpmLabel.setVisible(!wavesMode);
-    keyBadge.setVisible(!wavesMode);
-    timeRemainingLabel.setVisible(!wavesMode);
-    overviewWaveform.setVisible(!wavesMode);
-    if (videoPlayer != nullptr)
-        videoPlayer->setVisible(!wavesMode && isVideoMode);
-    updateJogVisibility();
-
-    resized();
-    repaint();
-}
-
-double DeckComponent::getCurrentSeconds() const
-{
-    return isVideoMode ? videoPositionSeconds : deck.getPosition();
-}
-
-double DeckComponent::getTotalSeconds() const
-{
-    return isVideoMode ? videoDurationSeconds : deck.getLengthInSeconds();
-}
-
-float DeckComponent::getPitchOffsetPercent() const
-{
-    return isVideoMode ? 0.0f : deck.getPitchPercent();
-}
-
 void DeckComponent::updateKeyLockButton()
 {
     bool on = keyLockButton.getToggleState();
@@ -1220,29 +1182,27 @@ void DeckComponent::paint(juce::Graphics& g)
     g.setColour(juce::Colour::fromRGB(30, 34, 44));
     g.drawRoundedRectangle(bounds.reduced(2.0f), 8.0f, 1.2f);
 
-    // Album Artwork Box (40x40px with rounded corners) — oculto en modo Ondas
-    if (!wavesMode)
+    // Album Artwork Box (40x40px with rounded corners)
+    juce::Rectangle<float> artBox(12.0f, 10.0f, 40.0f, 40.0f);
+    if (coverArtImage.isValid())
     {
-        juce::Rectangle<float> artBox(12.0f, 10.0f, 40.0f, 40.0f);
-        if (coverArtImage.isValid())
-        {
-            juce::Path clipPath;
-            clipPath.addRoundedRectangle(artBox, 6.0f);
-            juce::Graphics::ScopedSaveState state(g);
-            g.reduceClipRegion(clipPath);
-            g.drawImage(coverArtImage, artBox, juce::RectanglePlacement::centred | juce::RectanglePlacement::fillDestination);
-        }
-        else
-        {
-            juce::ColourGradient artGrad(accent, artBox.getX(), artBox.getY(),
-                                         juce::Colour::fromRGB(20, 24, 34), artBox.getRight(), artBox.getBottom(), false);
-            g.setGradientFill(artGrad);
-            g.fillRoundedRectangle(artBox, 6.0f);
-        }
-
-        g.setColour(juce::Colour::fromRGB(48, 54, 70));
-        g.drawRoundedRectangle(artBox, 6.0f, 1.0f);
+        juce::Path clipPath;
+        clipPath.addRoundedRectangle(artBox, 6.0f);
+        juce::Graphics::ScopedSaveState state(g);
+        g.reduceClipRegion(clipPath);
+        g.drawImage(coverArtImage, artBox, juce::RectanglePlacement::centred | juce::RectanglePlacement::fillDestination);
     }
+    else
+    {
+        juce::ColourGradient artGrad(accent, artBox.getX(), artBox.getY(),
+                                     juce::Colour::fromRGB(20, 24, 34), artBox.getRight(), artBox.getBottom(), false);
+        g.setGradientFill(artGrad);
+        g.fillRoundedRectangle(artBox, 6.0f);
+    }
+
+    g.setColour(juce::Colour::fromRGB(48, 54, 70));
+    g.drawRoundedRectangle(artBox, 6.0f, 1.0f);
+
 }
 
 void DeckComponent::paintOverChildren(juce::Graphics& g)
@@ -1305,12 +1265,6 @@ void DeckComponent::paintOverChildren(juce::Graphics& g)
 
 void DeckComponent::resized()
 {
-    if (wavesMode)
-    {
-        resizedWavesMode();
-        return;
-    }
-
     auto area = getLocalBounds().reduced(8, 6);
 
     // 1. Header (44px)
@@ -1378,9 +1332,9 @@ void DeckComponent::resized()
         if (videoPlayer != nullptr)
         {
             videoPlayer->setBounds(area);
-            videoPlayer->setVisible(!wavesMode && isVideoMode);
+            videoPlayer->setVisible(isVideoMode);
         }
-        updateJogVisibility();
+        jogWheel.setVisible(!isVideoMode);
     }
     else
     {
@@ -1391,9 +1345,9 @@ void DeckComponent::resized()
         if (videoPlayer != nullptr)
         {
             videoPlayer->setBounds(area);
-            videoPlayer->setVisible(!wavesMode && isVideoMode);
+            videoPlayer->setVisible(isVideoMode);
         }
-        updateJogVisibility();
+        jogWheel.setVisible(!isVideoMode);
     }
 
     // Layout Pitch Area
@@ -1409,87 +1363,6 @@ void DeckComponent::resized()
     auto bendArea = pitchArea.removeFromBottom(22).reduced(2, 0);
     pitchBendDownButton.setBounds(bendArea.removeFromLeft(24));
     pitchBendUpButton.setBounds(bendArea.removeFromRight(24));
-
-    pitchArea.removeFromBottom(4);
-    pitchSlider.setBounds(pitchArea);
-}
-
-void DeckComponent::resizedWavesMode()
-{
-    // Modo Ondas: sin cabecera, sin onda interna y sin plato. Los controles
-    // restantes se reacomodan uniformemente en el espacio liberado por el plato.
-    auto area = getLocalBounds().reduced(6, 4);
-
-    // 1. Columna de pitch completa en el borde exterior del deck
-    const int pitchW = 64;
-    juce::Rectangle<int> pitchArea;
-    if (deckIndex == 0)
-    {
-        pitchArea = area.removeFromLeft(pitchW);
-        area.removeFromLeft(8);
-    }
-    else
-    {
-        pitchArea = area.removeFromRight(pitchW);
-        area.removeFromRight(8);
-    }
-
-    // 2. Tres filas de controles compactas (transporte, hot cues, loop + SYNC/KEY):
-    // filas y huecos mínimos para aplastar la parte central, bloque centrado
-    const int totalH = area.getHeight();
-    const int rowH = juce::jlimit(34, 52, (totalH - 16) / 3);
-    const int gap = juce::jlimit(3, 6, (totalH - 3 * rowH) / 4);
-    const int blockH = 3 * rowH + 2 * gap;
-    area.removeFromTop(juce::jmax(0, (totalH - blockH) / 2));
-
-    auto transportRow = area.removeFromTop(rowH);
-    area.removeFromTop(gap);
-    auto hotCueRow = area.removeFromTop(rowH);
-    area.removeFromTop(gap);
-    auto loopRow = area.removeFromTop(rowH);
-
-    // 2a. Transporte: PLAY | CUE (botones centrados verticalmente)
-    int btnH = juce::jmin(rowH, 38);
-    auto transportBtns = transportRow.withSizeKeepingCentre(transportRow.getWidth(), btnH);
-    int playW = (transportBtns.getWidth() - 6) / 2;
-    playButton.setBounds(transportBtns.removeFromLeft(playW).reduced(1, 0));
-    transportBtns.removeFromLeft(6);
-    cueButton.setBounds(transportBtns.reduced(1, 0));
-
-    // 2b. Hot Cues: etiqueta arriba a la izquierda y los 4 pads justo debajo
-    hotCueRowLabel.setBounds(hotCueRow.removeFromTop(12).reduced(2, 0));
-    hotCueRow.removeFromTop(1);
-    int padW = (hotCueRow.getWidth() - 12) / 4;
-    for (int i = 0; i < 4; ++i)
-    {
-        hotCueButtons[static_cast<size_t>(i)].setBounds(hotCueRow.removeFromLeft(padW).reduced(1, 0));
-        if (i < 3)
-            hotCueRow.removeFromLeft(4);
-    }
-
-    // 2c. Loop + SYNC/KEY uniformes en la tercera fila
-    int loopBtnH = juce::jmin(rowH, 34);
-    auto loopBtns = loopRow.withSizeKeepingCentre(loopRow.getWidth(), loopBtnH);
-    loopPrevButton.setBounds(loopBtns.removeFromLeft(loopBtnH).reduced(2, 0));
-    loopBtns.removeFromLeft(6);
-    int beatsW = juce::jmin(90, loopBtns.getWidth() / 4);
-    loopBeatsButton.setBounds(loopBtns.removeFromLeft(beatsW).reduced(2, 0));
-    loopBtns.removeFromLeft(6);
-    loopNextButton.setBounds(loopBtns.removeFromLeft(loopBtnH).reduced(2, 0));
-    loopBtns.removeFromRight(2);
-    int smallW = juce::jmin(72, (loopBtns.getWidth() - 6) / 2);
-    keyLockButton.setBounds(loopBtns.removeFromRight(smallW).reduced(2, 0));
-    loopBtns.removeFromRight(6);
-    syncButton.setBounds(loopBtns.removeFromRight(smallW).reduced(2, 0));
-
-    // 3. Pitch: mismo bloque, con el slider más alto en el hueco del plato
-    pitchBpmLabel.setBounds(pitchArea.removeFromTop(18));
-    pitchDeltaLabel.setBounds(pitchArea.removeFromTop(16));
-    pitchArea.removeFromTop(4);
-
-    auto bendArea = pitchArea.removeFromBottom(22).reduced(2, 0);
-    pitchBendDownButton.setBounds(bendArea.removeFromLeft(28));
-    pitchBendUpButton.setBounds(bendArea.removeFromRight(28));
 
     pitchArea.removeFromBottom(4);
     pitchSlider.setBounds(pitchArea);

@@ -6,137 +6,9 @@
 #include <psapi.h>
 #elif JUCE_LINUX
 #include <unistd.h>
+#include <cstdio>
 #endif
 #include <cmath>
-
-// ========================= ViewSelectorDropdown =========================
-// Panel desplegable propio (estilo ComboBox): lista todas las vistas con la
-// activa marcada. Se muestra como hijo del componente padre para no recortarse
-// contra los 40px de la barra superior, en estado modal: cualquier clic fuera
-// del panel o Esc lo cierran.
-
-class TopBarComponent::ViewSelectorDropdown : public juce::Component
-{
-public:
-    explicit ViewSelectorDropdown(TopBarComponent& o) : owner(o)
-    {
-        setWantsKeyboardFocus(true);
-    }
-
-    void setCurrentMode(ViewMode mode)
-    {
-        currentMode = mode;
-        repaint();
-    }
-
-    void refreshLabels()
-    {
-        for (int i = 0; i < numOptions; ++i)
-            labels[i] = owner.viewModeLabel(modes[i]);
-        repaint();
-    }
-
-    void paint(juce::Graphics& g) override
-    {
-        auto bounds = getLocalBounds().toFloat();
-
-        g.setColour(juce::Colour::fromRGB(22, 24, 32));
-        g.fillRoundedRectangle(bounds.reduced(1.0f), 6.0f);
-        g.setColour(juce::Colour::fromRGB(45, 50, 65));
-        g.drawRoundedRectangle(bounds.reduced(1.0f), 6.0f, 1.0f);
-
-        for (int i = 0; i < numOptions; ++i)
-        {
-            auto row = rowRect(i).toFloat();
-            const bool selected = (modes[i] == currentMode);
-
-            if (i == hoveredRow)
-            {
-                g.setColour(juce::Colour::fromRGB(30, 41, 59));
-                g.fillRoundedRectangle(row.reduced(3.0f, 1.0f), 4.0f);
-            }
-
-            if (selected)
-            {
-                LucideIcons::draw(g, LucideIcons::IconType::Check,
-                                  juce::Rectangle<float>(row.getX() + 10.0f, row.getCentreY() - 6.0f, 12.0f, 12.0f),
-                                  juce::Colour::fromRGB(96, 165, 250), 2.0f);
-            }
-
-            g.setColour(selected ? juce::Colours::white : juce::Colour::fromRGB(142, 149, 165));
-            g.setFont(juce::FontOptions(11.0f, juce::Font::bold));
-            g.drawText(labels[i],
-                       juce::Rectangle<float>(row.getX() + 28.0f, row.getY(), row.getWidth() - 34.0f, row.getHeight()),
-                       juce::Justification::centredLeft, false);
-        }
-    }
-
-    void mouseMove(const juce::MouseEvent& e) override
-    {
-        int newHover = -1;
-        for (int i = 0; i < numOptions; ++i)
-            if (rowRect(i).contains(e.getPosition()))
-            {
-                newHover = i;
-                break;
-            }
-
-        if (newHover != hoveredRow)
-        {
-            hoveredRow = newHover;
-            repaint();
-        }
-    }
-
-    void mouseExit(const juce::MouseEvent&) override
-    {
-        if (hoveredRow != -1)
-        {
-            hoveredRow = -1;
-            repaint();
-        }
-    }
-
-    void mouseUp(const juce::MouseEvent& e) override
-    {
-        for (int i = 0; i < numOptions; ++i)
-            if (rowRect(i).contains(e.getPosition()))
-            {
-                owner.selectViewMode(modes[i]);
-                return;
-            }
-    }
-
-    bool keyPressed(const juce::KeyPress& key) override
-    {
-        if (key == juce::KeyPress::escapeKey)
-        {
-            owner.hideViewSelector();
-            return true;
-        }
-        return false;
-    }
-
-    void inputAttemptWhenModal() override
-    {
-        owner.hideViewSelector();
-    }
-
-private:
-    static constexpr int numOptions = 2;
-    static constexpr int rowHeight = 26;
-    static constexpr ViewMode modes[numOptions] = { ViewMode::TwoDecks, ViewMode::Waves };
-
-    juce::Rectangle<int> rowRect(int index) const
-    {
-        return juce::Rectangle<int>(0, 4 + index * rowHeight, getWidth(), rowHeight);
-    }
-
-    TopBarComponent& owner;
-    ViewMode currentMode { ViewMode::TwoDecks };
-    int hoveredRow { -1 };
-    juce::String labels[numOptions];
-};
 
 TopBarComponent::TopBarComponent()
 {
@@ -191,13 +63,16 @@ TopBarComponent::TopBarComponent()
     ramLabel.setTooltip("Consumo de memoria RAM de DiscNativePro en tiempo real");
     addAndMakeVisible(ramLabel);
 
-    // Selector de vista desplegable: muestra la vista activa y despliega la lista de opciones
-    viewSelectorButton.setIcon(LucideIcons::IconType::ChevronDown, 12.0f);
-    viewSelectorButton.setFontSize(10.5f);
-    viewSelectorButton.setCornerRadius(6.0f);
-    viewSelectorButton.onClick = [this]() { toggleViewSelector(); };
-    addAndMakeVisible(viewSelectorButton);
-    updateViewSelectorAppearance(false);
+    layoutBadge.setIcon(LucideIcons::IconType::CircleDot, 12.0f);
+    layoutBadge.setText("2 Decks");
+    layoutBadge.setFontSize(10.5f);
+    layoutBadge.setCornerRadius(6.0f);
+    layoutBadge.setCustomColours(juce::Colour::fromRGB(22, 24, 32),
+                                juce::Colour::fromRGB(96, 165, 250),
+                                juce::Colour::fromRGB(96, 165, 250),
+                                juce::Colour::fromRGB(37, 40, 51));
+    layoutBadge.setInterceptsMouseClicks(false, false);
+    addAndMakeVisible(layoutBadge);
 
     settingsButton.setIcon(LucideIcons::IconType::Settings, 15.0f);
     settingsButton.setCustomColours(juce::Colour::fromRGB(24, 26, 32),
@@ -251,78 +126,8 @@ void TopBarComponent::refreshLanguage()
     fullscreenButton.setTooltip(LanguageManager::trUtf8("Pantalla Completa", "Fullscreen"));
     recButton.setTooltip(LanguageManager::trUtf8("Grabar Sesión (⌘R / Ctrl+R)", "Record Session (⌘R / Ctrl+R)"));
     fxButton.setTooltip(LanguageManager::trUtf8("Panel de Efectos (FX)", "Effects Panel (FX)"));
-    viewSelectorButton.setText(viewModeLabel(currentViewMode));
-    viewSelectorButton.setTooltip(LanguageManager::trUtf8("Cambiar la vista de la interfaz", "Switch interface view"));
-    if (viewDropdown != nullptr)
-        viewDropdown->refreshLabels();
+    layoutBadge.setText(LanguageManager::trUtf8("2 Bandejas", "2 Decks"));
     updateButton.setTooltip(LanguageManager::trUtf8("Nueva versión disponible — clic para ver", "New version available — click to view"));
-}
-
-void TopBarComponent::setViewMode(ViewMode mode, bool sendCallback)
-{
-    currentViewMode = mode;
-    viewSelectorButton.setText(viewModeLabel(mode));
-
-    if (sendCallback && onViewModeChanged)
-        onViewModeChanged(mode);
-}
-
-void TopBarComponent::selectViewMode(ViewMode mode)
-{
-    hideViewSelector();
-
-    if (mode != currentViewMode)
-        setViewMode(mode, true);
-}
-
-void TopBarComponent::toggleViewSelector()
-{
-    if (viewDropdown != nullptr && viewDropdown->isVisible())
-    {
-        hideViewSelector();
-        return;
-    }
-
-    if (viewDropdown == nullptr)
-        viewDropdown = std::make_unique<ViewSelectorDropdown>(*this);
-
-    if (auto* parent = getParentComponent())
-    {
-        const auto buttonPos = viewSelectorButton.getScreenPosition() - parent->getScreenPosition();
-        viewDropdown->setBounds(buttonPos.x, buttonPos.y + viewSelectorButton.getHeight() + 2,
-                                viewSelectorButton.getWidth(), 8 + 2 * 26);
-        parent->addAndMakeVisible(viewDropdown.get());
-        viewDropdown->setCurrentMode(currentViewMode);
-        viewDropdown->refreshLabels();
-        viewDropdown->toFront(true);
-        viewDropdown->enterModalState(true);
-        updateViewSelectorAppearance(true);
-    }
-}
-
-void TopBarComponent::hideViewSelector()
-{
-    if (viewDropdown != nullptr && viewDropdown->isVisible())
-    {
-        viewDropdown->exitModalState(0);
-        viewDropdown->setVisible(false);
-        updateViewSelectorAppearance(false);
-    }
-}
-
-void TopBarComponent::updateViewSelectorAppearance(bool open)
-{
-    viewSelectorButton.setCustomColours(juce::Colour::fromRGB(22, 24, 32),
-                                        juce::Colours::white,
-                                        juce::Colour::fromRGB(142, 149, 165),
-                                        open ? juce::Colour::fromRGB(96, 165, 250)
-                                             : juce::Colour::fromRGB(37, 40, 51));
-}
-
-juce::String TopBarComponent::viewModeLabel(ViewMode mode) const
-{
-    return mode == ViewMode::Waves ? LanguageManager::trUtf8("Ondas", "Waves")
-                                   : LanguageManager::trUtf8("2 Bandejas", "2 Decks");
 }
 
 void TopBarComponent::setUpdateAvailable(bool available)
@@ -504,10 +309,7 @@ void TopBarComponent::resized()
         updateButton.setBounds(area.removeFromRight(92).reduced(0, 2));
         area.removeFromRight(6);
     }
-    // Selector de vista desplegable (vista activa + lista de opciones)
-    hideViewSelector();
-    auto viewSelector = area.removeFromRight(132);
-    viewSelectorButton.setBounds(viewSelector.reduced(1, 3));
+    layoutBadge.setBounds(area.removeFromRight(95).reduced(0, 3));
     area.removeFromRight(6);
     clockLabel.setBounds(area.removeFromRight(80).reduced(0, 3));
     area.removeFromRight(6);
