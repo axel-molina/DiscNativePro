@@ -67,7 +67,7 @@ void LanguageManager::saveToSettings()
 void LanguageManager::setLanguageSetting(LanguageSetting setting)
 {
     langSetting = setting;
-    Language newLang;
+    Language newLang = currentLang; // sin valor por defecto MSVC avisa C4701
     switch (setting)
     {
         case LanguageSetting::System:  newLang = resolveSystemLanguage(); break;

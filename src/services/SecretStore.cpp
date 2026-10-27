@@ -160,7 +160,9 @@ bool readCredential(const juce::String& account, juce::String& result)
         return false;
     }
 
-    result = juce::String::fromUTF8(static_cast<const char*>(credential->CredentialBlob),
+    // CredentialBlob es LPBYTE (unsigned char*): MSVC exige reinterpret_cast
+    // para pasar a const char* (static_cast solo vale entre tipos relacionados).
+    result = juce::String::fromUTF8(reinterpret_cast<const char*>(credential->CredentialBlob),
                                     static_cast<int>(credential->CredentialBlobSize));
     CredFree(credential);
     return true;
@@ -173,7 +175,9 @@ bool writeCredential(const juce::String& account, const juce::String& value)
     auto blob = value.toRawUTF8();
     CREDENTIALW credential{};
     credential.Type = CRED_TYPE_GENERIC;
-    credential.TargetName = targetName;
+    // CREDENTIALW::TargetName es LPWSTR (no const). El buffer pertenece a
+    // `target`, que sigue vivo hasta el CredWriteW de abajo.
+    credential.TargetName = const_cast<LPWSTR>(targetName);
     credential.CredentialBlobSize = static_cast<DWORD>(value.getNumBytesAsUTF8());
     credential.CredentialBlob = reinterpret_cast<LPBYTE>(const_cast<char*>(blob));
     credential.Persist = CRED_PERSIST_LOCAL_MACHINE;

@@ -676,3 +676,27 @@ Si las dos pistas son audibles y están desfasadas más de ~15 ms, la correcció
 - `cmake --build build` → **0 errores**, 0 warnings nuevos en ficheros tocados.
 - `Info.plist` del bundle Release: `CFBundleShortVersionString` = `CFBundleVersion` = **1.3.1**.
 - Bancos en verde: `run_pause_seek`, `run_seek_isolation`, `run_fader_jump` (12.3 ms máx. en la bandeja audible), `run_phase_real` (0.93 ms), `run_pos_merged` (−0.0 ms).
+
+---
+
+# Fix de build Windows (1.3.1)
+
+## 1. Causa
+El release `v1.3.1` no se publicó: el job **Windows x64** falló al compilar `src/services/SecretStore.cpp` (código exclusivo de Windows, nunca compilado en macOS/Linux):
+
+```
+SecretStore.cpp(163,37): error C2440: 'static_cast': cannot convert from 'LPBYTE' to 'const char *'
+SecretStore.cpp(176,29): error C2440: '=': cannot convert from 'const wchar_t *' to 'LPWSTR'
+```
+
+Introducido en `ff16330` (21-oct, almacén seguro de credenciales). `build-windows.yml` llevaba en rojo desde el push del 27-oct 02:09 (4 ejecuciones), pero no se revisó hasta generar el release.
+
+## 2. Cambios
+- `SecretStore.cpp:163`: `static_cast<const char*>` → `reinterpret_cast<const char*>` (`CredentialBlob` es `LPBYTE`).
+- `SecretStore.cpp:176`: `credential.TargetName = const_cast<LPWSTR>(targetName)` (`CREDENTIALW::TargetName` no es const; el buffer de `target` sigue vivo).
+- `LanguageManager.cpp:70`: `Language newLang = currentLang;` (C4701, variable potencialmente sin inicializar).
+- Auditar el resto del bloque `#if JUCE_WINDOWS`: `CredReadW`/`CredDeleteW` reciben `LPCWSTR`, correctos.
+
+## 3. Verificación
+- Build local (macOS): **0 errores**, 0 warnings nuevos.
+- Verificación real en `build-windows.yml` (push a `main`) antes de mover el tag.
