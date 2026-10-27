@@ -19,12 +19,24 @@ if(NOT DEFINED APP_VERSION OR "${APP_VERSION}" STREQUAL "")
                     OUTPUT_STRIP_TRAILING_WHITESPACE
                     ERROR_QUIET)
     if(GIT_DESCRIBE STREQUAL "")
-        set(APP_VERSION "1.0.0-dev")
+        set(APP_VERSION "${PROJECT_VERSION}")
     else()
         string(REGEX REPLACE "^v" "" APP_VERSION "${GIT_DESCRIBE}")
     endif()
 endif()
+
+string(REGEX MATCH "^[0-9]+(\\.[0-9]+){0,2}" APP_VERSION_NORMALIZED "${APP_VERSION}")
+if(APP_VERSION_NORMALIZED STREQUAL "")
+    set(APP_VERSION_NORMALIZED "${PROJECT_VERSION}")
+endif()
+set(APP_VERSION "${APP_VERSION_NORMALIZED}")
 message(STATUS "DiscNativePro APP_VERSION: ${APP_VERSION}")
+
+# Versión numérica para metadatos del bundle (CFBundleShortVersionString /
+# VS_VERSION_INFO). git describe puede producir "1.3.0-1-g4dda9cb", que no es
+# válido para el bundle, así que se recorta al prefijo X.Y.Z.
+set(APP_BUNDLE_VERSION "${APP_VERSION}")
+message(STATUS "DiscNativePro bundle version: ${APP_BUNDLE_VERSION}")
 
 include(FetchContent)
 
@@ -42,6 +54,7 @@ juce_add_gui_app(DiscNativePro
     PRODUCT_NAME "DiscNativePro"
     COMPANY_NAME "DiscPro"
     BUNDLE_ID "com.discpro.discnativepro"
+    VERSION "${APP_BUNDLE_VERSION}"
     ICON_BIG "${CMAKE_CURRENT_SOURCE_DIR}/assets/icon.png"
 )
 

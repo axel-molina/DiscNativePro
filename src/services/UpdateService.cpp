@@ -75,11 +75,12 @@ ReleaseItem parseReleaseItem(const juce::var& releaseObj)
 
 juce::String UpdateService::getCurrentVersion()
 {
-#ifdef DISCNATIVEPRO_VERSION
+    // Fuente runtime única: la versión la decide JUCEApplication
+    // (getApplicationVersion()), alimentada por APP_VERSION en CMake.
+    if (auto* app = juce::JUCEApplicationBase::getInstance())
+        return app->getApplicationVersion();
+
     return DISCNATIVEPRO_VERSION;
-#else
-    return "1.0.0-dev";
-#endif
 }
 
 int UpdateService::compareVersions(const juce::String& a, const juce::String& b)

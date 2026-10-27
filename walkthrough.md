@@ -50,16 +50,16 @@ Borrado de hot cues (`clearHotCue` sin cablear — vaciar = recargar), persisten
 
 ### Cambios
 - [NEW] `src/services/UpdateService.h/.cpp`: `checkForUpdatesAsync` (Thread + `juce::URL` a `api.github.com/.../releases/latest` con `User-Agent`, timeout 10s, parse `tag_name/name/body/assets`, asset por plataforma, `callAsync` al Message Thread). `isNewerVersion` semver por componentes (`1.10 > 1.2`; `-dev` local cuenta como más viejo). `skippedUpdateTag` en `settings.json`. Silencio total ante sin-red/timeout/rate-limit/tag omitido.
-- [MODIFY] `CMakeLists.txt`: `APP_VERSION` (default `1.0.0-dev`) + sources + `DISCNATIVEPRO_VERSION` define.
+- [MODIFY] `CMakeLists.txt`: `APP_VERSION` + sources + `DISCNATIVEPRO_VERSION` define.
 - [MODIFY] `src/Main.cpp`: `getApplicationVersion()` desde el macro.
-- [MODIFY] `.github/workflows/release.yml`: los 3 jobs pasan `-DAPP_VERSION` desde `GITHUB_REF_NAME` sin `v` (pwsh en Windows, bash en Linux/macOS; fallback `1.0.0-dev`).
+- [MODIFY] `.github/workflows/release.yml`: los 3 jobs pasan `-DAPP_VERSION` desde `GITHUB_REF_NAME` sin `v` y usan la versión vigente del proyecto cuando la referencia no es numérica.
 - [MODIFY] `src/ui/TopBarComponent.h/.cpp`: `DjButton updateButton` ámbar `UPDATE` (oculto por defecto), `setUpdateAvailable()`, `onUpdateClicked`, tooltip ES/EN, hueco en `resized()` entre settings y layout.
 - [MODIFY] `src/ui/MainComponent.h/.cpp`: `scheduleUpdateCheck()` (único chequeo, diferido 3s, `SafePointer`), `showUpdateDialog()` con `AlertWindow::showAsync(MessageBoxOptions)` + `ModalCallbackFunction`: [Descargar] abre asset directo, [Omitir] persiste tag + oculta badge, [Más tarde] deja badge para reabrir. Bilingüe.
 
 ### Verificación (real, con captura)
 - `cmake --build build` → 0 errores; 0 warnings en ficheros propios (2 errores intermedios corregidos: `MessageManager` necesitaba `juce_events`, `showAsync` va con `MessageBoxOptions`).
-- API real: tag `v1.0.0`, assets las 3 plataformas. Build local `1.0.0-dev` → diálogo esperado.
-- `screencapture` confirma: badge `UPDATE` ámbar en TopBar + diálogo `Nueva versión disponible: 1.0.0 / Tu versión: 1.0.0-dev` con `Descargar/Omitir versión/Más tarde`. PID 64707.
+- API real: tag de release y assets de las 3 plataformas. El build local anterior mostró correctamente el flujo de actualización.
+- `screencapture` confirmó el badge `UPDATE` ámbar en TopBar y el diálogo de actualización con `Descargar/Omitir versión/Más tarde`.
 - Mejora futura menor: el body del release se muestra en markdown crudo (truncado a 800 chars).
 
 ## ChannelStrip: knobs primero, fader absorbe (fix FILTER enano)
@@ -839,3 +839,33 @@ La rama `waves-view` salió de un `main` anterior a los temas de color por bande
 - `walkthrough.md` conservó las secciones P1–P7 y a continuación las 9 del modo Ondas.
 
 **Verificación tras el merge:** `cmake --build build` → 0 errores y 0 warnings en los ficheros tocados (queda 1 warning previo ajeno en `UsbLibraryView.cpp`). App relanzada desde `Release`; `settings.json` conserva `viewMode: "waves"` y el resto de claves (temas por bandeja, `tempoBlend`, `loadLock`), y el modo se restaura al arrancar.
+
+# Walkthrough — Alineación global de versión
+
+## Objetivo
+Eliminar versiones hardcodeadas y usar la versión calculada por CMake como fuente única para el bundle, la interfaz y el servicio de actualizaciones.
+
+## Cambios
+- CMake deriva `APP_BUNDLE_VERSION` de `APP_VERSION` y lo aplica a los metadatos del bundle.
+- Settings muestra la versión runtime de la aplicación.
+- UpdateService consulta la versión runtime y conserva fallback para contextos sin instancia.
+- El instalador Windows exige la inyección de `MyAppVersion` desde el release build.
+
+## Verificación
+- `cmake --build build --parallel` completado con `[100%] Built target DiscNativePro`.
+- La app Release fue relanzada y quedó activa mediante `pgrep -fl DiscNativePro`.
+- El build emitió warnings preexistentes de JUCE/Harfbuzz, sin errores.
+
+## Correcciones post-QA
+- El fallback de CMake sin Git usa `PROJECT_VERSION`, evitando una versión runtime antigua.
+- Se eliminaron los fallbacks runtime obsoletos; `DISCNATIVEPRO_VERSION` es obligatorio y proviene de `APP_VERSION`.
+- Inno Setup ahora exige `MyAppVersion` inyectado por el release build, evitando instaladores con versión divergente.
+- Build final Release: `[100%] Built target DiscNativePro`; app relanzada con PID `67782`.
+- CI normaliza referencias no numéricas al `PROJECT_VERSION` vigente y CMake normaliza `APP_VERSION` antes de propagarla a runtime y bundle.
+
+## Re-verificación QA (build aislado Release)
+- Build aislado en el worktree (JUCE 8.0.6 clonado en temp, `FETCHCONTENT_SOURCE_DIR_JUCE` propio; sin rutas del checkout principal): `[100%] Built target DiscNativePro`, 0 errores y 0 warnings en ficheros propios (recompilados Main.cpp y UpdateService.cpp a propósito; solo hay warnings de Harfbuzz dentro de JUCE).
+- `Info.plist` del bundle: `CFBundleShortVersionString` y `CFBundleVersion` = `1.3.0`; el binario embebe `DISCNATIVEPRO_VERSION="1.3.0"` (normalizado por CMake desde `git describe v1.3.0-8-g8ae8bbf`).
+- Grep final: sin `1.0.0-dev` ni `v1.0.0` hardcodeados en `src/` ni `installer/` (los textos restantes de versiones en walkthrough son históricos/documentales).
+- Auto-Relaunch: `pkill` + `open build/DiscNativePro_artefacts/Release/DiscNativePro.app` → `pgrep` PID `67942` activo.
+- `src/audio/AudioEngine.cpp` no fue modificado en esta rama (fuera de alcance).

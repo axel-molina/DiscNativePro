@@ -2,7 +2,7 @@
 ; Produces DiscNativePro-Windows-x64-Setup.exe
 
 #ifndef MyAppVersion
-#define MyAppVersion "1.1.0"
+#error MyAppVersion must be supplied by the release build with /DMyAppVersion=...
 #endif
 
 #define MyAppName "DiscNativePro"
