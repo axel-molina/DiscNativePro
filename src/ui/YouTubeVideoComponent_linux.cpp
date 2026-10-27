@@ -201,7 +201,7 @@ void YouTubeVideoComponent::paint(juce::Graphics& g)
         g.setFont(juce::FontOptions(11.0f, juce::Font::plain));
         g.drawFittedText("Falta WebKitGTK. Instala libwebkit2gtk-4.1-0 y libgtk-3-0 "
                          "(o libwebkit2gtk-4.1-dev si lo compilaste tú).",
-                         area.removeFromTop(46.0f), juce::Justification::centredTop, 3);
+                         area.removeFromTop(46.0f).toNearestInt(), juce::Justification::centredTop, 3);
     }
 }
 
