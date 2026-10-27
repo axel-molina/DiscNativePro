@@ -656,3 +656,23 @@ El seek cae siempre en la slave, que es "la otra canción" respecto al master.
 
 ## 4. Compromiso asumido (Opción A)
 Si las dos pistas son audibles y están desfasadas más de ~15 ms, la corrección es un bend de ±1 %: tarda ~20 s en quitar 100 ms. No hay saltos, pero durante ese rato se oye el flam entre bombos. La alternativa (Opción B) era nudge siempre, también sin saltos, con la misma lentitud.
+
+---
+
+# Versión 1.3.1 — fixes de transporte y alineación de fase
+
+## 1. Contenido
+| Commit | Fix |
+|---|---|
+| `c9702bc` | Arrastre vertical y zoom en la onda central; seek en pausa; aguja viva durante el scratch |
+| `b45b4d1` | Un seek manual desarma la alineación de fase (arrastrar una bandeja ya no mueve la otra) |
+| `c7b7b44` | El controlador de fase nunca salta sobre una bandeja audible; Tempo Blend off de fábrica |
+
+## 2. Cambio de versión
+- `CMakeLists.txt`: `project(DiscNativePro VERSION 1.3.0)` → **1.3.1**.
+- `APP_VERSION` sigue derivándose de `git describe`; con el tag `v1.3.1` en el commit de la versión, el bundle y el binario reportan **1.3.1**.
+
+## 3. Verificación
+- `cmake --build build` → **0 errores**, 0 warnings nuevos en ficheros tocados.
+- `Info.plist` del bundle Release: `CFBundleShortVersionString` = `CFBundleVersion` = **1.3.1**.
+- Bancos en verde: `run_pause_seek`, `run_seek_isolation`, `run_fader_jump` (12.3 ms máx. en la bandeja audible), `run_phase_real` (0.93 ms), `run_pos_merged` (−0.0 ms).
