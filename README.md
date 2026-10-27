@@ -55,6 +55,7 @@
 - **Compilador**: GCC 11+ o Clang 14+ con soporte C++20.
 - **CMake**: Versión 3.22 o superior.
 - **Librerías de Audio & Gráficos**: ALSA (`libasound2-dev`), X11, WebKitGTK (`libwebkit2gtk-4.1-dev`), OpenGL.
+- **Reproducción de vídeo de YouTube**: WebKitGTK **y** los plugins de GStreamer (`gstreamer1.0-gl`, `gstreamer1.0-plugins-good`, `gstreamer1.0-plugins-bad`, `gstreamer1.0-libav`). Sin ellos el audio de YouTube puede sonar pero la imagen queda en blanco.
 
 ---
 
@@ -152,6 +153,22 @@ Tienes dos alternativas para obtener el binario ejecutable en Linux:
    ./DiscNativePro
    ```
 
+> **Dependencias de runtime del binario ya compilado.** El `.tar.gz` no las incluye:
+> ```bash
+> sudo apt-get install -y libwebkit2gtk-4.1-0 libgtk-3-0 \
+>   gstreamer1.0-gl gstreamer1.0-plugins-good gstreamer1.0-plugins-bad gstreamer1.0-libav
+> ```
+> `libwebkit2gtk-4.1-0` y `libgtk-3-0` son **obligatorias**: sin ellas la app arranca pero el reproductor de YouTube queda en blanco (y ahora muestra un aviso en su lugar). Los cuatro paquetes de GStreamer son los que decodifican y pintan el vídeo de YouTube; sin ellos suele pasar que **el audio suena y la imagen queda en blanco**.
+>
+> **Si el vídeo sale en blanco pero el audio suena**, comprueba primero los plugins:
+> ```bash
+> gst-inspect-1.0 vp9dec avdec_h264 glimagesink
+> ```
+> La app ya lanza WebKit en modo software (`WEBKIT_DISABLE_DMABUF_RENDERER=1` y `WEBKIT_DISABLE_COMPOSITING_MODE=1`) para evitar el fallo de compositing en NVIDIA/XWayland. Si tu GPU funciona bien y quieres aceleración, expórtalos a `0` antes de abrir la app:
+> ```bash
+> WEBKIT_DISABLE_DMABUF_RENDERER=0 WEBKIT_DISABLE_COMPOSITING_MODE=0 ./DiscNativePro
+> ```
+
 ---
 
 ### Opción B: Compilación Manual en Linux (Ubuntu / Debian / Pop!_OS)
@@ -165,7 +182,8 @@ sudo apt-get install -y \
   libx11-dev libxcomposite-dev libxcursor-dev libxext-dev \
   libxinerama-dev libxrandr-dev libxrender-dev \
   libglu1-mesa-dev mesa-common-dev \
-  libwebkit2gtk-4.1-dev libgtk-3-dev libcurl4-openssl-dev
+  libwebkit2gtk-4.1-dev libgtk-3-dev libcurl4-openssl-dev \
+  gstreamer1.0-gl gstreamer1.0-plugins-good gstreamer1.0-plugins-bad gstreamer1.0-libav
 ```
 
 #### 2. Clonar y configurar con CMake

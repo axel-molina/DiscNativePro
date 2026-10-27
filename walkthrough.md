@@ -700,3 +700,23 @@ Introducido en `ff16330` (21-oct, almacén seguro de credenciales). `build-windo
 ## 3. Verificación
 - Build local (macOS): **0 errores**, 0 warnings nuevos.
 - Verificación real en `build-windows.yml` (push a `main`) antes de mover el tag.
+
+---
+
+# Feedback Linux: vídeo de YouTube en blanco (audio sí)
+
+## 1. Diagnóstico
+El build de Linux compila; el fallo es de **runtime**. En modo vídeo el audio sale del webview (`MainComponent.cpp:228-241` → `setVideoVolume`), así que si suena, WebKit cargó y la página vive: lo que no llega a pintarse es la superficie. Tres causas posibles, por probabilidad:
+
+1. **Faltan plugins de GStreamer** (`gstreamer1.0-gl`, `plugins-bad`, `libav`): WebKitGTK no crea el *video sink* ni decodifica VP9/H.264. El audio (Opus, en `plugins-base`) suena igual. Es la firma exacta del reporte.
+2. **DMA-BUF renderer / compositing de WebKitGTK** (NVIDIA propietario, XWayland, VMs): la página existe y suena pero la superficie sale blanca. Bug clásico de Tauri/Wails en Linux.
+3. **JUCE 8.0.6 abre WebKit con el nombre sin versión** (`juce_WebBrowserComponent_linux.cpp:402-411`: `libwebkit2gtk-4.1.so`, `libgtk-3.so`). Ese symlink solo lo pone el paquete `-dev`; con solo runtime todos los `dlopen` fallan y el componente queda mudo, en blanco y sin ningún error (juce-framework/JUCE#1730). Esta daría blanco **y tampoco audio**, así que probablemente no es, pero conviene detectarla.
+
+## 2. Cambios
+- `src/Main.cpp`: `configureWebKitForLinux()` en `initialise()`, **antes** de crear la ventana. Define `WEBKIT_DISABLE_DMABUF_RENDERER=1` y `WEBKIT_DISABLE_COMPOSITING_MODE=1` con `overwrite=0` (si el usuario ya los puso, se respeta; así una GPU que funcione puede pedir aceleración con `...=0`). WebKit lee su entorno al arrancar el proceso web, que es un fork nuestro, por eso va aquí y no dentro del componente.
+- `src/ui/YouTubeVideoComponent_linux.cpp`: `webKitRuntimeAvailable()` reproduce con `dlopen` la misma comprobación que hace JUCE. Si falla, no se crea el `WebBrowserComponent` y `paint()` dibuja el aviso *"Reproductor web no disponible — falta WebKitGTK…"* en vez de un rectángulo blanco mudo.
+- `README.md`: dependencias de **runtime** del `.tar.gz` (`libwebkit2gtk-4.1-0`, `libgtk-3-0`, los cuatro paquetes de GStreamer), cómo comprobar los plugins con `gst-inspect-1.0` y cómo forzar aceleración por GPU.
+
+## 3. Verificación
+- `cmake --build build` (macOS): **0 errores**, 0 warnings. El bloque Linux no se compila en macOS: la verificación real es `build-linux.yml`, que corre en cada push a `main`.
+- Pendiente de confirmación del usuario: si el aviso nuevo aparece, es la causa 3; si sigue en blanco con audio, es la 1 o la 2 (los `gst-inspect-1.0` del README lo distinguen).

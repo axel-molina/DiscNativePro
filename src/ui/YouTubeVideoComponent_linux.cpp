@@ -2,17 +2,54 @@
 #include "YouTubeEmbedHtml.h"
 #include "LucideIcons.h"
 #include <juce_gui_extra/juce_gui_extra.h>
+#include <dlfcn.h>
 
 #if JUCE_LINUX
+
+namespace
+{
+    // JUCE 8.0.6 abre las librerías de WebKit con el nombre SIN versión
+    // ("libwebkit2gtk-4.1.so", "libgtk-3.so"). Ese symlink solo lo instala el
+    // paquete -dev: en una máquina con solo el runtime (libwebkit2gtk-4.1-0)
+    // todos los dlopen fallan, WebBrowserComponent se queda mudo y el área de
+    // vídeo aparece blanca sin ningún error. (juce-framework/JUCE#1730.)
+    //
+    // Reproducimos la misma comprobación para poder decírselo al usuario en vez
+    // de dejarle un rectángulo blanco.
+    //
+    // ponytail: no hacemos dlclose; los handles quedan abiertos hasta salir.
+    // Es una comprobación única y, si WebKit está, JUCE lo carga igualmente.
+    bool webKitRuntimeAvailable()
+    {
+        auto canOpen = [](const char* name)
+        {
+            return ::dlopen(name, RTLD_LAZY | RTLD_LOCAL) != nullptr;
+        };
+
+        const bool gtk = canOpen("libgtk-3.so") && canOpen("libglib-2.0.so");
+
+        const bool webkit41 = canOpen("libwebkit2gtk-4.1.so")
+                           && canOpen("libjavascriptcoregtk-4.1.so")
+                           && canOpen("libsoup-3.0.so");
+
+        const bool webkit40 = canOpen("libwebkit2gtk-4.0.so")
+                           && canOpen("libjavascriptcoregtk-4.0.so")
+                           && canOpen("libsoup-2.4.so");
+
+        return gtk && (webkit41 || webkit40);
+    }
+}
 
 struct YouTubeVideoComponent::Pimpl
 {
     std::unique_ptr<juce::WebBrowserComponent> browser;
+    const bool webKitAvailable = webKitRuntimeAvailable();
 
     Pimpl()
     {
 #if JUCE_WEB_BROWSER
-        browser = std::make_unique<juce::WebBrowserComponent>();
+        if (webKitAvailable)
+            browser = std::make_unique<juce::WebBrowserComponent>();
 #endif
     }
 
@@ -147,6 +184,25 @@ void YouTubeVideoComponent::paint(juce::Graphics& g)
     g.setFont(juce::FontOptions(9.5f, juce::Font::plain));
     g.drawText(volPercent > 0 ? juce::String::formatted("VOL %d%%", volPercent) : "MUTED",
                volRect, juce::Justification::centred, false);
+
+    // Sin WebKit cargado no hay webview: en vez de dejar el hueco en blanco,
+    // explicamos qué falta. El audio sigue sonando porque va por el deck nativo
+    // solo en modo audio; en modo vídeo aquí no habría ni imagen ni sonido.
+    if (!pimpl->webKitAvailable)
+    {
+        auto area = bounds.reduced(14.0f, 10.0f);
+
+        g.setColour(juce::Colour::fromRGB(239, 68, 68));
+        g.setFont(juce::FontOptions(13.0f, juce::Font::bold));
+        g.drawText("Reproductor web no disponible",
+                   area.removeFromTop(22.0f), juce::Justification::centred, false);
+
+        g.setColour(juce::Colour::fromRGB(160, 166, 180));
+        g.setFont(juce::FontOptions(11.0f, juce::Font::plain));
+        g.drawFittedText("Falta WebKitGTK. Instala libwebkit2gtk-4.1-0 y libgtk-3-0 "
+                         "(o libwebkit2gtk-4.1-dev si lo compilaste tú).",
+                         area.removeFromTop(46.0f), juce::Justification::centredTop, 3);
+    }
 }
 
 void YouTubeVideoComponent::resized()
