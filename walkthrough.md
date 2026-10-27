@@ -584,3 +584,41 @@ Tres problemas encadenados:
 ## 4. Pendiente
 - Prueba manual del gesto (clic, arrastre en play y en pausa, rueda para zoom) y del plato girando durante el scratch.
 - El zoom no se persiste (decisión: solo memoria, por sesión).
+
+---
+
+# Walkthrough — Aislamiento de bandejas en la onda vertical (Tempo Blend ON)
+
+## 1. Causa
+El arrastre ya elegía bandeja por mitad (`deckForX`), pero el **controlador de fase** del motor deshacía la selección:
+
+1. Arrastrar la onda izquierda hace `deck1.setPosition(...)` → la fase entre decks salta ~2 s.
+2. `AudioEngine::processPhaseAlign()` tenía un **auto-rearme por deriva**: si `|error| > 25 ms` estando enclavado, pasaba a `Settle` → `Measure`.
+3. Con `|error| > 15 ms` (`phaseReanchorSec`) ejecutaba `slaveDeck.seekRelative(delta)` → **la otra bandeja saltaba** (~135 ms cuantizados al beat, medido).
+
+Resultado: si arrastrabas la master, la otra se movía contigo (movía ambas); si arrastrabas la slave, el controlador te la devolvía (parecía que no distinguía). El único detector de intervención humana existente comparaba `getPitchBend()`: detectaba tocar el pitch, no mover el transporte.
+
+## 2. Cambios
+### `src/audio/DeckPlayer.h/.cpp`
+- `std::atomic<juce::uint32> userSeekSerial` + `getUserSeekSerial()`: contador monótono de seeks **pedidos por el usuario**.
+- `setPosition(double, bool userInitiated = true)` y `seekRelative(double, bool userInitiated = true)`: solo incrementan el serial si el salto es humano. El controlador de fase pasa `false`; las ondas, el overview y el MIDI mantienen el valor por defecto.
+
+### `src/audio/AudioEngine.h/.cpp`
+- `std::atomic<bool> phaseUserOverride` + `lastUserSeek1/lastUserSeek2`.
+- En `processPhaseAlign()`, tras resolver master/slave (antes del `return` de `isPlaying`): si cambió algún serial → `setPitchBend(0)` en la slave, limpiar nudge, `Idle`, `armedFlag = false`, `seekCount = 0`, `phaseUserOverride = true` y salir.
+- El bloque de rearme por deriva añade `&& !phaseUserOverride.load()`.
+- `phaseUserOverride` se limpia en `armPhaseAlign()` (cruce del crossfader al centro) y en `setTempoBlend(true)`.
+
+Semántica: **un seek manual manda**. El Tempo Blend sigue igualando el BPM, pero la alineación de fase no se reanuda hasta el próximo cruce del crossfader al centro (o hasta reactivar Tempo Blend).
+
+## 3. Verificación
+- `cmake --build build` → **0 errores**, 0 warnings en los ficheros tocados (los 3 warnings de `AsyncFolderScanner.cpp` son previos y ajenos a este cambio).
+- Banco nuevo `run_seek_isolation` (pista real, ambas sonando, Tempo Blend ON, crossfader al centro):
+  - seek +2.0 s en **deck 1** → deck 1 en objetivo (±6 ms) y deck 2 **+6 ms** (sin salto);
+  - seek +1.5 s en **deck 2** (la slave) → deck 2 se queda donde se puso (±9 ms) y deck 1 **−9 ms**;
+  - tras rearmar por crossfader el controlador vuelve a estar vivo.
+- **Prueba negativa**: con el guardián del rearme desactivado, el mismo banco da **+135 ms** de salto en deck 2 (test 1) y **+366 ms** (test 2) → el banco detecta la regresión.
+- Regresión: `run_phase_real` converge a **0.93 ms** con bend liberado; `run_pause_seek` (30.000 s en pausa, scratch +1287/−543 ms) y `run_pos_merged` (invariante −0.0 ms) siguen en verde.
+
+## 4. Pendiente
+- Prueba manual: con las dos pistas sonando y Tempo Blend ON, arrastrar la mitad izquierda mueve **solo** el disco izquierdo y viceversa.

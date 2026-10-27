@@ -563,7 +563,7 @@ void DeckPlayer::setCuePosition()
     }
 }
 
-void DeckPlayer::setPosition(double seconds)
+void DeckPlayer::setPosition(double seconds, bool userInitiated)
 {
     if (currentSampleRate <= 0.0)
         return;
@@ -573,6 +573,8 @@ void DeckPlayer::setPosition(double seconds)
         target = juce::jlimit(0.0, dur, target);
     else
         target = juce::jmax(0.0, target);
+    if (userInitiated)
+        userSeekSerial.fetch_add(1);
     seekTargetSec.store(target);
     seekPending.store(true);
 }
@@ -637,7 +639,7 @@ double DeckPlayer::getBeatPhase() const
     return phase / interval;
 }
 
-void DeckPlayer::seekRelative(double deltaSeconds)
+void DeckPlayer::seekRelative(double deltaSeconds, bool userInitiated)
 {
     double cur = getPosition();
     double target = cur + deltaSeconds;
@@ -646,7 +648,7 @@ void DeckPlayer::seekRelative(double deltaSeconds)
         target = juce::jlimit(0.0, maxDur, target);
     else
         target = juce::jmax(0.0, target);
-    setPosition(target);
+    setPosition(target, userInitiated);
 }
 
 void DeckPlayer::setPitchPercent(float percent)

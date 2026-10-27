@@ -37,7 +37,10 @@ public:
     bool isLoaded() const  { return loaded.load(); }
 
     // Navigation & position
-    void setPosition(double seconds);
+    // userInitiated = true cuando el salto lo pide una persona (onda, MIDI,
+    // jog). El controlador de fase usa false: sus seeks no deben desarmarlo.
+    void setPosition(double seconds, bool userInitiated = true);
+    juce::uint32 getUserSeekSerial() const { return userSeekSerial.load(); }
     double getPosition() const;
     double getLengthInSeconds() const { return trackDurationSeconds.load(); }
 
@@ -86,7 +89,7 @@ public:
     // BPM & Beatgrid
     double getBpm() const         { return currentBpm.load(); }
     double getOriginalBpm() const { return originalBpm.load(); }
-    void seekRelative(double deltaSeconds);
+    void seekRelative(double deltaSeconds, bool userInitiated = true);
 
     // Waveform peak data (3 frequency bands)
     const std::vector<float>& getPeaksLow() const  { return peaksLow; }
@@ -134,6 +137,9 @@ private:
     std::atomic<bool> seekPending { false };
     std::atomic<double> seekTargetSec { 0.0 };
     std::atomic<juce::int64> playbackPosSamples { 0 };
+    // Contador monótono de seeks pedidos por el usuario (nunca por el
+    // controlador de fase). AudioEngine lo compara para desarmar la alineación.
+    std::atomic<juce::uint32> userSeekSerial { 0 };
 
     void applyPendingSeek(double targetSec);
 

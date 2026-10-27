@@ -149,6 +149,13 @@ private:
     bool phaseNudgeActiveFlag { false };
     float phaseAppliedNudgeVal { 0.0f }; // ultimo bend escrito por el controlador
 
+    // Un seek manual manda: desarma la alineacion hasta el proximo armPhaseAlign
+    // (cruce del crossfader al centro) o hasta reactivar Tempo Blend. Sin esto el
+    // rearme por deriva volvia a alinear y arrastraba la otra bandeja al seek.
+    std::atomic<bool> phaseUserOverride { false };
+    juce::uint32 lastUserSeek1 { 0 };
+    juce::uint32 lastUserSeek2 { 0 };
+
     void processPhaseAlign();
 
     std::atomic<bool> isShuttingDown { false };

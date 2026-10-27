@@ -432,6 +432,7 @@ void AudioEngine::setTempoBlend(bool active)
 
     if (active)
     {
+        phaseUserOverride.store(false); // reactivar el blend devuelve el mando
         applyTempoBlend(currentCrossfaderVal.load());
     }
 }
@@ -578,6 +579,7 @@ void AudioEngine::armPhaseAlign(int masterDeckIndex)
     phaseAlignArmedFlag = true;
     phaseNudgeActiveFlag = false;
     phaseAppliedNudgeVal = 0.0f;
+    phaseUserOverride.store(false); // el cruce al centro vuelve a ceder el mando
 }
 
 void AudioEngine::processPhaseAlign()
@@ -601,6 +603,29 @@ void AudioEngine::processPhaseAlign()
     const int slaveIdx  = masterIdx == 0 ? 1 : 0;
     auto& masterDeck = getDeck(masterIdx);
     auto& slaveDeck  = getDeck(slaveIdx);
+
+    // Intervencion manual del transporte: si el usuario mueve una bandeja (onda,
+    // MIDI, jog), el controlador se desarma. Antes el rearme por deriva (>25 ms)
+    // volvia a alinear y seekeaba la OTRA bandeja al mismo instante, asi que un
+    // arrastre en la mitad izquierda movia las dos.
+    const juce::uint32 s1 = deck1.getUserSeekSerial();
+    const juce::uint32 s2 = deck2.getUserSeekSerial();
+    if (s1 != lastUserSeek1 || s2 != lastUserSeek2)
+    {
+        lastUserSeek1 = s1;
+        lastUserSeek2 = s2;
+        if (phaseNudgeActiveFlag || std::abs(slaveDeck.getPitchBend()) > 1e-6f)
+        {
+            slaveDeck.setPitchBend(0.0f);
+            phaseAppliedNudgeVal = 0.0f;
+            phaseNudgeActiveFlag = false;
+        }
+        phaseAlignState = PhaseAlignState::Idle;
+        phaseAlignArmedFlag = false;
+        phaseAlignSeekCount = 0;
+        phaseUserOverride.store(true);
+        return;
+    }
 
     if (!masterDeck.isPlaying() || !slaveDeck.isPlaying()) return;
     if (masterDeck.isScratching() || slaveDeck.isScratching()) return;
@@ -627,8 +652,11 @@ void AudioEngine::processPhaseAlign()
     const double error        = wrappedPhaseError(masterPhase, slavePhase, beatInterval);
     const double errorAbs     = std::abs(error);
 
-    // Auto re-armado si la deriva supera ~25 ms estando enclavado (Idle)
-    if (phaseAlignState == PhaseAlignState::Idle && phaseAlignArmedFlag == false)
+    // Auto re-armado si la deriva supera ~25 ms estando enclavado (Idle).
+    // Desactivado mientras el usuario mande (seek manual): su intervencion no
+    // se revierte sola.
+    if (phaseAlignState == PhaseAlignState::Idle && phaseAlignArmedFlag == false
+        && !phaseUserOverride.load())
     {
         if (errorAbs > phaseDriftRearmSec)
         {
@@ -698,7 +726,7 @@ void AudioEngine::processPhaseAlign()
             }
             const double delta = quantizedSeekDelta(error, beatInterval);
             if (delta > 0.0)
-                slaveDeck.seekRelative(delta);
+                slaveDeck.seekRelative(delta, false); // seek del controlador, no del usuario
             ++phaseAlignSeekCount;
             phaseAlignState = PhaseAlignState::Settle;
             phaseAlignSettleBlocks = 0;
