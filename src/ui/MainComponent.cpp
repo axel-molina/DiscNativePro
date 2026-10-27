@@ -17,7 +17,9 @@ MainComponent::MainComponent()
       deck1(0, audioEngine.getDeck(0), audioEngine, juce::Colour::fromRGB(0, 180, 216)),
       deck2(1, audioEngine.getDeck(1), audioEngine, juce::Colour::fromRGB(148, 163, 184)),
       mixer(audioEngine),
-      library(audioEngine.getFormatManager())
+      library(audioEngine.getFormatManager()),
+      wavesView(audioEngine.getDeck(0), juce::Colour::fromRGB(0, 180, 216),
+                audioEngine.getDeck(1), juce::Colour::fromRGB(148, 163, 184))
 {
     tooltipWindow = std::make_unique<juce::TooltipWindow>(this, 700);
     // Inicialización pesada diferida a un tick del message loop: la ventana ya
@@ -97,6 +99,18 @@ MainComponent::MainComponent()
     topBar.onUpdateClicked = [this]() {
         openSettings(9);
     };
+
+    // Selector de vista del TopBar: 2 Bandejas (default) u Ondas, persistente
+    // en settings.json y conmutable en caliente sin reiniciar.
+    currentViewMode = loadViewModeFromSettings();
+    topBar.setViewMode(currentViewMode, false);
+    topBar.onViewModeChanged = [this](TopBarComponent::ViewMode mode) {
+        setViewMode(mode);
+    };
+
+    addChildComponent(wavesView);
+    wavesView.setDeckDropTargets(&deck1, &deck2);
+    applyViewMode();
 
     addChildComponent(fxPanel);
     fxPanel.setVisible(isFxPanelVisible);
@@ -222,6 +236,12 @@ void MainComponent::timerCallback()
     if (audioEngine.isRecording())
     {
         topBar.setRecordingState(true, audioEngine.getRecordingDuration());
+    }
+
+    // Modo Ondas: reflejar los datos de cada deck en su tira a todo el ancho
+    if (currentViewMode == TopBarComponent::ViewMode::Waves)
+    {
+        wavesView.updateFromDecks(deck1, deck2);
     }
 
     // Video volume mixing: sync channel faders and crossfader to YouTube video players
@@ -380,6 +400,60 @@ void MainComponent::paint(juce::Graphics& g)
     g.fillAll(juce::Colour::fromRGB(12, 13, 16));
 }
 
+void MainComponent::setViewMode(TopBarComponent::ViewMode mode)
+{
+    if (currentViewMode == mode)
+        return;
+
+    currentViewMode = mode;
+    topBar.setViewMode(mode, false);
+    saveViewModeToSettings(mode);
+    applyViewMode();
+    resized();
+}
+
+void MainComponent::applyViewMode()
+{
+    const bool waves = (currentViewMode == TopBarComponent::ViewMode::Waves);
+    deck1.setWavesMode(waves);
+    deck2.setWavesMode(waves);
+    mixer.setWavesMode(waves);
+    wavesView.setVisible(waves);
+}
+
+TopBarComponent::ViewMode MainComponent::loadViewModeFromSettings()
+{
+    auto file = AudioEngine::getSettingsFile();
+    if (file.existsAsFile())
+    {
+        auto json = juce::JSON::parse(file);
+        if (json.isObject() && json.hasProperty("viewMode"))
+        {
+            auto val = json["viewMode"].toString().trim().toLowerCase();
+            if (val == "waves" || val == "ondas")
+                return TopBarComponent::ViewMode::Waves;
+        }
+    }
+    return TopBarComponent::ViewMode::TwoDecks;
+}
+
+void MainComponent::saveViewModeToSettings(TopBarComponent::ViewMode mode)
+{
+    auto file = AudioEngine::getSettingsFile();
+    juce::var json;
+    if (file.existsAsFile())
+        json = juce::JSON::parse(file);
+    if (!json.isObject())
+        json = juce::var(new juce::DynamicObject());
+
+    if (auto* obj = json.getDynamicObject())
+    {
+        obj->setProperty("viewMode",
+                         mode == TopBarComponent::ViewMode::Waves ? "waves" : "decks");
+    }
+    file.replaceWithText(juce::JSON::toString(json));
+}
+
 void MainComponent::resized()
 {
     auto area = getLocalBounds();
@@ -387,8 +461,25 @@ void MainComponent::resized()
     // 1. Top Bar header (40px)
     topBar.setBounds(area.removeFromTop(40));
 
+    const bool waves = (currentViewMode == TopBarComponent::ViewMode::Waves);
+
     float totalRemainingHeight = static_cast<float>(area.getHeight());
-    int libHeight = juce::jlimit(190, 480, static_cast<int>(totalRemainingHeight * (isFxPanelVisible ? 0.35f : 0.41f)));
+    // Modo Ondas: reparto explícito — franjas de onda arriba, fila central
+    // COMPACTA (230px) y todo lo demás para la librería (más pistas visibles).
+    int wavesBandHeight = 0;
+    int libHeight;
+    if (waves)
+    {
+        const int chrome = (isFxPanelVisible ? 54 : 0) + (isSamplerPanelVisible ? 76 : 0);
+        const int controlsH = 230;
+        const int remain = juce::jmax(320, static_cast<int>(totalRemainingHeight) - chrome - controlsH - 8);
+        wavesBandHeight = juce::jlimit(150, 220, remain / 2);
+        libHeight = juce::jlimit(150, 480, remain - wavesBandHeight);
+    }
+    else
+    {
+        libHeight = juce::jlimit(190, 480, static_cast<int>(totalRemainingHeight * (isFxPanelVisible ? 0.35f : 0.41f)));
+    }
     library.setBounds(area.removeFromBottom(libHeight));
 
     // 3. Optional FX Strip (54px) directly below Decks/Mixer and above Library (djay Pro style)
@@ -403,10 +494,18 @@ void MainComponent::resized()
         samplerPanel.setBounds(area.removeFromBottom(76).reduced(6, 2));
     }
 
-    // 4. Center workspace: Deck 1 (left), Center Mixer, Deck 2 (right)
+    // 4. Center workspace
     area.reduce(6, 4);
-    int mixerWidth = 430; // 96px Ch1 + 238px Center + 96px Ch2
+    int mixerWidth = waves ? 382 : 430; // Ondas: 72px Ch1 + 238px Center + 72px Ch2
     int deckWidth = (area.getWidth() - mixerWidth - 12) / 2;
+
+    if (waves)
+    {
+        // 4a. Modo Ondas: dos ondas apiladas a todo el ancho con los datos de
+        // cada deck; debajo, la fila central compacta (deck1 | mixer | deck2).
+        wavesView.setBounds(area.removeFromTop(wavesBandHeight));
+        area.removeFromTop(8);
+    }
 
     deck1.setBounds(area.removeFromLeft(deckWidth));
     area.removeFromLeft(6);

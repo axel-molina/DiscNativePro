@@ -14,6 +14,29 @@ MixerComponent::~MixerComponent()
 {
 }
 
+void MixerComponent::setWavesMode(bool waves)
+{
+    if (wavesMode == waves)
+        return;
+
+    wavesMode = waves;
+
+    if (waves)
+    {
+        centerColumn.setWavesMode(true, &channel1.getVolumeFader(), &channel2.getVolumeFader());
+        channel1.setWavesMode(true);
+        channel2.setWavesMode(true);
+    }
+    else
+    {
+        centerColumn.setWavesMode(false, nullptr, nullptr);
+        channel1.setWavesMode(false);
+        channel2.setWavesMode(false);
+    }
+
+    resized();
+}
+
 void MixerComponent::paint(juce::Graphics& g)
 {
     g.fillAll(juce::Colour::fromRGB(12, 13, 18));
@@ -23,7 +46,8 @@ void MixerComponent::resized()
 {
     auto area = getLocalBounds();
 
-    int stripWidth = 96;
+    // Ondas: columnas más estrechas (solo EQ, sin VU ni fader)
+    int stripWidth = wavesMode ? 72 : 96;
     channel1.setBounds(area.removeFromLeft(stripWidth));
     channel2.setBounds(area.removeFromRight(stripWidth));
     centerColumn.setBounds(area);
