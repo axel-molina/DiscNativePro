@@ -5,6 +5,7 @@
 VerticalWaveform::VerticalWaveform(DeckPlayer& p1, DeckPlayer& p2)
     : deck1(p1), deck2(p2)
 {
+    setMouseCursor(juce::MouseCursor::UpDownResizeCursor);
     startTimerHz(60);
 }
 
@@ -15,10 +16,78 @@ VerticalWaveform::~VerticalWaveform()
 
 void VerticalWaveform::timerCallback()
 {
-    if (deck1.isPlaying() || deck2.isPlaying())
+    const double p1 = deck1.getPosition();
+    const double p2 = deck2.getPosition();
+    // Tambien repinta con el transporte parado: un seek en pausa mueve la
+    // aguja sin que ningun deck este sonando.
+    if (deck1.isPlaying() || deck2.isPlaying()
+        || std::abs(p1 - lastPos1) > 1e-4
+        || std::abs(p2 - lastPos2) > 1e-4)
     {
+        lastPos1 = p1;
+        lastPos2 = p2;
         repaint();
     }
+}
+
+DeckPlayer& VerticalWaveform::deckForX(float x) const
+{
+    return x < (float)getWidth() * 0.5f ? deck1 : deck2;
+}
+
+double VerticalWaveform::timeAtY(const DeckPlayer& player, float y) const
+{
+    const float centerY = std::floor((float)getHeight() * 0.5f);
+    // Misma geometria que renderDeckHalf(): arriba = futuro.
+    return player.getPosition() + (double)(centerY - y) / (double)pixelsPerSecond;
+}
+
+void VerticalWaveform::applyDragPosition(const juce::MouseEvent& e)
+{
+    auto& d = (dragDeck == 0) ? deck1 : deck2;
+    const double dur = d.getLengthInSeconds();
+    if (dur <= 0.0)
+        return;
+
+    const double delta = (double)(dragAnchorY - e.position.y) / (double)pixelsPerSecond;
+    d.setPosition(juce::jlimit(0.0, dur, dragAnchorPos + delta));
+    repaint();
+}
+
+void VerticalWaveform::mouseDown(const juce::MouseEvent& e)
+{
+    auto& d = deckForX(e.position.x);
+    if (!d.isLoaded() || d.getLengthInSeconds() <= 0.0)
+    {
+        dragDeck = -1;
+        return;
+    }
+
+    dragDeck = (&d == &deck1) ? 0 : 1;
+    // Clic simple: salto al instante que hay bajo el puntero.
+    const double dur = d.getLengthInSeconds();
+    dragAnchorPos = juce::jlimit(0.0, dur, timeAtY(d, e.position.y));
+    dragAnchorY = e.position.y;
+    d.setPosition(dragAnchorPos);
+    repaint();
+}
+
+void VerticalWaveform::mouseDrag(const juce::MouseEvent& e)
+{
+    if (dragDeck < 0)
+        return;
+    applyDragPosition(e);
+}
+
+void VerticalWaveform::mouseWheelMove(const juce::MouseEvent&, const juce::MouseWheelDetails& wheel)
+{
+    // Zoom continuo alrededor de la aguja (centro). Solo en memoria.
+    const float factor = std::pow(2.0f, wheel.deltaY * 2.0f);
+    const float nuevo = juce::jlimit(20.0f, 300.0f, pixelsPerSecond * factor);
+    if (std::abs(nuevo - pixelsPerSecond) < 0.01f)
+        return;
+    pixelsPerSecond = nuevo;
+    repaint();
 }
 
 void VerticalWaveform::renderDeckHalf(juce::Graphics& g,
@@ -51,7 +120,7 @@ void VerticalWaveform::renderDeckHalf(juce::Graphics& g,
     if (bpm <= 20.0) bpm = 124.0;
     double beatInterval = 60.0 / bpm;
 
-    const float pixelsPerSecond = 70.0f; // ventana ~7-8 s: contexto + scroll
+    // Zoom de la vista (rueda del raton). Ventana por defecto ~7-8 s.
     float maxHalfAmp = deckWidth * 0.44f;
     float barHeight = 2.0f;
     float rowStep = 2.0f; // filas densas estilo referencia (djay): 1-2 px

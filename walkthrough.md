@@ -548,3 +548,39 @@ Todos los merges con `--no-ff` para conservar la historia por fase. Tag `pre-mer
 - Prueba de escucha manual: cruce de zona con dos temas reales (el controlador tarda ~23 s por diseño en corregir desfases de 1–15 ms) y autoplay desde Finder/YouTube.
 - **Modo Ondas fuera de `main`**: se revirtió el merge `b84d18c` (`git revert -m 1`) porque la vista de ondas aún no está probada a fondo. La rama `axel-molina/waves-view` queda intacta; al re-mergear habrá que revertir antes este revert.
 - Deuda documentada en cada fase (lock del callback de audio, pre-roll dentro del callback, `ScrollingWaveform` con grid fijo a 124 BPM).
+
+---
+
+# Walkthrough — Arrastre y zoom en la onda vertical central
+
+## 1. Causa
+Tres problemas encadenados:
+1. **`VerticalWaveform` no tenía handlers de ratón**: el componente central (mitad izquierda = Deck 1, derecha = Deck 2) solo pintaba a 60 Hz. Arrastrar sobre él no podía hacer nada, en play ni en pausa.
+2. **Seek en pausa roto** (regresión de P3): `setPosition()` dejaba un `seekPending` que aplicaba el callback de audio, pero ese callback salía antes con el transporte parado. El clic/arrastre sobre cualquier onda no movía nada en pausa.
+3. **La aguja se congelaba durante el scratch** (también de P3): la rama de scratch hacía `return` antes de actualizar `playbackPosSamples`, de donde leen `getPosition()`, el tiempo y el giro del plato. El plato raspaba pero parecía muerto.
+
+## 2. Cambios
+### `src/ui/VerticalWaveform.h/.cpp`
+- **Clic** = salto al instante bajo el puntero (`timeAtY`: arriba = futuro, misma geometría que el pintado).
+- **Arrastre vertical** = adelantar/atrasar: `nuevaPos = ancla + (anclaY − y) / pxPerSec`, con clamp a `[0, duración]`. Seek **silencioso** (la pista sigue sonando desde el punto nuevo).
+- **Rueda** = zoom de la vista (`pixelsPerSecond`, 20–300 px/s, por defecto 70), solo en memoria.
+- Cursor `UpDownResizeCursor` y repintado cuando cambia la posición **aunque el deck esté en pausa** (antes el timer solo repintaba si algún deck sonaba).
+- El `pixelsPerSecond` local de `renderDeckHalf` pasa a ser el miembro de la clase (la rejilla de beats y la ventana visible escalan con el zoom).
+
+### `src/audio/DeckPlayer.cpp`
+- El `seekPending` se aplica **antes** del `return` de `!playing` y dentro del `ScopedLock`: el seek funciona con el transporte parado (afecta también a la waveform horizontal y al overview).
+- `publishScratchPos()` en las dos ramas del scratch (adelante y atrás) publica la posición real de la aguja, reponiendo la latencia del stretcher cuando Key Lock está activo.
+
+## 3. Verificación
+- `cmake --build build` → **0 errores**, 0 warnings en los ficheros tocados.
+- Banco nuevo `run_pause_seek` (pista real):
+  - pausa + `setPosition(30.0)` → `getPosition()` = **30.000 s** (antes se quedaba en 0.661 s);
+  - en pausa la posición no deriva (**+0.0 ms** en 300 ms);
+  - scratch adelante **+1287 ms**, scratch atrás **−543 ms** (la aguja sigue a la mano);
+  - tras `endScratch` el transporte vuelve a avanzar (**+395 ms en 400 ms**).
+- `run_pos_merged`: invariante de posición **−0.0 ms** antes/después del seek, delta 0.1139 frente al natural 0.114.
+- `run_phase_real`: controlador de fase converge a **0.93 ms** con el nudge liberado.
+
+## 4. Pendiente
+- Prueba manual del gesto (clic, arrastre en play y en pausa, rueda para zoom) y del plato girando durante el scratch.
+- El zoom no se persiste (decisión: solo memoria, por sesión).

@@ -280,7 +280,7 @@ void DeckPlayer::releaseResources()
 
 void DeckPlayer::getNextAudioBlock(const juce::AudioSourceChannelInfo& bufferToFill)
 {
-    if (!loaded.load() || !playing.load())
+    if (!loaded.load())
     {
         bufferToFill.clearActiveBufferRegion();
         return;
@@ -288,6 +288,17 @@ void DeckPlayer::getNextAudioBlock(const juce::AudioSourceChannelInfo& bufferToF
 
     const juce::ScopedLock sl(lock);
     if (resamplingSource == nullptr || bufferingSource == nullptr)
+    {
+        bufferToFill.clearActiveBufferRegion();
+        return;
+    }
+
+    // P3: el seek se aplica tambien con el transporte en pausa (la aguja, el
+    // tiempo y la onda deben moverse al hacer clic o arrastrar sobre la onda).
+    if (seekPending.exchange(false))
+        applyPendingSeek(seekTargetSec.load());
+
+    if (!playing.load())
     {
         bufferToFill.clearActiveBufferRegion();
         return;
@@ -302,6 +313,15 @@ void DeckPlayer::getNextAudioBlock(const juce::AudioSourceChannelInfo& bufferToF
         double dur = trackDurationSeconds.load();
         int N = bufferToFill.numSamples;
         double rate = (double)scratchVelRevPerSec.load() * 1.8; // audio-sec por sec, con signo
+
+        // P3: la aguja y el tiempo siguen a la mano tambien durante el scratch.
+        // getPosition() descuenta la latencia del stretcher, asi que se repone
+        // aqui para que la posicion publicada sea la que se esta oyendo.
+        auto publishScratchPos = [&]()
+        {
+            const double latency = keylock.load() ? stretcher->getLatencySeconds() : 0.0;
+            playbackPosSamples.store((juce::int64)((scratchAnchorSec + latency) * sr));
+        };
 
         if (!scratchAnchorInit)
         {
@@ -350,6 +370,7 @@ void DeckPlayer::getNextAudioBlock(const juce::AudioSourceChannelInfo& bufferToF
             scratchAnchorSec = (double)bufferingSource->getNextReadPosition() / sr;
             if (dur > 0.0 && scratchAnchorSec > dur)
                 scratchAnchorSec = dur; // tope sin auto-stop
+            publishScratchPos();
             return;
         }
 
@@ -398,14 +419,12 @@ void DeckPlayer::getNextAudioBlock(const juce::AudioSourceChannelInfo& bufferToF
         if (scratchAnchorSec < 0.0)
             scratchAnchorSec = 0.0;
         bufferingSource->setNextReadPosition((juce::int64)(scratchAnchorSec * sr)); // cursor = aguja
+        publishScratchPos();
         return; // sin loop-wrap ni auto-stop durante el toque
     }
 
-    // Seek seguro: aplicar al inicio del bloque si hay uno pendiente
-    if (seekPending.exchange(false))
-    {
-        applyPendingSeek(seekTargetSec.load());
-    }
+    // Seek seguro: el pendiente ya se aplico al inicio del bloque (tambien en
+    // pausa), antes de decidir si hay audio que renderizar.
 
     // Process audio block from streaming reader.
     // Key Lock ON: tempo por stretch (pitch intacto). OFF: resample clásico.
