@@ -720,3 +720,33 @@ El build de Linux compila; el fallo es de **runtime**. En modo vídeo el audio s
 ## 3. Verificación
 - `cmake --build build` (macOS): **0 errores**, 0 warnings. El bloque Linux no se compila en macOS: la verificación real es `build-linux.yml`, que corre en cada push a `main`.
 - Pendiente de confirmación del usuario: si el aviso nuevo aparece, es la causa 3; si sigue en blanco con audio, es la 1 o la 2 (los `gst-inspect-1.0` del README lo distinguen).
+
+---
+
+# Columna FECHA en el buscador de YouTube
+
+## 1. De dónde sale el dato
+El buscador tiene dos rutas (`YouTubeService.cpp:580`): la oficial con API key y, sin key configurada, `searchPublic()`, que scrapea `ytInitialData`. En los resultados YouTube solo expone la fecha **relativa** (`publishedTimeText.simpleText` = "hace 2 años"), que es lo que muestra su propia web. **No hace falta ninguna request extra.**
+
+La ruta con API key (`searchOfficialApi`) sí trae `snippet.publishedAt` absoluto; se pinta en ISO (`2023-05-14`) para no dejar la columna vacía si algún día se configura una key.
+
+## 2. Cambios
+- `YouTubeService.h`: campo `juce::String publishedText` en `YouTubeSearchResult` (texto ya formateado; vacío si YouTube no lo da, p. ej. directos).
+- `YouTubeService.cpp` (`searchPublic`): lee `publishedTimeText.simpleText`, con fallback a `runs[0].text`.
+- `YouTubeService.cpp` (`searchOfficialApi`): rellena con `snippet.publishedAt` en ISO.
+- `YouTubeLibraryView.cpp`: columna `FECHA` (id 8) insertada **entre CANAL/ARTISTA y DURACIÓN** (`insertIndex 5`), 105 px. TÍTULO 340→300 y CANAL 170→150 para no forzar scroll (total 892→937 px). `notSortable` porque `sortOrderChanged` no está implementado en esta vista. Cabecera traducida (`FECHA` / `DATE`) y `case 8` en `paintCell`: gris 150/158/175, 11.5 plain, centrado, con `—` apagado cuando no hay fecha.
+
+## 3. Verificación
+- `cmake --build build`: **0 errores**, 0 warnings en `src/`.
+- Banco nuevo `run_yt_date` (busca "daft punk" y exige fecha en la mayoría de los 5 primeros):
+
+```
+Daft Punk - Lose Yourself to Dance (Official Versi | hace 13 años | 4:11
+D.a.f.t P.u.n.k Greatest Hits                      | hace 3 años  | 1:11:15
+Daft Punk - Around The World (Official Music Video | hace 5 años  | 4:02
+Daft Punk - Veridis Quo (Official Audio)           | hace 11 años | 5:46
+Daft Punk - Something About Us (Official Video)    | hace 17 años | 3:49
+5/5 con fecha -> OK
+```
+
+Valida lo único frágil del cambio: el nombre del campo en `ytInitialData`.

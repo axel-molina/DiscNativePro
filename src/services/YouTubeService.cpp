@@ -748,6 +748,16 @@ std::vector<YouTubeSearchResult> YouTubeService::searchPublic(const juce::String
                     res.durationText = "3:00";
                 }
 
+                // Fecha de publicación: los resultados de búsqueda solo traen el
+                // texto relativo ("hace 2 años"), que es justo lo que se pinta.
+                res.publishedText = vr["publishedTimeText"]["simpleText"].toString();
+                if (res.publishedText.isEmpty())
+                {
+                    auto pubRuns = vr["publishedTimeText"]["runs"];
+                    if (pubRuns.isArray() && pubRuns.size() > 0)
+                        res.publishedText = pubRuns[0]["text"].toString();
+                }
+
                 // Thumbnail (always clean 16:9 JPEG)
                 res.thumbnailUrl = "https://i.ytimg.com/vi/" + vidId + "/mqdefault.jpg";
 
@@ -796,6 +806,13 @@ std::vector<YouTubeSearchResult> YouTubeService::searchOfficialApi(const juce::S
         res.durationSeconds = 210;
         res.durationText = "3:30";
         res.thumbnailUrl = "https://i.ytimg.com/vi/" + vidId + "/mqdefault.jpg";
+
+        // Salvaguarda: esta ruta (solo con API key configurada) sí trae la fecha
+        // absoluta. Se pinta en ISO para no dejar la columna vacía.
+        auto publishedAt = item["snippet"]["publishedAt"].toString();
+        if (publishedAt.isNotEmpty())
+            res.publishedText = juce::Time::fromISO8601(publishedAt).formatted("%Y-%m-%d");
+
         results.push_back(res);
     }
 

@@ -13,6 +13,10 @@ struct YouTubeSearchResult
     juce::String thumbnailUrl;
     int durationSeconds { 180 };
     juce::String durationText { "3:00" };
+    // Fecha de publicación ya formateada para la tabla. YouTube solo expone el
+    // texto relativo en los resultados ("hace 2 años"), así que se guarda tal
+    // cual; queda vacío si no viene (directos, o la ruta de oembed).
+    juce::String publishedText;
 };
 
 class YouTubeService

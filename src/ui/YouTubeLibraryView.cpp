@@ -224,8 +224,12 @@ YouTubeLibraryView::YouTubeLibraryView()
     table.setColour(juce::TableListBox::backgroundColourId, juce::Colour::fromRGB(12, 13, 18));
     table.getHeader().addColumn("#", 1, 36, 28, 45, juce::TableHeaderComponent::notSortable);
     table.getHeader().addColumn("VISTA PREVIA", 2, 96, 85, 110, juce::TableHeaderComponent::notSortable);
-    table.getHeader().addColumn(juce::String::fromUTF8("TÍTULO DEL VIDEO"), 3, 340, 180, 600);
-    table.getHeader().addColumn("CANAL / ARTISTA", 4, 170, 100, 300);
+    table.getHeader().addColumn(juce::String::fromUTF8("TÍTULO DEL VIDEO"), 3, 300, 180, 600);
+    table.getHeader().addColumn("CANAL / ARTISTA", 4, 150, 100, 300);
+    // insertIndex 5: la fecha va entre CANAL y DURACIÓN, pegada al resto de
+    // metadatos del vídeo. notSortable porque sortOrderChanged no está
+    // implementado en esta vista (las flechas de las otras columnas son mudas).
+    table.getHeader().addColumn("FECHA", 8, 105, 80, 140, juce::TableHeaderComponent::notSortable, 5);
     table.getHeader().addColumn(juce::String::fromUTF8("DURACIÓN"), 5, 75, 55, 95);
     table.getHeader().addColumn("CARGAR", 6, 80, 70, 95, juce::TableHeaderComponent::notSortable);
     table.getHeader().addColumn(juce::String::fromUTF8("DESCARGAR"), 7, 95, 80, 115, juce::TableHeaderComponent::notSortable);
@@ -290,6 +294,7 @@ void YouTubeLibraryView::refreshLanguage()
     table.getHeader().setColumnName(2, LanguageManager::trUtf8("VISTA PREVIA", "PREVIEW"));
     table.getHeader().setColumnName(3, LanguageManager::trUtf8("TÍTULO DEL VIDEO", "VIDEO TITLE"));
     table.getHeader().setColumnName(4, LanguageManager::trUtf8("CANAL / ARTISTA", "CHANNEL / ARTIST"));
+    table.getHeader().setColumnName(8, LanguageManager::trUtf8("FECHA", "DATE"));
     table.getHeader().setColumnName(5, LanguageManager::trUtf8("DURACIÓN", "DURATION"));
     table.getHeader().setColumnName(6, LanguageManager::trUtf8("CARGAR", "LOAD"));
     table.getHeader().setColumnName(7, LanguageManager::trUtf8("DESCARGAR", "DOWNLOAD"));
@@ -498,6 +503,23 @@ void YouTubeLibraryView::paintCell(juce::Graphics& g, int rowNumber, int columnI
             g.setColour(juce::Colour::fromRGB(0, 229, 255));
             g.setFont(juce::FontOptions(11.0f, juce::Font::bold));
             g.drawText(item.durationText, 4, 0, width - 8, height, juce::Justification::centred, false);
+            break;
+
+        case 8: // FECHA DE PUBLICACIÓN (texto relativo de YouTube)
+            if (item.publishedText.isEmpty())
+            {
+                g.setColour(juce::Colour::fromRGB(80, 86, 100));
+                g.setFont(juce::FontOptions(11.5f, juce::Font::plain));
+                g.drawText(juce::String::fromUTF8("—"), 4, 0, width - 8, height,
+                           juce::Justification::centred, false);
+            }
+            else
+            {
+                g.setColour(juce::Colour::fromRGB(150, 158, 175));
+                g.setFont(juce::FontOptions(11.5f, juce::Font::plain));
+                g.drawText(item.publishedText, 4, 0, width - 8, height,
+                           juce::Justification::centred, true);
+            }
             break;
 
         default:
