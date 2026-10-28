@@ -750,3 +750,29 @@ Daft Punk - Something About Us (Official Video)    | hace 17 años | 3:49
 ```
 
 Valida lo único frágil del cambio: el nombre del campo en `ytInitialData`.
+
+---
+
+# Header de la tabla USB igual al resto de la app
+
+## 1. Causa
+`UsbLibraryView` era la única de las cuatro vistas con `TableListBox` que no fijaba los colores del header. Sin overrides manda el LookAndFeel por defecto — que no es `DjLookAndFeel` (solo lo usan `ChannelStripComponent` y `CenterColumnComponent`), sino `LookAndFeel_V4`, que hereda de V3:
+
+- `juce_LookAndFeel_V3.cpp:54` → `backgroundColourId = white.withAlpha(0.6f)`
+- `juce_LookAndFeel_V2.cpp:158` → `textColourId = 0xff000000`
+
+Blanco al 60 % sobre el fondo oscuro = franja gris clara con texto negro.
+
+## 2. Cambio
+`src/ui/UsbLibraryView.cpp:117-118`, los mismos valores que `LibraryComponent.cpp:796` y `YouTubeLibraryView.cpp:236`:
+
+```cpp
+table.getHeader().setColour(juce::TableHeaderComponent::backgroundColourId, juce::Colour::fromRGB(16, 18, 24));
+table.getHeader().setColour(juce::TableHeaderComponent::textColourId, juce::Colour::fromRGB(142, 149, 165));
+```
+
+No se toca `outlineColourId`: ninguna de las otras vistas lo define, así que la línea separadora ya coincide.
+
+## 3. Verificación
+- `cmake --build build`: 0 errores. El único warning de `src/` es el preexistente `UsbLibraryView.cpp:172 unused parameter 'totalFound'`.
+- Pendiente de ojo en la pestaña USB: header oscuro con texto gris, idéntico a Biblioteca local y YouTube.

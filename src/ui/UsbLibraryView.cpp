@@ -113,6 +113,11 @@ UsbLibraryView::UsbLibraryView(juce::AudioFormatManager& fm)
     table.setModel(this);
     table.setColour(juce::ListBox::backgroundColourId, juce::Colour::fromRGB(12, 13, 18));
     table.setColour(juce::ListBox::outlineColourId, juce::Colour::fromRGB(24, 28, 38));
+    // Mismos colores de header que la biblioteca local y YouTube. Sin esto manda
+    // LookAndFeel_V4 (hereda de V3): fondo white.withAlpha(0.6f) y texto negro,
+    // o sea una franja gris claro sobre el fondo oscuro.
+    table.getHeader().setColour(juce::TableHeaderComponent::backgroundColourId, juce::Colour::fromRGB(16, 18, 24));
+    table.getHeader().setColour(juce::TableHeaderComponent::textColourId, juce::Colour::fromRGB(142, 149, 165));
     table.setRowHeight(34);
     table.setMultipleSelectionEnabled(true);
 
