@@ -776,3 +776,24 @@ No se toca `outlineColourId`: ninguna de las otras vistas lo define, así que la
 ## 3. Verificación
 - `cmake --build build`: 0 errores. El único warning de `src/` es el preexistente `UsbLibraryView.cpp:172 unused parameter 'totalFound'`.
 - Pendiente de ojo en la pestaña USB: header oscuro con texto gris, idéntico a Biblioteca local y YouTube.
+
+---
+
+# Versión 1.3.2
+
+## 1. Contenido
+| Commit | Cambio |
+|---|---|
+| `8220247` + `9a5ff20` | Fix del vídeo de YouTube en blanco en Linux: `WEBKIT_DISABLE_DMABUF_RENDERER=1` y `WEBKIT_DISABLE_COMPOSITING_MODE=1` antes de crear la ventana, detección de WebKitGTK con `dlopen` y aviso en pantalla si falta. |
+| `cefa2f3` | Columna FECHA en el buscador de YouTube (`publishedTimeText`, sin requests extra). |
+| `874e8f2` | Header de la tabla USB con los colores del resto de la app. |
+
+## 2. Cambio de versión
+- `CMakeLists.txt`: `project(DiscNativePro VERSION 1.3.1)` → **1.3.2**.
+- `APP_VERSION` sigue derivándose de `git describe`; con el tag `v1.3.2` en este commit, bundle y binario reportan **1.3.2**.
+
+## 3. Verificación
+- `cmake --build build` → 0 errores; los warnings de `src/` son los preexistentes (`AsyncFolderScanner` ×3, `SoundCloudService`, `UsbLibraryView:172`).
+- Bancos: `run_yt_date` 5/5 con fecha; `run_pause_seek`, `run_seek_isolation`, `run_fader_jump`, `run_phase_real`, `run_pos_merged` en verde.
+- CI de `main`: `build-linux.yml` y `build-windows.yml` en success en los tres commits.
+- Pendiente: prueba real del fix de Linux por el usuario (no había máquina Linux disponible al taggear).
