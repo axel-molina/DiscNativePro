@@ -616,8 +616,8 @@ void SettingsModalComponent::refreshLanguage()
     broadcastSectionTitle.setText(LanguageManager::trUtf8("Emitir en vivo (Broadcast a servidor propio)",
                                                           "Broadcast live (to your own server)"), juce::dontSendNotification);
     broadcastDescLabel.setText(LanguageManager::trUtf8(
-        "Emite la mezcla master en vivo a tu propio servidor Icecast/Shoutcast (como la función Broadcast de VirtualDJ). Los oyentes se conectan al servidor, no a tu app.",
-        "Streams the master mix live to your own Icecast/Shoutcast server (like VirtualDJ's Broadcast). Listeners connect to the server, not to your app."), juce::dontSendNotification);
+        "Emite la mezcla master en vivo a tu propio servidor Icecast/Shoutcast. Los oyentes se conectan al servidor, no a tu app.",
+        "Streams the master mix live to your own Icecast/Shoutcast server. Listeners connect to the server, not to your app."), juce::dontSendNotification);
     broadcastEnabledToggle.setButtonText(LanguageManager::trUtf8("Emitir mezcla en vivo", "Broadcast mix live"));
     broadcastHostLabel.setText(LanguageManager::trUtf8("Servidor (host o IP):", "Server (host or IP):"), juce::dontSendNotification);
     broadcastPortLabel.setText(LanguageManager::trUtf8("Puerto:", "Port:"), juce::dontSendNotification);
@@ -953,7 +953,7 @@ void SettingsModalComponent::setupStreamingTab()
     broadcastSectionTitle.setColour(juce::Label::textColourId, juce::Colour::fromRGB(0, 180, 216));
     bodyContent.addChildComponent(broadcastSectionTitle);
 
-    broadcastDescLabel.setText(juce::String::fromUTF8("Emite la mezcla master en vivo a tu propio servidor Icecast/Shoutcast (como la función Broadcast de VirtualDJ). Los oyentes se conectan al servidor, no a tu app."), juce::dontSendNotification);
+    broadcastDescLabel.setText(juce::String::fromUTF8("Emite la mezcla master en vivo a tu propio servidor Icecast/Shoutcast. Los oyentes se conectan al servidor, no a tu app."), juce::dontSendNotification);
     broadcastDescLabel.setFont(juce::FontOptions(10.5f));
     broadcastDescLabel.setColour(juce::Label::textColourId, juce::Colour::fromRGB(160, 165, 180));
     bodyContent.addChildComponent(broadcastDescLabel);
