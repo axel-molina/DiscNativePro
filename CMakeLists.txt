@@ -50,6 +50,9 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(JUCE)
 
+# LAME MP3 encoder (vendorizado en third_party/lame) para el broadcast Icecast
+add_subdirectory(third_party/lame)
+
 juce_add_gui_app(DiscNativePro
     PRODUCT_NAME "DiscNativePro"
     COMPANY_NAME "DiscPro"
@@ -80,6 +83,8 @@ target_sources(DiscNativePro
         src/audio/AudioEngine.cpp
         src/audio/AudioRecorder.h
         src/audio/AudioRecorder.cpp
+        src/audio/BroadcastService.h
+        src/audio/BroadcastService.cpp
         src/audio/SampleTrackGenerator.h
         src/audio/SampleTrackGenerator.cpp
         src/midi/MidiManager.h
@@ -191,6 +196,7 @@ target_link_libraries(DiscNativePro
         juce::juce_gui_extra
         juce::juce_recommended_config_flags
         juce::juce_recommended_warning_flags
+        mp3lame
 )
 
 if(APPLE)

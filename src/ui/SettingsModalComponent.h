@@ -14,7 +14,8 @@
 
 class SettingsModalComponent : public juce::Component,
                                public LanguageManager::Listener,
-                               public juce::ChangeListener
+                               public juce::ChangeListener,
+                               public juce::Timer
 {
 public:
     SettingsModalComponent(AudioEngine& engine, MidiManager& midiMgr, int initialTab = 0);
@@ -24,6 +25,7 @@ public:
     void resized() override;
     void languageChanged() override;
     void changeListenerCallback(juce::ChangeBroadcaster* source) override;
+    void timerCallback() override;
     void refreshLanguage();
     void setActiveTab(int tabIndex);
 
@@ -47,6 +49,9 @@ private:
     void refreshMidiDevices();
     void updateTabVisibility();
     void applySettings();
+    void updateBroadcastRuntime();
+    void refreshBroadcastStatus();
+    void persistBroadcastConfig();
     void updateRecordingFolderUI();
     void refreshAiModelOptions();
 
@@ -158,6 +163,24 @@ private:
     juce::Label apiStatusBadge;
     juce::Label apiInfoCard;
     DjButton clearApiKeyBtn;
+
+    // --- Tab 5: Broadcast (servidor propio Icecast/Shoutcast) ---
+    juce::Label broadcastSectionTitle;
+    juce::Label broadcastDescLabel;
+    juce::ToggleButton broadcastEnabledToggle;
+    juce::Label broadcastHostLabel;
+    juce::TextEditor broadcastHostEditor;
+    juce::Label broadcastPortLabel;
+    juce::TextEditor broadcastPortEditor;
+    juce::Label broadcastMountLabel;
+    juce::TextEditor broadcastMountEditor;
+    juce::Label broadcastPasswordLabel;
+    juce::TextEditor broadcastPasswordEditor;
+    juce::Label broadcastNameLabel;
+    juce::TextEditor broadcastNameEditor;
+    juce::Label broadcastBitrateLabel;
+    juce::ComboBox broadcastBitrateCombo;
+    juce::Label broadcastStatusBadge;
 
     // --- Tab 6: Inteligencia Artificial (AI Match) Controls ---
     juce::Label aiSectionTitle;

@@ -145,6 +145,7 @@ void AudioEngine::shutdown()
 {
     isShuttingDown.store(true);
     cancelPendingUpdate();
+    broadcastService.stopBroadcast();
     audioRecorder.stopRecording();
     deviceManager.removeChangeListener(this);
     deviceManager.removeAudioCallback(this);
@@ -376,8 +377,9 @@ void AudioEngine::audioDeviceIOCallbackWithContext(const float* const* /*inputCh
     // 2b. Sampler one-shots al master post-crossfader (entran a la grabación)
     samplerBank.process(masterBuffer, numSamples);
 
-    // 3. Push to master recorder (lock-free, zero allocation)
+    // 3. Push to master recorder + broadcast (lock-free, zero allocation)
     audioRecorder.pushAudioBlock(masterBuffer, numSamples);
+    broadcastService.pushAudioBlock(masterBuffer, numSamples);
 
     // 4. Write to physical audio output (DAC / CoreAudio)
     int masterPair = masterChannelPair.load(); // 0 = Ch 1-2, 1 = Ch 3-4

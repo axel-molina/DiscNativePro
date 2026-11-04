@@ -5,6 +5,7 @@
 #include "DeckPlayer.h"
 #include "DjMixer.h"
 #include "AudioRecorder.h"
+#include "BroadcastService.h"
 #include "SamplerBank.h"
 
 class AudioEngine : public juce::AudioIODeviceCallback,
@@ -42,6 +43,7 @@ public:
     juce::AudioDeviceManager& getDeviceManager() { return deviceManager; }
     juce::AudioFormatManager& getFormatManager() { return formatManager; }
     AudioRecorder& getRecorder()       { return audioRecorder; }
+    BroadcastService& getBroadcastService() { return broadcastService; }
 
     // Recording convenience methods
     bool toggleRecording(juce::String& outFilePath);
@@ -114,6 +116,7 @@ private:
     DjMixer djMixer;
     SamplerBank samplerBank;
     AudioRecorder audioRecorder;
+    BroadcastService broadcastService;
 
     // Preallocated buffers for real-time safety (no malloc in audio callback)
     juce::AudioBuffer<float> deck1Buffer;

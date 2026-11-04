@@ -3,6 +3,70 @@
 #include "../services/WaveformTheme.h"
 #include "../services/SecretStore.h"
 
+namespace
+{
+    // Ajustes de broadcast (strings/numeros) en el mismo settings.json del resto de la app.
+    // La contraseña NUNCA va al JSON: se guarda en el llavero via SecretStore.
+    constexpr const char* broadcastHostProperty = "broadcastHost";
+    constexpr const char* broadcastPortProperty = "broadcastPort";
+    constexpr const char* broadcastMountProperty = "broadcastMount";
+    constexpr const char* broadcastNameProperty = "broadcastName";
+    constexpr const char* broadcastBitrateProperty = "broadcastBitrate";
+    constexpr const char* broadcastPasswordAccount = "broadcast.password";
+
+    juce::String readStringSetting(const char* property, const juce::String& defaultValue = {})
+    {
+        auto file = AudioEngine::getSettingsFile();
+        if (!file.existsAsFile())
+            return defaultValue;
+
+        auto json = juce::JSON::parse(file);
+        if (!json.isObject() || !json.hasProperty(property))
+            return defaultValue;
+
+        return json[property].toString();
+    }
+
+    void writeStringSetting(const char* property, const juce::String& value)
+    {
+        auto file = AudioEngine::getSettingsFile();
+        juce::var json;
+        if (file.existsAsFile())
+            json = juce::JSON::parse(file);
+        if (!json.isObject())
+            json = juce::var(new juce::DynamicObject());
+
+        if (auto* obj = json.getDynamicObject())
+            obj->setProperty(property, value);
+
+        file.replaceWithText(juce::JSON::toString(json));
+    }
+
+    int bitrateFromComboId(int comboId)
+    {
+        switch (comboId)
+        {
+            case 1: return 128;
+            case 3: return 256;
+            case 4: return 320;
+            case 2:
+            default: return 192;
+        }
+    }
+
+    int comboIdFromBitrate(int kbps)
+    {
+        switch (kbps)
+        {
+            case 128: return 1;
+            case 256: return 3;
+            case 320: return 4;
+            case 192:
+            default: return 2;
+        }
+    }
+} // namespace
+
 SettingsModalComponent::SettingsModalComponent(AudioEngine& engine, MidiManager& midiMgr, int initialTab)
     : audioEngine(engine), midi(midiMgr), activeTab(initialTab)
 {
@@ -66,10 +130,12 @@ SettingsModalComponent::SettingsModalComponent(AudioEngine& engine, MidiManager&
     LanguageManager::getInstance().addListener(this);
     refreshLanguage();
     updateTabVisibility();
+    startTimerHz(2); // refresco del estado del broadcast (solo pinta si la tab esta activa)
 }
 
 SettingsModalComponent::~SettingsModalComponent()
 {
+    stopTimer();
     LanguageManager::getInstance().removeListener(this);
     midi.onMidiActivity = nullptr;
 }
@@ -546,6 +612,18 @@ void SettingsModalComponent::refreshLanguage()
     apiKeyLabel.setText(LanguageManager::trUtf8("YouTube Data API v3 Key (Opcional - Para búsqueda oficial sin restricciones):", "YouTube Data API v3 Key (Optional - For official search without limits):"), juce::dontSendNotification);
     apiKeyEditor.setTextToShowWhenEmpty(LanguageManager::trUtf8("Pega tu clave AIzaSy...", "Paste your AIzaSy key..."), juce::Colour::fromRGB(100, 108, 125));
     clearApiKeyBtn.setText(LanguageManager::trUtf8("Borrar Key", "Clear Key"));
+
+    broadcastSectionTitle.setText(LanguageManager::trUtf8("Emitir en vivo (Broadcast a servidor propio)",
+                                                          "Broadcast live (to your own server)"), juce::dontSendNotification);
+    broadcastDescLabel.setText(LanguageManager::trUtf8(
+        "Emite la mezcla master en vivo a tu propio servidor Icecast/Shoutcast (como la función Broadcast de VirtualDJ). Los oyentes se conectan al servidor, no a tu app.",
+        "Streams the master mix live to your own Icecast/Shoutcast server (like VirtualDJ's Broadcast). Listeners connect to the server, not to your app."), juce::dontSendNotification);
+    broadcastEnabledToggle.setButtonText(LanguageManager::trUtf8("Emitir mezcla en vivo", "Broadcast mix live"));
+    broadcastHostLabel.setText(LanguageManager::trUtf8("Servidor (host o IP):", "Server (host or IP):"), juce::dontSendNotification);
+    broadcastPortLabel.setText(LanguageManager::trUtf8("Puerto:", "Port:"), juce::dontSendNotification);
+    broadcastPasswordLabel.setText(LanguageManager::trUtf8("Contraseña:", "Password:"), juce::dontSendNotification);
+    broadcastNameLabel.setText(LanguageManager::trUtf8("Nombre de la emisión:", "Station name:"), juce::dontSendNotification);
+    broadcastBitrateLabel.setText(LanguageManager::trUtf8("Bitrate MP3:", "MP3 bitrate:"), juce::dontSendNotification);
     apiInfoCard.setText(LanguageManager::trUtf8("Modo Video en Bandejas:\n• Al soltar un video de YouTube en el Deck 1 o Deck 2, el Jog Wheel se transforma en reproductor de video de alta definición (WebKit).\n• Los faders de volumen y el Crossfader central mezclan fluidamente el audio y video entre bandejas.\n• Iniciar sesión en YouTube en Safari comparte tu sesión con WKWebView para reproducción Premium sin publicidad.", "Video Mode in Decks:\n• Dropping a YouTube video onto Deck 1 or 2 turns the Jog Wheel into an HD video player (WebKit).\n• Volume faders and Crossfader smoothly mix audio and video between decks.\n• Logging in to YouTube in Safari shares your session with WKWebView for ad-free Premium playback."), juce::dontSendNotification);
 
     // Tab 6: IA
@@ -856,6 +934,175 @@ void SettingsModalComponent::setupStreamingTab()
     apiInfoCard.setColour(juce::Label::textColourId, juce::Colour::fromRGB(140, 145, 160));
     apiInfoCard.setJustificationType(juce::Justification::topLeft);
     bodyContent.addChildComponent(apiInfoCard);
+
+    // --- Broadcast: emitir la mezcla a un servidor Icecast/Shoutcast propio ---
+    auto styleBroadcastEditor = [this](juce::TextEditor& ed) {
+        ed.setFont(juce::FontOptions(11.5f));
+        ed.setColour(juce::TextEditor::backgroundColourId, juce::Colour::fromRGB(17, 19, 26));
+        ed.setColour(juce::TextEditor::textColourId, juce::Colours::white);
+        ed.setColour(juce::TextEditor::outlineColourId, juce::Colour::fromRGB(38, 43, 58));
+    };
+    auto styleBroadcastLabel = [this](juce::Label& lb) {
+        lb.setFont(juce::FontOptions(11.0f, juce::Font::plain));
+        lb.setColour(juce::Label::textColourId, juce::Colour::fromRGB(180, 185, 200));
+        lb.setJustificationType(juce::Justification::centredLeft);
+    };
+
+    broadcastSectionTitle.setText(juce::String::fromUTF8("Emitir en vivo (Broadcast a servidor propio)"), juce::dontSendNotification);
+    broadcastSectionTitle.setFont(juce::FontOptions(13.0f, juce::Font::bold));
+    broadcastSectionTitle.setColour(juce::Label::textColourId, juce::Colour::fromRGB(0, 180, 216));
+    bodyContent.addChildComponent(broadcastSectionTitle);
+
+    broadcastDescLabel.setText(juce::String::fromUTF8("Emite la mezcla master en vivo a tu propio servidor Icecast/Shoutcast (como la función Broadcast de VirtualDJ). Los oyentes se conectan al servidor, no a tu app."), juce::dontSendNotification);
+    broadcastDescLabel.setFont(juce::FontOptions(10.5f));
+    broadcastDescLabel.setColour(juce::Label::textColourId, juce::Colour::fromRGB(160, 165, 180));
+    bodyContent.addChildComponent(broadcastDescLabel);
+
+    broadcastEnabledToggle.setButtonText(juce::String::fromUTF8("Emitir mezcla en vivo"));
+    broadcastEnabledToggle.setColour(juce::ToggleButton::textColourId, juce::Colour::fromRGB(220, 225, 235));
+    broadcastEnabledToggle.onClick = [this]() { updateBroadcastRuntime(); };
+    bodyContent.addChildComponent(broadcastEnabledToggle);
+
+    styleBroadcastLabel(broadcastHostLabel);
+    broadcastHostLabel.setText(juce::String::fromUTF8("Servidor (host o IP):"), juce::dontSendNotification);
+    bodyContent.addChildComponent(broadcastHostLabel);
+    styleBroadcastEditor(broadcastHostEditor);
+    broadcastHostEditor.setTextToShowWhenEmpty("radio.midominio.com", juce::Colour::fromRGB(100, 108, 125));
+    bodyContent.addChildComponent(broadcastHostEditor);
+
+    styleBroadcastLabel(broadcastPortLabel);
+    broadcastPortLabel.setText(juce::String::fromUTF8("Puerto:"), juce::dontSendNotification);
+    bodyContent.addChildComponent(broadcastPortLabel);
+    styleBroadcastEditor(broadcastPortEditor);
+    broadcastPortEditor.setInputRestrictions(0, "0123456789");
+    broadcastPortEditor.setTextToShowWhenEmpty("8000", juce::Colour::fromRGB(100, 108, 125));
+    bodyContent.addChildComponent(broadcastPortEditor);
+
+    styleBroadcastLabel(broadcastMountLabel);
+    broadcastMountLabel.setText(juce::String::fromUTF8("Mount:"), juce::dontSendNotification);
+    bodyContent.addChildComponent(broadcastMountLabel);
+    styleBroadcastEditor(broadcastMountEditor);
+    broadcastMountEditor.setTextToShowWhenEmpty("/stream", juce::Colour::fromRGB(100, 108, 125));
+    bodyContent.addChildComponent(broadcastMountEditor);
+
+    styleBroadcastLabel(broadcastPasswordLabel);
+    broadcastPasswordLabel.setText(juce::String::fromUTF8("Contraseña:"), juce::dontSendNotification);
+    bodyContent.addChildComponent(broadcastPasswordLabel);
+    styleBroadcastEditor(broadcastPasswordEditor);
+    broadcastPasswordEditor.setPasswordCharacter((juce::juce_wchar)'*');
+    bodyContent.addChildComponent(broadcastPasswordEditor);
+
+    styleBroadcastLabel(broadcastNameLabel);
+    broadcastNameLabel.setText(juce::String::fromUTF8("Nombre de la emisión:"), juce::dontSendNotification);
+    bodyContent.addChildComponent(broadcastNameLabel);
+    styleBroadcastEditor(broadcastNameEditor);
+    broadcastNameEditor.setTextToShowWhenEmpty("Mi radio DJ", juce::Colour::fromRGB(100, 108, 125));
+    bodyContent.addChildComponent(broadcastNameEditor);
+
+    styleBroadcastLabel(broadcastBitrateLabel);
+    broadcastBitrateLabel.setText(juce::String::fromUTF8("Bitrate MP3:"), juce::dontSendNotification);
+    bodyContent.addChildComponent(broadcastBitrateLabel);
+    broadcastBitrateCombo.addItem("128 kbps", 1);
+    broadcastBitrateCombo.addItem("192 kbps", 2);
+    broadcastBitrateCombo.addItem("256 kbps", 3);
+    broadcastBitrateCombo.addItem("320 kbps", 4);
+    broadcastBitrateCombo.setSelectedId(2, juce::dontSendNotification);
+    bodyContent.addChildComponent(broadcastBitrateCombo);
+
+    broadcastStatusBadge.setFont(juce::FontOptions(11.0f, juce::Font::bold));
+    bodyContent.addChildComponent(broadcastStatusBadge);
+
+    // Cargar configuración persistida
+    broadcastHostEditor.setText(readStringSetting(broadcastHostProperty), juce::dontSendNotification);
+    broadcastPortEditor.setText(readStringSetting(broadcastPortProperty, "8000"), juce::dontSendNotification);
+    broadcastMountEditor.setText(readStringSetting(broadcastMountProperty, "/stream"), juce::dontSendNotification);
+    broadcastNameEditor.setText(readStringSetting(broadcastNameProperty), juce::dontSendNotification);
+    broadcastPasswordEditor.setText(SecretStore::read(broadcastPasswordAccount), juce::dontSendNotification);
+    broadcastBitrateCombo.setSelectedId(comboIdFromBitrate(
+        readStringSetting(broadcastBitrateProperty, "192").getIntValue()), juce::dontSendNotification);
+
+    // Si la emision ya estaba activa (configurado desde otra sesion del modal)
+    broadcastEnabledToggle.setToggleState(audioEngine.getBroadcastService().isBroadcasting(), juce::dontSendNotification);
+}
+
+void SettingsModalComponent::updateBroadcastRuntime()
+{
+    auto& svc = audioEngine.getBroadcastService();
+
+    if (broadcastEnabledToggle.getToggleState())
+    {
+        BroadcastService::Config cfg;
+        cfg.host = broadcastHostEditor.getText().trim();
+        cfg.port = juce::jlimit(1, 65535, broadcastPortEditor.getText().trim().getIntValue());
+        if (cfg.port == 0)
+            cfg.port = 8000;
+        cfg.mount = broadcastMountEditor.getText().trim();
+        cfg.password = broadcastPasswordEditor.getText();
+        cfg.stationName = broadcastNameEditor.getText().trim();
+        cfg.bitrateKbps = bitrateFromComboId(broadcastBitrateCombo.getSelectedId());
+
+        persistBroadcastConfig();
+
+        if (!svc.startBroadcast(cfg, audioEngine.getSampleRate(), 2))
+            broadcastEnabledToggle.setToggleState(false, juce::dontSendNotification);
+    }
+    else
+    {
+        svc.stopBroadcast();
+    }
+
+    refreshBroadcastStatus();
+}
+
+void SettingsModalComponent::persistBroadcastConfig()
+{
+    writeStringSetting(broadcastHostProperty, broadcastHostEditor.getText().trim());
+    writeStringSetting(broadcastPortProperty, broadcastPortEditor.getText().trim());
+    writeStringSetting(broadcastMountProperty, broadcastMountEditor.getText().trim());
+    writeStringSetting(broadcastNameProperty, broadcastNameEditor.getText().trim());
+    writeStringSetting(broadcastBitrateProperty,
+                       juce::String(bitrateFromComboId(broadcastBitrateCombo.getSelectedId())));
+    SecretStore::write(broadcastPasswordAccount, broadcastPasswordEditor.getText());
+}
+
+void SettingsModalComponent::refreshBroadcastStatus()
+{
+    auto& svc = audioEngine.getBroadcastService();
+
+    if (svc.isBroadcasting())
+    {
+        if (svc.isConnected())
+        {
+            const double mb = (double) svc.getBytesSent() / (1024.0 * 1024.0);
+            broadcastStatusBadge.setText(
+                juce::String::fromUTF8("● ") + LanguageManager::trUtf8("Emitiendo en vivo", "Broadcasting live")
+                    + " — " + juce::String::formatted("%.1f MB", mb),
+                juce::dontSendNotification);
+            broadcastStatusBadge.setColour(juce::Label::textColourId, juce::Colour::fromRGB(74, 222, 128));
+        }
+        else
+        {
+            const auto err = svc.getLastError();
+            broadcastStatusBadge.setText(
+                juce::String::fromUTF8("● ") + LanguageManager::trUtf8("Reconectando", "Reconnecting")
+                    + (err.isNotEmpty() ? " — " + err : juce::String()),
+                juce::dontSendNotification);
+            broadcastStatusBadge.setColour(juce::Label::textColourId, juce::Colour::fromRGB(250, 204, 21));
+        }
+    }
+    else
+    {
+        broadcastStatusBadge.setText(
+            juce::String::fromUTF8("● ") + LanguageManager::trUtf8("Emisión apagada", "Broadcast off"),
+            juce::dontSendNotification);
+        broadcastStatusBadge.setColour(juce::Label::textColourId, juce::Colour::fromRGB(120, 125, 140));
+    }
+}
+
+void SettingsModalComponent::timerCallback()
+{
+    if (activeTab == 5)
+        refreshBroadcastStatus();
 }
 
 namespace
@@ -1501,6 +1748,25 @@ void SettingsModalComponent::updateTabVisibility()
     apiInfoCard.setVisible(isStreaming);
     clearApiKeyBtn.setVisible(isStreaming);
 
+    broadcastSectionTitle.setVisible(isStreaming);
+    broadcastDescLabel.setVisible(isStreaming);
+    broadcastEnabledToggle.setVisible(isStreaming);
+    broadcastHostLabel.setVisible(isStreaming);
+    broadcastHostEditor.setVisible(isStreaming);
+    broadcastPortLabel.setVisible(isStreaming);
+    broadcastPortEditor.setVisible(isStreaming);
+    broadcastMountLabel.setVisible(isStreaming);
+    broadcastMountEditor.setVisible(isStreaming);
+    broadcastPasswordLabel.setVisible(isStreaming);
+    broadcastPasswordEditor.setVisible(isStreaming);
+    broadcastNameLabel.setVisible(isStreaming);
+    broadcastNameEditor.setVisible(isStreaming);
+    broadcastBitrateLabel.setVisible(isStreaming);
+    broadcastBitrateCombo.setVisible(isStreaming);
+    broadcastStatusBadge.setVisible(isStreaming);
+    if (isStreaming)
+        refreshBroadcastStatus();
+
     if (isStreaming)
     {
         bool hasKey = apiKeyEditor.getText().trim().isNotEmpty();
@@ -1635,6 +1901,9 @@ void SettingsModalComponent::applySettings()
     // Apply YouTube API key + video autoplay
     YouTubeService::setApiKey(apiKeyEditor.getText().trim());
     YouTubeService::setVideoAutoplayEnabled(ytAutoplayToggle.getToggleState());
+
+    // Persistir la configuración de broadcast (la emisión en sí se controla con el toggle)
+    persistBroadcastConfig();
 
     // Apply AI Settings
     AIService::setEnabled(aiEnabledToggle.getToggleState());
@@ -2082,6 +2351,48 @@ void SettingsModalComponent::resized()
 
         streamingInfoCardBox = stArea.removeFromTop(120);
         apiInfoCard.setBounds(streamingInfoCardBox.reduced(12, 10));
+
+        // --- Broadcast (misma tab 5, debajo de la tarjeta de info) ---
+        stArea.removeFromTop(14);
+        broadcastSectionTitle.setBounds(stArea.removeFromTop(22));
+        stArea.removeFromTop(4);
+        broadcastDescLabel.setBounds(stArea.removeFromTop(30));
+        stArea.removeFromTop(6);
+        broadcastEnabledToggle.setBounds(stArea.removeFromTop(24));
+        stArea.removeFromTop(10);
+
+        auto bcRow1 = stArea.removeFromTop(26);
+        broadcastHostLabel.setBounds(bcRow1.removeFromLeft(170));
+        bcRow1.removeFromLeft(8);
+        broadcastHostEditor.setBounds(bcRow1);
+        stArea.removeFromTop(6);
+
+        auto bcRow2 = stArea.removeFromTop(28);
+        broadcastPortLabel.setBounds(bcRow2.removeFromLeft(170));
+        bcRow2.removeFromLeft(8);
+        broadcastPortEditor.setBounds(bcRow2.removeFromLeft(100));
+        bcRow2.removeFromLeft(16);
+        broadcastMountLabel.setBounds(bcRow2.removeFromLeft(100));
+        bcRow2.removeFromLeft(8);
+        broadcastMountEditor.setBounds(bcRow2);
+        stArea.removeFromTop(6);
+
+        auto bcRow3 = stArea.removeFromTop(28);
+        broadcastPasswordLabel.setBounds(bcRow3.removeFromLeft(170));
+        bcRow3.removeFromLeft(8);
+        broadcastPasswordEditor.setBounds(bcRow3.removeFromLeft(200));
+        bcRow3.removeFromLeft(16);
+        broadcastNameLabel.setBounds(bcRow3.removeFromLeft(120));
+        bcRow3.removeFromLeft(8);
+        broadcastNameEditor.setBounds(bcRow3);
+        stArea.removeFromTop(6);
+
+        auto bcRow4 = stArea.removeFromTop(24);
+        broadcastBitrateLabel.setBounds(bcRow4.removeFromLeft(170));
+        bcRow4.removeFromLeft(8);
+        broadcastBitrateCombo.setBounds(bcRow4.removeFromLeft(120));
+        bcRow4.removeFromLeft(16);
+        broadcastStatusBadge.setBounds(bcRow4);
     }
 
     // --- Tab 6: AI Match Layout (Unconditionally set bounds) ---
