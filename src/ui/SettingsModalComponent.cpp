@@ -1307,9 +1307,12 @@ void SettingsModalComponent::updateBroadcastRuntime()
 
 void SettingsModalComponent::updateTransmitDestinationUI()
 {
+    // Los campos condicionales (radio/RTMP) dependen de la pestaña activa Y del
+    // destino: si la pestaña no es Transmitir, todo se oculta.
+    const bool tabActive = (activeTab == 10);
     const int destId = broadcastDestCombo.getSelectedId();
-    const bool radio = (destId == 1);
-    const bool rtmp = isRtmpDestination(destId);
+    const bool radio = tabActive && (destId == 1);
+    const bool rtmp = tabActive && isRtmpDestination(destId);
 
     broadcastSectionTitle.setVisible(radio);
     broadcastDescLabel.setVisible(radio);
@@ -1344,6 +1347,7 @@ void SettingsModalComponent::updateTransmitDestinationUI()
 
 void SettingsModalComponent::refreshFfmpegStatus()
 {
+    const bool onTransmitTab = (activeTab == 10);
     const auto ffmpeg = FfmpegLocator::locateFfmpeg();
     if (ffmpeg.existsAsFile())
     {
@@ -1358,7 +1362,7 @@ void SettingsModalComponent::refreshFfmpegStatus()
             "ffmpeg no está instalado (necesario para emitir a redes)",
             "ffmpeg is not installed (required to stream to networks)"), juce::dontSendNotification);
         ffmpegStatusBadge.setColour(juce::Label::textColourId, juce::Colour::fromRGB(250, 204, 21));
-        installFfmpegBtn.setVisible(isRtmpDestination(broadcastDestCombo.getSelectedId()));
+        installFfmpegBtn.setVisible(onTransmitTab && isRtmpDestination(broadcastDestCombo.getSelectedId()));
     }
 }
 
@@ -2151,6 +2155,12 @@ void SettingsModalComponent::updateTabVisibility()
         updateTransmitDestinationUI();
         refreshBroadcastStatus();
         refreshPodcastRecordings();
+    }
+    else
+    {
+        // Ocultar los campos condicionales de la pestaña Transmitir al salir de ella
+        // (los gestiona updateTransmitDestinationUI() con la pestaña activa).
+        updateTransmitDestinationUI();
     }
 
     if (isStreaming)
