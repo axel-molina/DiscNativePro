@@ -2131,7 +2131,7 @@ void SettingsModalComponent::resized()
 
     auto sidebarRect = getLocalBounds();
     sidebarRect.removeFromBottom(52); // footer
-    sidebarRect.removeFromLeft(sidebarW);
+    sidebarRect = sidebarRect.removeFromLeft(sidebarW); // el sidebar ES la franja izquierda
     sideViewport.setBounds(sidebarRect);
 
     const int tabsContentH = 4 + 10 * tabBtnH + 9 * tabGap + 4;
