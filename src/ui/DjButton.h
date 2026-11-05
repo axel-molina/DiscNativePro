@@ -48,6 +48,10 @@ public:
     void setCornerRadius(float r) { cornerRadius = r; repaint(); }
     void setFontSize(float fs) { fontSize = fs; repaint(); }
 
+    // Layout apilado (menus verticales tipo sidebar): icono centrado arriba,
+    // etiqueta centrada debajo. Default: icono + texto en linea.
+    void setStackedLayout(bool stacked) { stackedLayout = stacked; repaint(); }
+
     void paintButton(juce::Graphics& g, bool shouldDrawButtonAsHighlighted, bool shouldDrawButtonAsDown) override
     {
         auto bounds = getLocalBounds().toFloat();
@@ -70,6 +74,25 @@ public:
 
         if (icon.has_value() && buttonText.isNotEmpty())
         {
+            if (stackedLayout)
+            {
+                auto font = juce::FontOptions(fontSize, juce::Font::bold);
+
+                auto iconArea = juce::Rectangle<float>(bounds.getCentreX() - iconSize * 0.5f,
+                                                       bounds.getY() + 5.0f,
+                                                       iconSize, iconSize);
+                LucideIcons::draw(g, *icon, iconArea, iconColour, 1.8f);
+
+                auto textArea = juce::Rectangle<float>(bounds.getX(),
+                                                       iconArea.getBottom() + 2.0f,
+                                                       bounds.getWidth(),
+                                                       bounds.getBottom() - iconArea.getBottom() - 2.0f);
+                g.setColour(textColour);
+                g.setFont(font);
+                g.drawText(buttonText, textArea, juce::Justification::centredTop, false);
+                return;
+            }
+
             // Measure total width to centre both icon and text
             auto font = juce::FontOptions(fontSize, juce::Font::bold);
             juce::GlyphArrangement ga;
@@ -108,6 +131,7 @@ private:
     float iconSize { 15.0f };
     float cornerRadius { 6.0f };
     float fontSize { 11.5f };
+    bool stackedLayout { false };
 
     juce::Colour bgColour { juce::Colour::fromRGB(24, 26, 34) };
     juce::Colour textColour { juce::Colours::white };

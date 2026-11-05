@@ -72,11 +72,17 @@ SettingsModalComponent::SettingsModalComponent(AudioEngine& engine, MidiManager&
 {
     setSize(740, 540);
 
-    // 1. Tab Buttons (10 tabs)
+    // 0. Sidebar vertical de pestañas (icono + etiqueta, scroll si no caben)
+    sideViewport.setViewedComponent(&sideContent, false);
+    sideViewport.setScrollBarsShown(true, false);
+    addAndMakeVisible(sideViewport);
+
+    // 1. Tab Buttons (10 tabs) — botones apilados dentro del sidebar
     auto setupTabBtn = [this](DjButton& btn, LucideIcons::IconType icon, const juce::String& text, int tabIdx) {
         btn.setIcon(icon, 14.0f);
         btn.setText(text);
-        btn.setFontSize(10.5f);
+        btn.setFontSize(9.5f);
+        btn.setStackedLayout(true);
         btn.setCornerRadius(6.0f);
         btn.onClick = [this, tabIdx]() {
             activeTab = tabIdx;
@@ -85,7 +91,7 @@ SettingsModalComponent::SettingsModalComponent(AudioEngine& engine, MidiManager&
             resized();
             repaint();
         };
-        addAndMakeVisible(btn);
+        sideContent.addAndMakeVisible(btn);
     };
 
     setupTabBtn(tabGeneralBtn, LucideIcons::IconType::Settings, "General", 0);
@@ -1942,9 +1948,11 @@ void SettingsModalComponent::paint(juce::Graphics& g)
     g.setColour(juce::Colour::fromRGB(45, 50, 66));
     g.drawRect(bounds, 1.0f);
 
-    // 2. Tab Divider line (below the tab buttons row)
+    // 2. Sidebar (fondo más oscuro) + divisor vertical
+    g.setColour(juce::Colour::fromRGB(20, 22, 31));
+    g.fillRect(0.0f, 0.0f, 96.0f, bounds.getHeight());
     g.setColour(juce::Colour::fromRGB(38, 43, 58));
-    g.drawHorizontalLine(48, 0.0f, bounds.getWidth());
+    g.drawVerticalLine(96, 0.0f, bounds.getHeight());
 
     // 3. Footer Bar (#14161f)
     auto footerArea = getLocalBounds().removeFromBottom(48);
@@ -2004,8 +2012,9 @@ void SettingsModalComponent::paint(juce::Graphics& g)
     if (activeTab == 4)
     {
         auto contentArea = getLocalBounds();
-        contentArea.removeFromTop(88);
+        contentArea.removeFromTop(10);
         contentArea.removeFromBottom(54);
+        contentArea.removeFromLeft(96); // sidebar
         contentArea.reduce(20, 10);
 
         g.setColour(juce::Colours::white);
@@ -2113,27 +2122,36 @@ void SettingsModalComponent::paint(juce::Graphics& g)
 
 void SettingsModalComponent::resized()
 {
-    // 1. Tab buttons row (y: 8 to 42) — 10 tabs, modal 740px wide
-    int tabW = 68;
-    int tabH = 34;
-    int spacing = 3;
-    int totalTabsW = tabW * 10 + spacing * 9;
-    int startTabX = (getWidth() - totalTabsW) / 2;
+    // 1. Sidebar vertical de pestañas (icono arriba + etiqueta abajo).
+    //    Botones 80x44 apilados; scroll vertical solo si no caben en la altura.
+    constexpr int sidebarW = 96;
+    constexpr int tabBtnW = 80;
+    constexpr int tabBtnH = 44;
+    constexpr int tabGap = 4;
 
-    tabGeneralBtn.setBounds(startTabX, 8, tabW, tabH);
-    tabDevicesBtn.setBounds(startTabX + (tabW + spacing) * 1, 8, tabW, tabH);
-    tabSoundBtn.setBounds(startTabX + (tabW + spacing) * 2, 8, tabW, tabH);
-    tabMidiBtn.setBounds(startTabX + (tabW + spacing) * 3, 8, tabW, tabH);
-    tabShortcutsBtn.setBounds(startTabX + (tabW + spacing) * 4, 8, tabW, tabH);
-    tabStreamingBtn.setBounds(startTabX + (tabW + spacing) * 5, 8, tabW, tabH);
-    tabAIBtn.setBounds(startTabX + (tabW + spacing) * 6, 8, tabW, tabH);
-    tabDonateBtn.setBounds(startTabX + (tabW + spacing) * 7, 8, tabW, tabH);
-    tabDesignBtn.setBounds(startTabX + (tabW + spacing) * 8, 8, tabW, tabH);
-    tabVersionBtn.setBounds(startTabX + (tabW + spacing) * 9, 8, tabW, tabH);
+    auto sidebarRect = getLocalBounds();
+    sidebarRect.removeFromBottom(52); // footer
+    sidebarRect.removeFromLeft(sidebarW);
+    sideViewport.setBounds(sidebarRect);
 
-    // 2. Tab Body Area con scroll (el contenido vive en bodyContent, no en this)
+    const int tabsContentH = 4 + 10 * tabBtnH + 9 * tabGap + 4;
+    sideContent.setBounds(0, 0, sidebarW, juce::jmax(tabsContentH, sidebarRect.getHeight()));
+
+    const int tabBtnX = (sidebarW - tabBtnW) / 2;
+    tabGeneralBtn.setBounds(tabBtnX, 4, tabBtnW, tabBtnH);
+    tabDevicesBtn.setBounds(tabBtnX, 4 + (tabBtnH + tabGap) * 1, tabBtnW, tabBtnH);
+    tabSoundBtn.setBounds(tabBtnX, 4 + (tabBtnH + tabGap) * 2, tabBtnW, tabBtnH);
+    tabMidiBtn.setBounds(tabBtnX, 4 + (tabBtnH + tabGap) * 3, tabBtnW, tabBtnH);
+    tabShortcutsBtn.setBounds(tabBtnX, 4 + (tabBtnH + tabGap) * 4, tabBtnW, tabBtnH);
+    tabStreamingBtn.setBounds(tabBtnX, 4 + (tabBtnH + tabGap) * 5, tabBtnW, tabBtnH);
+    tabAIBtn.setBounds(tabBtnX, 4 + (tabBtnH + tabGap) * 6, tabBtnW, tabBtnH);
+    tabDonateBtn.setBounds(tabBtnX, 4 + (tabBtnH + tabGap) * 7, tabBtnW, tabBtnH);
+    tabDesignBtn.setBounds(tabBtnX, 4 + (tabBtnH + tabGap) * 8, tabBtnW, tabBtnH);
+    tabVersionBtn.setBounds(tabBtnX, 4 + (tabBtnH + tabGap) * 9, tabBtnW, tabBtnH);
+
+    // 2. Tab Body Area (derecha del sidebar) con scroll (el contenido vive en bodyContent)
     auto bodyRect = getLocalBounds();
-    bodyRect.removeFromTop(56);
+    bodyRect.removeFromLeft(sidebarW);
     bodyRect.removeFromBottom(52);
     bodyViewport.setBounds(bodyRect);
 

@@ -250,6 +250,10 @@ private:
     juce::Viewport bodyViewport;
     juce::Component bodyContent;
 
+    // Sidebar vertical de pestañas (icono + etiqueta), con scroll si no caben
+    juce::Viewport sideViewport;
+    juce::Component sideContent;
+
     // Dynamic card layout boxes computed in resized()
     juce::Rectangle<int> midiDeviceListBox;
     juce::Rectangle<int> streamingInfoCardBox;
