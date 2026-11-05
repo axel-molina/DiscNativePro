@@ -2,6 +2,8 @@
 #include "../services/YouTubeService.h"
 #include "../services/WaveformTheme.h"
 #include "../services/SecretStore.h"
+#include "../services/FfmpegLocator.h"
+#include "../audio/Mp3Exporter.h"
 
 namespace
 {
@@ -65,6 +67,48 @@ namespace
             default: return 2;
         }
     }
+
+    // --- Destinos de transmision ---
+    // ids del combo: 1 radio propia (Icecast), 2 YouTube, 3 Facebook, 4 Twitch, 5 personalizado
+    constexpr const char* broadcastDestProperty = "broadcastDest";
+    constexpr const char* rtmpBitrateProperty = "rtmpBitrate";
+    constexpr const char* rtmpCustomUrlProperty = "rtmpCustomUrl";
+    constexpr const char* podcastBitrateProperty = "podcastBitrate";
+
+    bool isRtmpDestination(int comboId) { return comboId >= 2; }
+
+    juce::String defaultRtmpUrlForDestination(int comboId)
+    {
+        switch (comboId)
+        {
+            case 2: return "rtmp://a.rtmp.youtube.com/live2/";
+            case 3: return "rtmps://live-api-s.facebook.com:443/rtmp/";
+            case 4: return "rtmp://live.twitch.tv/app/";
+            default: return {};
+        }
+    }
+
+    juce::String rtmpKeyAccountForDestination(int comboId)
+    {
+        switch (comboId)
+        {
+            case 2: return "rtmp.key.youtube";
+            case 3: return "rtmp.key.facebook";
+            case 4: return "rtmp.key.twitch";
+            default: return "rtmp.key.custom";
+        }
+    }
+
+    juce::String composeRtmpIngestUrl(const juce::String& baseUrl, const juce::String& streamKey)
+    {
+        auto base = baseUrl.trim();
+        auto key = streamKey.trim();
+        if (key.isEmpty())
+            return base;
+        if (base.endsWithChar('/'))
+            return base + key;
+        return base + "/" + key;
+    }
 } // namespace
 
 SettingsModalComponent::SettingsModalComponent(AudioEngine& engine, MidiManager& midiMgr, int initialTab)
@@ -104,6 +148,7 @@ SettingsModalComponent::SettingsModalComponent(AudioEngine& engine, MidiManager&
     setupTabBtn(tabDonateBtn, LucideIcons::IconType::Coffee, "Donar", 7);
     setupTabBtn(tabDesignBtn, LucideIcons::IconType::Sliders, "Diseño", 8);
     setupTabBtn(tabVersionBtn, LucideIcons::IconType::Tag, "Versión", 9);
+    setupTabBtn(tabTransmitBtn, LucideIcons::IconType::Radio, "Transmitir", 10);
 
     // 3. Setup Tab Contents
     bodyViewport.setViewedComponent(&bodyContent, false);
@@ -115,6 +160,7 @@ SettingsModalComponent::SettingsModalComponent(AudioEngine& engine, MidiManager&
     setupSoundTab();
     setupMidiTab();
     setupStreamingTab();
+    setupTransmitTab();
     setupAITab();
     setupDonateTab();
     setupDesignTab();
@@ -619,17 +665,36 @@ void SettingsModalComponent::refreshLanguage()
     apiKeyEditor.setTextToShowWhenEmpty(LanguageManager::trUtf8("Pega tu clave AIzaSy...", "Paste your AIzaSy key..."), juce::Colour::fromRGB(100, 108, 125));
     clearApiKeyBtn.setText(LanguageManager::trUtf8("Borrar Key", "Clear Key"));
 
-    broadcastSectionTitle.setText(LanguageManager::trUtf8("Emitir en vivo (Broadcast a servidor propio)",
-                                                          "Broadcast live (to your own server)"), juce::dontSendNotification);
-    broadcastDescLabel.setText(LanguageManager::trUtf8(
-        "Emite la mezcla master en vivo a tu propio servidor Icecast/Shoutcast. Los oyentes se conectan al servidor, no a tu app.",
-        "Streams the master mix live to your own Icecast/Shoutcast server. Listeners connect to the server, not to your app."), juce::dontSendNotification);
+    // Tab 10: Transmitir (radio + RTMP + podcasts)
+    transmitTitleLabel.setText(LanguageManager::trUtf8("Transmitir — Emisiones en vivo y podcasts",
+                                                      "Transmit — Live streams and podcasts"), juce::dontSendNotification);
+    transmitDescLabel.setText(LanguageManager::trUtf8(
+        "Emite la mezcla master en vivo a tu radio propia o a tus redes (YouTube, Facebook, Twitch). Los oyentes se conectan a la plataforma, no a tu app.",
+        "Streams the master mix live to your own radio server or to your networks (YouTube, Facebook, Twitch). Listeners connect to the platform, not to your app."), juce::dontSendNotification);
+    broadcastDestLabel.setText(LanguageManager::trUtf8("Destino de la emisión:", "Destination:"), juce::dontSendNotification);
+    broadcastSectionTitle.setText(LanguageManager::trUtf8("Servidor de radio (Icecast/Shoutcast)",
+                                                          "Radio server (Icecast/Shoutcast)"), juce::dontSendNotification);
+    broadcastDescLabel.setText(LanguageManager::trUtf8("Datos de tu servidor propio de streaming.",
+                                                       "Details of your own streaming server."), juce::dontSendNotification);
     broadcastEnabledToggle.setButtonText(LanguageManager::trUtf8("Emitir mezcla en vivo", "Broadcast mix live"));
     broadcastHostLabel.setText(LanguageManager::trUtf8("Servidor (host o IP):", "Server (host or IP):"), juce::dontSendNotification);
     broadcastPortLabel.setText(LanguageManager::trUtf8("Puerto:", "Port:"), juce::dontSendNotification);
     broadcastPasswordLabel.setText(LanguageManager::trUtf8("Contraseña:", "Password:"), juce::dontSendNotification);
     broadcastNameLabel.setText(LanguageManager::trUtf8("Nombre de la emisión:", "Station name:"), juce::dontSendNotification);
     broadcastBitrateLabel.setText(LanguageManager::trUtf8("Bitrate MP3:", "MP3 bitrate:"), juce::dontSendNotification);
+    rtmpUrlLabel.setText(LanguageManager::trUtf8("URL de ingesta RTMP:", "RTMP ingest URL:"), juce::dontSendNotification);
+    rtmpKeyLabel.setText(LanguageManager::trUtf8("Stream key:", "Stream key:"), juce::dontSendNotification);
+    rtmpBitrateLabel.setText(LanguageManager::trUtf8("Bitrate AAC:", "AAC bitrate:"), juce::dontSendNotification);
+    installFfmpegBtn.setText(LanguageManager::trUtf8("Instalar ffmpeg", "Install ffmpeg"));
+    podcastSectionLabel.setText(LanguageManager::trUtf8("Podcast (exportar grabación a MP3)",
+                                                        "Podcast (export recording to MP3)"), juce::dontSendNotification);
+    podcastDescLabel.setText(LanguageManager::trUtf8("Convierte una grabación de sesión (WAV) a MP3 listo para publicar.",
+                                                    "Converts a session recording (WAV) into a publish-ready MP3."), juce::dontSendNotification);
+    podcastRecCombo.setTextWhenNothingSelected(LanguageManager::trUtf8("(sin grabaciones)", "(no recordings)"));
+    podcastRefreshBtn.setText(LanguageManager::trUtf8("Refrescar", "Refresh"));
+    podcastBitrateLabel.setText(LanguageManager::trUtf8("Bitrate de exportación:", "Export bitrate:"), juce::dontSendNotification);
+    podcastExportBtn.setText(LanguageManager::trUtf8("Exportar a MP3", "Export to MP3"));
+    refreshFfmpegStatus();
     apiInfoCard.setText(LanguageManager::trUtf8("Modo Video en Bandejas:\n• Al soltar un video de YouTube en el Deck 1 o Deck 2, el Jog Wheel se transforma en reproductor de video de alta definición (WebKit).\n• Los faders de volumen y el Crossfader central mezclan fluidamente el audio y video entre bandejas.\n• Iniciar sesión en YouTube en Safari comparte tu sesión con WKWebView para reproducción Premium sin publicidad.", "Video Mode in Decks:\n• Dropping a YouTube video onto Deck 1 or 2 turns the Jog Wheel into an HD video player (WebKit).\n• Volume faders and Crossfader smoothly mix audio and video between decks.\n• Logging in to YouTube in Safari shares your session with WKWebView for ad-free Premium playback."), juce::dontSendNotification);
 
     // Tab 6: IA
@@ -666,6 +731,7 @@ void SettingsModalComponent::refreshLanguage()
 
     // Tab 9: Versión / Version
     tabVersionBtn.setText(LanguageManager::trUtf8("Versión", "Version"));
+    tabTransmitBtn.setText(LanguageManager::trUtf8("Transmitir", "Transmit"));
     versionSectionTitle.setText(LanguageManager::trUtf8("Versión", "Version"), juce::dontSendNotification);
     versionChangeTitle.setText(LanguageManager::trUtf8("Cambiar de versión", "Change version"), juce::dontSendNotification);
     checkUpdatesBtn.setText(LanguageManager::trUtf8("Buscar actualizaciones", "Check for updates"));
@@ -941,71 +1007,114 @@ void SettingsModalComponent::setupStreamingTab()
     apiInfoCard.setJustificationType(juce::Justification::topLeft);
     bodyContent.addChildComponent(apiInfoCard);
 
-    // --- Broadcast: emitir la mezcla a un servidor Icecast/Shoutcast propio ---
-    auto styleBroadcastEditor = [this](juce::TextEditor& ed) {
+}
+
+void SettingsModalComponent::setupTransmitTab()
+{
+    auto styleEditor = [](juce::TextEditor& ed) {
         ed.setFont(juce::FontOptions(11.5f));
         ed.setColour(juce::TextEditor::backgroundColourId, juce::Colour::fromRGB(17, 19, 26));
         ed.setColour(juce::TextEditor::textColourId, juce::Colours::white);
         ed.setColour(juce::TextEditor::outlineColourId, juce::Colour::fromRGB(38, 43, 58));
     };
-    auto styleBroadcastLabel = [this](juce::Label& lb) {
+    auto styleLabel = [](juce::Label& lb) {
         lb.setFont(juce::FontOptions(11.0f, juce::Font::plain));
         lb.setColour(juce::Label::textColourId, juce::Colour::fromRGB(180, 185, 200));
         lb.setJustificationType(juce::Justification::centredLeft);
     };
 
-    broadcastSectionTitle.setText(juce::String::fromUTF8("Emitir en vivo (Broadcast a servidor propio)"), juce::dontSendNotification);
-    broadcastSectionTitle.setFont(juce::FontOptions(13.0f, juce::Font::bold));
+    transmitTitleLabel.setText(juce::String::fromUTF8("Transmitir — Emisiones en vivo y podcasts"), juce::dontSendNotification);
+    transmitTitleLabel.setFont(juce::FontOptions(13.0f, juce::Font::bold));
+    transmitTitleLabel.setColour(juce::Label::textColourId, juce::Colour::fromRGB(0, 180, 216));
+    bodyContent.addChildComponent(transmitTitleLabel);
+
+    transmitDescLabel.setText(juce::String::fromUTF8("Emite la mezcla master en vivo a tu radio propia o a tus redes (YouTube, Facebook, Twitch). Los oyentes se conectan a la plataforma, no a tu app."), juce::dontSendNotification);
+    transmitDescLabel.setFont(juce::FontOptions(10.5f));
+    transmitDescLabel.setColour(juce::Label::textColourId, juce::Colour::fromRGB(160, 165, 180));
+    bodyContent.addChildComponent(transmitDescLabel);
+
+    // --- Destino ---
+    styleLabel(broadcastDestLabel);
+    broadcastDestLabel.setText(juce::String::fromUTF8("Destino de la emisión:"), juce::dontSendNotification);
+    bodyContent.addChildComponent(broadcastDestLabel);
+
+    broadcastDestCombo.addItem(juce::String::fromUTF8("Servidor de radio propio (Icecast/Shoutcast)"), 1);
+    broadcastDestCombo.addItem("YouTube Live", 2);
+    broadcastDestCombo.addItem("Facebook Live", 3);
+    broadcastDestCombo.addItem("Twitch", 4);
+    broadcastDestCombo.addItem("RTMP personalizado", 5);
+    broadcastDestCombo.setSelectedId(juce::jmax(1, juce::jmin(5, readStringSetting(broadcastDestProperty, "1").getIntValue())),
+                                     juce::dontSendNotification);
+    broadcastDestCombo.onChange = [this]() {
+        // Cambiar de destino con emisión activa reinicia el servicio en el nuevo destino
+        if (audioEngine.getBroadcastService().isBroadcasting())
+        {
+            if (isRtmpDestination(broadcastDestCombo.getSelectedId()))
+                rtmpUrlEditor.setText(defaultRtmpUrlForDestination(broadcastDestCombo.getSelectedId()),
+                                      juce::dontSendNotification);
+            rtmpKeyEditor.setText(SecretStore::read(rtmpKeyAccountForDestination(broadcastDestCombo.getSelectedId())),
+                                  juce::dontSendNotification);
+            updateTransmitDestinationUI();
+            updateBroadcastRuntime();
+        }
+        else
+        {
+            updateTransmitDestinationUI();
+        }
+        persistBroadcastConfig();
+        resized();
+        repaint();
+    };
+    bodyContent.addChildComponent(broadcastDestCombo);
+
+    // --- Radio propia (Icecast) ---
+    broadcastSectionTitle.setText(juce::String::fromUTF8("Servidor de radio (Icecast/Shoutcast)"), juce::dontSendNotification);
+    broadcastSectionTitle.setFont(juce::FontOptions(12.0f, juce::Font::bold));
     broadcastSectionTitle.setColour(juce::Label::textColourId, juce::Colour::fromRGB(0, 180, 216));
     bodyContent.addChildComponent(broadcastSectionTitle);
 
-    broadcastDescLabel.setText(juce::String::fromUTF8("Emite la mezcla master en vivo a tu propio servidor Icecast/Shoutcast. Los oyentes se conectan al servidor, no a tu app."), juce::dontSendNotification);
+    broadcastDescLabel.setText(juce::String::fromUTF8("Datos de tu servidor propio de streaming."), juce::dontSendNotification);
     broadcastDescLabel.setFont(juce::FontOptions(10.5f));
     broadcastDescLabel.setColour(juce::Label::textColourId, juce::Colour::fromRGB(160, 165, 180));
     bodyContent.addChildComponent(broadcastDescLabel);
 
-    broadcastEnabledToggle.setButtonText(juce::String::fromUTF8("Emitir mezcla en vivo"));
-    broadcastEnabledToggle.setColour(juce::ToggleButton::textColourId, juce::Colour::fromRGB(220, 225, 235));
-    broadcastEnabledToggle.onClick = [this]() { updateBroadcastRuntime(); };
-    bodyContent.addChildComponent(broadcastEnabledToggle);
-
-    styleBroadcastLabel(broadcastHostLabel);
+    styleLabel(broadcastHostLabel);
     broadcastHostLabel.setText(juce::String::fromUTF8("Servidor (host o IP):"), juce::dontSendNotification);
     bodyContent.addChildComponent(broadcastHostLabel);
-    styleBroadcastEditor(broadcastHostEditor);
+    styleEditor(broadcastHostEditor);
     broadcastHostEditor.setTextToShowWhenEmpty("radio.midominio.com", juce::Colour::fromRGB(100, 108, 125));
     bodyContent.addChildComponent(broadcastHostEditor);
 
-    styleBroadcastLabel(broadcastPortLabel);
+    styleLabel(broadcastPortLabel);
     broadcastPortLabel.setText(juce::String::fromUTF8("Puerto:"), juce::dontSendNotification);
     bodyContent.addChildComponent(broadcastPortLabel);
-    styleBroadcastEditor(broadcastPortEditor);
+    styleEditor(broadcastPortEditor);
     broadcastPortEditor.setInputRestrictions(0, "0123456789");
     broadcastPortEditor.setTextToShowWhenEmpty("8000", juce::Colour::fromRGB(100, 108, 125));
     bodyContent.addChildComponent(broadcastPortEditor);
 
-    styleBroadcastLabel(broadcastMountLabel);
+    styleLabel(broadcastMountLabel);
     broadcastMountLabel.setText(juce::String::fromUTF8("Mount:"), juce::dontSendNotification);
     bodyContent.addChildComponent(broadcastMountLabel);
-    styleBroadcastEditor(broadcastMountEditor);
+    styleEditor(broadcastMountEditor);
     broadcastMountEditor.setTextToShowWhenEmpty("/stream", juce::Colour::fromRGB(100, 108, 125));
     bodyContent.addChildComponent(broadcastMountEditor);
 
-    styleBroadcastLabel(broadcastPasswordLabel);
+    styleLabel(broadcastPasswordLabel);
     broadcastPasswordLabel.setText(juce::String::fromUTF8("Contraseña:"), juce::dontSendNotification);
     bodyContent.addChildComponent(broadcastPasswordLabel);
-    styleBroadcastEditor(broadcastPasswordEditor);
+    styleEditor(broadcastPasswordEditor);
     broadcastPasswordEditor.setPasswordCharacter((juce::juce_wchar)'*');
     bodyContent.addChildComponent(broadcastPasswordEditor);
 
-    styleBroadcastLabel(broadcastNameLabel);
+    styleLabel(broadcastNameLabel);
     broadcastNameLabel.setText(juce::String::fromUTF8("Nombre de la emisión:"), juce::dontSendNotification);
     bodyContent.addChildComponent(broadcastNameLabel);
-    styleBroadcastEditor(broadcastNameEditor);
+    styleEditor(broadcastNameEditor);
     broadcastNameEditor.setTextToShowWhenEmpty("Mi radio DJ", juce::Colour::fromRGB(100, 108, 125));
     bodyContent.addChildComponent(broadcastNameEditor);
 
-    styleBroadcastLabel(broadcastBitrateLabel);
+    styleLabel(broadcastBitrateLabel);
     broadcastBitrateLabel.setText(juce::String::fromUTF8("Bitrate MP3:"), juce::dontSendNotification);
     bodyContent.addChildComponent(broadcastBitrateLabel);
     broadcastBitrateCombo.addItem("128 kbps", 1);
@@ -1015,10 +1124,116 @@ void SettingsModalComponent::setupStreamingTab()
     broadcastBitrateCombo.setSelectedId(2, juce::dontSendNotification);
     bodyContent.addChildComponent(broadcastBitrateCombo);
 
+    // --- RTMP (YouTube / Facebook / Twitch / personalizado) ---
+    rtmpUrlLabel.setText(juce::String::fromUTF8("URL de ingesta RTMP:"), juce::dontSendNotification);
+    styleLabel(rtmpUrlLabel);
+    bodyContent.addChildComponent(rtmpUrlLabel);
+    styleEditor(rtmpUrlEditor);
+    rtmpUrlEditor.setTextToShowWhenEmpty("rtmp://...", juce::Colour::fromRGB(100, 108, 125));
+    bodyContent.addChildComponent(rtmpUrlEditor);
+
+    rtmpKeyLabel.setText(juce::String::fromUTF8("Stream key:"), juce::dontSendNotification);
+    styleLabel(rtmpKeyLabel);
+    bodyContent.addChildComponent(rtmpKeyLabel);
+    styleEditor(rtmpKeyEditor);
+    rtmpKeyEditor.setPasswordCharacter((juce::juce_wchar)'*');
+    bodyContent.addChildComponent(rtmpKeyEditor);
+
+    rtmpBitrateLabel.setText(juce::String::fromUTF8("Bitrate AAC:"), juce::dontSendNotification);
+    styleLabel(rtmpBitrateLabel);
+    bodyContent.addChildComponent(rtmpBitrateLabel);
+    rtmpBitrateCombo.addItem("128 kbps", 1);
+    rtmpBitrateCombo.addItem("192 kbps", 2);
+    rtmpBitrateCombo.addItem("256 kbps", 3);
+    rtmpBitrateCombo.setSelectedId(2, juce::dontSendNotification);
+    bodyContent.addChildComponent(rtmpBitrateCombo);
+
+    installFfmpegBtn.setText("Instalar ffmpeg");
+    installFfmpegBtn.setFontSize(10.5f);
+    installFfmpegBtn.setCornerRadius(5.0f);
+    installFfmpegBtn.setCustomColours(juce::Colour::fromRGB(32, 35, 48),
+                                      juce::Colour::fromRGB(0, 180, 216),
+                                      juce::Colour::fromRGB(0, 180, 216),
+                                      juce::Colour::fromRGB(45, 50, 65));
+    installFfmpegBtn.onClick = [this]() {
+        installFfmpegBtn.setEnabled(false);
+        ffmpegStatusBadge.setText(LanguageManager::trUtf8("Descargando ffmpeg...", "Downloading ffmpeg..."),
+                                  juce::dontSendNotification);
+        juce::Thread::launch([this]() {
+            const bool ok = FfmpegLocator::ensureInstalled();
+            juce::MessageManager::callAsync([this, ok]() {
+                installFfmpegBtn.setEnabled(true);
+                refreshFfmpegStatus();
+                if (!ok)
+                    ffmpegStatusBadge.setColour(juce::Label::textColourId, juce::Colour::fromRGB(248, 113, 113));
+            });
+        });
+    };
+    bodyContent.addChildComponent(installFfmpegBtn);
+
+    ffmpegStatusBadge.setFont(juce::FontOptions(10.0f));
+    ffmpegStatusBadge.setColour(juce::Label::textColourId, juce::Colour::fromRGB(140, 145, 160));
+    bodyContent.addChildComponent(ffmpegStatusBadge);
+
+    // --- Emisión (toggle + estado, compartido por radio y RTMP) ---
+    broadcastEnabledToggle.setButtonText(juce::String::fromUTF8("Emitir mezcla en vivo"));
+    broadcastEnabledToggle.setColour(juce::ToggleButton::textColourId, juce::Colour::fromRGB(220, 225, 235));
+    broadcastEnabledToggle.onClick = [this]() { updateBroadcastRuntime(); };
+    bodyContent.addChildComponent(broadcastEnabledToggle);
+
     broadcastStatusBadge.setFont(juce::FontOptions(11.0f, juce::Font::bold));
     bodyContent.addChildComponent(broadcastStatusBadge);
 
-    // Cargar configuración persistida
+    // --- Podcast: exportar grabación a MP3 ---
+    podcastSectionLabel.setText(juce::String::fromUTF8("Podcast (exportar grabación a MP3)"), juce::dontSendNotification);
+    podcastSectionLabel.setFont(juce::FontOptions(12.0f, juce::Font::bold));
+    podcastSectionLabel.setColour(juce::Label::textColourId, juce::Colour::fromRGB(0, 180, 216));
+    bodyContent.addChildComponent(podcastSectionLabel);
+
+    podcastDescLabel.setText(juce::String::fromUTF8("Convierte una grabación de sesión (WAV) a MP3 listo para publicar."), juce::dontSendNotification);
+    podcastDescLabel.setFont(juce::FontOptions(10.5f));
+    podcastDescLabel.setColour(juce::Label::textColourId, juce::Colour::fromRGB(160, 165, 180));
+    bodyContent.addChildComponent(podcastDescLabel);
+
+    podcastRecCombo.setTextWhenNothingSelected(
+        LanguageManager::trUtf8("(sin grabaciones)", "(no recordings)"));
+    bodyContent.addChildComponent(podcastRecCombo);
+
+    podcastRefreshBtn.setText("Refrescar");
+    podcastRefreshBtn.setFontSize(10.5f);
+    podcastRefreshBtn.setCornerRadius(5.0f);
+    podcastRefreshBtn.setCustomColours(juce::Colour::fromRGB(32, 35, 48),
+                                       juce::Colour::fromRGB(0, 180, 216),
+                                       juce::Colour::fromRGB(0, 180, 216),
+                                       juce::Colour::fromRGB(45, 50, 65));
+    podcastRefreshBtn.onClick = [this]() { refreshPodcastRecordings(); };
+    bodyContent.addChildComponent(podcastRefreshBtn);
+
+    podcastBitrateLabel.setText(juce::String::fromUTF8("Bitrate de exportación:"), juce::dontSendNotification);
+    styleLabel(podcastBitrateLabel);
+    bodyContent.addChildComponent(podcastBitrateLabel);
+    podcastBitrateCombo.addItem("128 kbps", 1);
+    podcastBitrateCombo.addItem("192 kbps", 2);
+    podcastBitrateCombo.addItem("256 kbps", 3);
+    podcastBitrateCombo.addItem("320 kbps", 4);
+    podcastBitrateCombo.setSelectedId(2, juce::dontSendNotification);
+    bodyContent.addChildComponent(podcastBitrateCombo);
+
+    podcastExportBtn.setText("Exportar a MP3");
+    podcastExportBtn.setFontSize(10.5f);
+    podcastExportBtn.setCornerRadius(5.0f);
+    podcastExportBtn.setCustomColours(juce::Colour::fromRGB(37, 99, 235),
+                                      juce::Colours::white,
+                                      juce::Colours::white,
+                                      juce::Colour::fromRGB(45, 50, 65));
+    podcastExportBtn.onClick = [this]() { exportPodcastMp3(); };
+    bodyContent.addChildComponent(podcastExportBtn);
+
+    podcastStatusBadge.setFont(juce::FontOptions(10.5f));
+    podcastStatusBadge.setColour(juce::Label::textColourId, juce::Colour::fromRGB(140, 145, 160));
+    bodyContent.addChildComponent(podcastStatusBadge);
+
+    // --- Cargar configuración persistida ---
     broadcastHostEditor.setText(readStringSetting(broadcastHostProperty), juce::dontSendNotification);
     broadcastPortEditor.setText(readStringSetting(broadcastPortProperty, "8000"), juce::dontSendNotification);
     broadcastMountEditor.setText(readStringSetting(broadcastMountProperty, "/stream"), juce::dontSendNotification);
@@ -1027,25 +1242,55 @@ void SettingsModalComponent::setupStreamingTab()
     broadcastBitrateCombo.setSelectedId(comboIdFromBitrate(
         readStringSetting(broadcastBitrateProperty, "192").getIntValue()), juce::dontSendNotification);
 
+    const int destId = broadcastDestCombo.getSelectedId();
+    if (destId == 5)
+        rtmpUrlEditor.setText(readStringSetting(rtmpCustomUrlProperty), juce::dontSendNotification);
+    else
+        rtmpUrlEditor.setText(defaultRtmpUrlForDestination(destId), juce::dontSendNotification);
+    rtmpKeyEditor.setText(SecretStore::read(rtmpKeyAccountForDestination(destId)), juce::dontSendNotification);
+
+    const int rtmpBitrateStored = readStringSetting(rtmpBitrateProperty, "192").getIntValue();
+    rtmpBitrateCombo.setSelectedId(rtmpBitrateStored == 128 ? 1 : (rtmpBitrateStored == 256 ? 3 : 2),
+                                   juce::dontSendNotification);
+    podcastBitrateCombo.setSelectedId(comboIdFromBitrate(
+        readStringSetting(podcastBitrateProperty, "256").getIntValue()), juce::dontSendNotification);
+
     // Si la emision ya estaba activa (configurado desde otra sesion del modal)
     broadcastEnabledToggle.setToggleState(audioEngine.getBroadcastService().isBroadcasting(), juce::dontSendNotification);
+
+    updateTransmitDestinationUI();
+    refreshFfmpegStatus();
+    refreshPodcastRecordings();
 }
 
 void SettingsModalComponent::updateBroadcastRuntime()
 {
     auto& svc = audioEngine.getBroadcastService();
+    const int destId = broadcastDestCombo.getSelectedId();
 
     if (broadcastEnabledToggle.getToggleState())
     {
         BroadcastService::Config cfg;
-        cfg.host = broadcastHostEditor.getText().trim();
-        cfg.port = juce::jlimit(1, 65535, broadcastPortEditor.getText().trim().getIntValue());
-        if (cfg.port == 0)
-            cfg.port = 8000;
-        cfg.mount = broadcastMountEditor.getText().trim();
-        cfg.password = broadcastPasswordEditor.getText();
-        cfg.stationName = broadcastNameEditor.getText().trim();
-        cfg.bitrateKbps = bitrateFromComboId(broadcastBitrateCombo.getSelectedId());
+
+        if (isRtmpDestination(destId))
+        {
+            cfg.mode = BroadcastService::Mode::Rtmp;
+            cfg.ingestUrl = composeRtmpIngestUrl(rtmpUrlEditor.getText(), rtmpKeyEditor.getText());
+            cfg.bitrateKbps = rtmpBitrateCombo.getSelectedId() == 1 ? 128
+                           : (rtmpBitrateCombo.getSelectedId() == 3 ? 256 : 192);
+        }
+        else
+        {
+            cfg.mode = BroadcastService::Mode::Icecast;
+            cfg.host = broadcastHostEditor.getText().trim();
+            cfg.port = juce::jlimit(1, 65535, broadcastPortEditor.getText().trim().getIntValue());
+            if (cfg.port == 0)
+                cfg.port = 8000;
+            cfg.mount = broadcastMountEditor.getText().trim();
+            cfg.password = broadcastPasswordEditor.getText();
+            cfg.stationName = broadcastNameEditor.getText().trim();
+            cfg.bitrateKbps = bitrateFromComboId(broadcastBitrateCombo.getSelectedId());
+        }
 
         persistBroadcastConfig();
 
@@ -1060,8 +1305,129 @@ void SettingsModalComponent::updateBroadcastRuntime()
     refreshBroadcastStatus();
 }
 
+void SettingsModalComponent::updateTransmitDestinationUI()
+{
+    const int destId = broadcastDestCombo.getSelectedId();
+    const bool radio = (destId == 1);
+    const bool rtmp = isRtmpDestination(destId);
+
+    broadcastSectionTitle.setVisible(radio);
+    broadcastDescLabel.setVisible(radio);
+    broadcastHostLabel.setVisible(radio);
+    broadcastHostEditor.setVisible(radio);
+    broadcastPortLabel.setVisible(radio);
+    broadcastPortEditor.setVisible(radio);
+    broadcastMountLabel.setVisible(radio);
+    broadcastMountEditor.setVisible(radio);
+    broadcastPasswordLabel.setVisible(radio);
+    broadcastPasswordEditor.setVisible(radio);
+    broadcastNameLabel.setVisible(radio);
+    broadcastNameEditor.setVisible(radio);
+    broadcastBitrateLabel.setVisible(radio);
+    broadcastBitrateCombo.setVisible(radio);
+
+    rtmpUrlLabel.setVisible(rtmp);
+    rtmpUrlEditor.setVisible(rtmp);
+    rtmpKeyLabel.setVisible(rtmp);
+    rtmpKeyEditor.setVisible(rtmp);
+    rtmpBitrateLabel.setVisible(rtmp);
+    rtmpBitrateCombo.setVisible(rtmp);
+    installFfmpegBtn.setVisible(rtmp);
+    ffmpegStatusBadge.setVisible(rtmp);
+
+    // La URL solo es editable en el destino personalizado
+    rtmpUrlEditor.setReadOnly(destId != 5);
+
+    if (rtmp)
+        refreshFfmpegStatus();
+}
+
+void SettingsModalComponent::refreshFfmpegStatus()
+{
+    const auto ffmpeg = FfmpegLocator::locateFfmpeg();
+    if (ffmpeg.existsAsFile())
+    {
+        ffmpegStatusBadge.setText(LanguageManager::trUtf8("ffmpeg listo: ", "ffmpeg ready: ")
+                                      + ffmpeg.getFullPathName(), juce::dontSendNotification);
+        ffmpegStatusBadge.setColour(juce::Label::textColourId, juce::Colour::fromRGB(74, 222, 128));
+        installFfmpegBtn.setVisible(false);
+    }
+    else
+    {
+        ffmpegStatusBadge.setText(LanguageManager::trUtf8(
+            "ffmpeg no está instalado (necesario para emitir a redes)",
+            "ffmpeg is not installed (required to stream to networks)"), juce::dontSendNotification);
+        ffmpegStatusBadge.setColour(juce::Label::textColourId, juce::Colour::fromRGB(250, 204, 21));
+        installFfmpegBtn.setVisible(isRtmpDestination(broadcastDestCombo.getSelectedId()));
+    }
+}
+
+void SettingsModalComponent::refreshPodcastRecordings()
+{
+    podcastRecCombo.clear(juce::dontSendNotification);
+
+    auto dir = audioEngine.getRecordingDirectory();
+    if (!dir.isDirectory())
+        return;
+
+    auto files = dir.findChildFiles(juce::File::findFiles, false, "*.wav");
+    files.sort();
+    for (int i = 0; i < files.size(); ++i)
+        podcastRecCombo.addItem(files.getReference(i).getFileName(), i + 1);
+
+    if (!files.isEmpty())
+        podcastRecCombo.setSelectedId(files.size(), juce::dontSendNotification); // la más reciente
+}
+
+void SettingsModalComponent::exportPodcastMp3()
+{
+    if (isExportingPodcast)
+        return;
+
+    auto dir = audioEngine.getRecordingDirectory();
+    auto wav = dir.getChildFile(podcastRecCombo.getText());
+
+    if (podcastRecCombo.getText().isEmpty() || !wav.existsAsFile())
+    {
+        podcastStatusBadge.setText(LanguageManager::trUtf8("Selecciona una grabación válida",
+                                                          "Select a valid recording"), juce::dontSendNotification);
+        podcastStatusBadge.setColour(juce::Label::textColourId, juce::Colour::fromRGB(248, 113, 113));
+        return;
+    }
+
+    const int bitrate = bitrateFromComboId(podcastBitrateCombo.getSelectedId());
+    auto outMp3 = wav.withFileExtension("mp3");
+
+    isExportingPodcast = true;
+    podcastExportBtn.setEnabled(false);
+    podcastStatusBadge.setText(LanguageManager::trUtf8("Exportando a MP3...", "Exporting to MP3..."),
+                               juce::dontSendNotification);
+    podcastStatusBadge.setColour(juce::Label::textColourId, juce::Colour::fromRGB(0, 229, 255));
+
+    juce::Thread::launch([this, wav, outMp3, bitrate]() {
+        const auto error = Mp3Exporter::encodeWavToMp3(wav, outMp3, bitrate);
+        juce::MessageManager::callAsync([this, error, outMp3]() {
+            isExportingPodcast = false;
+            podcastExportBtn.setEnabled(true);
+
+            if (error.isEmpty())
+            {
+                podcastStatusBadge.setText(LanguageManager::trUtf8("MP3 creado: ", "MP3 created: ")
+                                               + outMp3.getFileName(), juce::dontSendNotification);
+                podcastStatusBadge.setColour(juce::Label::textColourId, juce::Colour::fromRGB(74, 222, 128));
+            }
+            else
+            {
+                podcastStatusBadge.setText(error, juce::dontSendNotification);
+                podcastStatusBadge.setColour(juce::Label::textColourId, juce::Colour::fromRGB(248, 113, 113));
+            }
+        });
+    });
+}
+
 void SettingsModalComponent::persistBroadcastConfig()
 {
+    writeStringSetting(broadcastDestProperty, juce::String(broadcastDestCombo.getSelectedId()));
     writeStringSetting(broadcastHostProperty, broadcastHostEditor.getText().trim());
     writeStringSetting(broadcastPortProperty, broadcastPortEditor.getText().trim());
     writeStringSetting(broadcastMountProperty, broadcastMountEditor.getText().trim());
@@ -1069,6 +1435,15 @@ void SettingsModalComponent::persistBroadcastConfig()
     writeStringSetting(broadcastBitrateProperty,
                        juce::String(bitrateFromComboId(broadcastBitrateCombo.getSelectedId())));
     SecretStore::write(broadcastPasswordAccount, broadcastPasswordEditor.getText());
+
+    const int destId = broadcastDestCombo.getSelectedId();
+    if (destId == 5)
+        writeStringSetting(rtmpCustomUrlProperty, rtmpUrlEditor.getText().trim());
+    writeStringSetting(rtmpBitrateProperty, juce::String(rtmpBitrateCombo.getSelectedId() == 1 ? 128
+                                                                                               : (rtmpBitrateCombo.getSelectedId() == 3 ? 256 : 192)));
+    SecretStore::write(rtmpKeyAccountForDestination(destId), rtmpKeyEditor.getText());
+    writeStringSetting(podcastBitrateProperty,
+                       juce::String(bitrateFromComboId(podcastBitrateCombo.getSelectedId())));
 }
 
 void SettingsModalComponent::refreshBroadcastStatus()
@@ -1107,7 +1482,7 @@ void SettingsModalComponent::refreshBroadcastStatus()
 
 void SettingsModalComponent::timerCallback()
 {
-    if (activeTab == 5)
+    if (activeTab == 10)
         refreshBroadcastStatus();
 }
 
@@ -1754,24 +2129,29 @@ void SettingsModalComponent::updateTabVisibility()
     apiInfoCard.setVisible(isStreaming);
     clearApiKeyBtn.setVisible(isStreaming);
 
-    broadcastSectionTitle.setVisible(isStreaming);
-    broadcastDescLabel.setVisible(isStreaming);
-    broadcastEnabledToggle.setVisible(isStreaming);
-    broadcastHostLabel.setVisible(isStreaming);
-    broadcastHostEditor.setVisible(isStreaming);
-    broadcastPortLabel.setVisible(isStreaming);
-    broadcastPortEditor.setVisible(isStreaming);
-    broadcastMountLabel.setVisible(isStreaming);
-    broadcastMountEditor.setVisible(isStreaming);
-    broadcastPasswordLabel.setVisible(isStreaming);
-    broadcastPasswordEditor.setVisible(isStreaming);
-    broadcastNameLabel.setVisible(isStreaming);
-    broadcastNameEditor.setVisible(isStreaming);
-    broadcastBitrateLabel.setVisible(isStreaming);
-    broadcastBitrateCombo.setVisible(isStreaming);
-    broadcastStatusBadge.setVisible(isStreaming);
-    if (isStreaming)
+    // Transmitir components (Tab 10)
+    bool isTransmit = (activeTab == 10);
+    transmitTitleLabel.setVisible(isTransmit);
+    transmitDescLabel.setVisible(isTransmit);
+    broadcastDestLabel.setVisible(isTransmit);
+    broadcastDestCombo.setVisible(isTransmit);
+    broadcastEnabledToggle.setVisible(isTransmit);
+    broadcastStatusBadge.setVisible(isTransmit);
+    podcastSectionLabel.setVisible(isTransmit);
+    podcastDescLabel.setVisible(isTransmit);
+    podcastRecCombo.setVisible(isTransmit);
+    podcastRefreshBtn.setVisible(isTransmit);
+    podcastBitrateLabel.setVisible(isTransmit);
+    podcastBitrateCombo.setVisible(isTransmit);
+    podcastExportBtn.setVisible(isTransmit);
+    podcastStatusBadge.setVisible(isTransmit);
+
+    if (isTransmit)
+    {
+        updateTransmitDestinationUI();
         refreshBroadcastStatus();
+        refreshPodcastRecordings();
+    }
 
     if (isStreaming)
     {
@@ -1900,6 +2280,7 @@ void SettingsModalComponent::updateTabVisibility()
     updateBtnStyle(tabDonateBtn, activeTab == 7);
     updateBtnStyle(tabDesignBtn, activeTab == 8);
     updateBtnStyle(tabVersionBtn, activeTab == 9);
+    updateBtnStyle(tabTransmitBtn, activeTab == 10);
 }
 
 void SettingsModalComponent::applySettings()
@@ -2134,7 +2515,7 @@ void SettingsModalComponent::resized()
     sidebarRect = sidebarRect.removeFromLeft(sidebarW); // el sidebar ES la franja izquierda
     sideViewport.setBounds(sidebarRect);
 
-    const int tabsContentH = 4 + 10 * tabBtnH + 9 * tabGap + 4;
+    const int tabsContentH = 4 + 11 * tabBtnH + 10 * tabGap + 4;
     sideContent.setBounds(0, 0, sidebarW, juce::jmax(tabsContentH, sidebarRect.getHeight()));
 
     const int tabBtnX = (sidebarW - tabBtnW) / 2;
@@ -2148,6 +2529,7 @@ void SettingsModalComponent::resized()
     tabDonateBtn.setBounds(tabBtnX, 4 + (tabBtnH + tabGap) * 7, tabBtnW, tabBtnH);
     tabDesignBtn.setBounds(tabBtnX, 4 + (tabBtnH + tabGap) * 8, tabBtnW, tabBtnH);
     tabVersionBtn.setBounds(tabBtnX, 4 + (tabBtnH + tabGap) * 9, tabBtnW, tabBtnH);
+    tabTransmitBtn.setBounds(tabBtnX, 4 + (tabBtnH + tabGap) * 10, tabBtnW, tabBtnH);
 
     // 2. Tab Body Area (derecha del sidebar) con scroll (el contenido vive en bodyContent)
     auto bodyRect = getLocalBounds();
@@ -2369,48 +2751,108 @@ void SettingsModalComponent::resized()
 
         streamingInfoCardBox = stArea.removeFromTop(120);
         apiInfoCard.setBounds(streamingInfoCardBox.reduced(12, 10));
+    }
 
-        // --- Broadcast (misma tab 5, debajo de la tarjeta de info) ---
-        stArea.removeFromTop(14);
-        broadcastSectionTitle.setBounds(stArea.removeFromTop(22));
-        stArea.removeFromTop(4);
-        broadcastDescLabel.setBounds(stArea.removeFromTop(30));
-        stArea.removeFromTop(6);
-        broadcastEnabledToggle.setBounds(stArea.removeFromTop(24));
-        stArea.removeFromTop(10);
+    // --- Tab 10: Transmitir Layout (radio + RTMP + podcasts) ---
+    {
+        auto tArea = body;
+        transmitTitleLabel.setBounds(tArea.removeFromTop(22));
+        tArea.removeFromTop(4);
+        transmitDescLabel.setBounds(tArea.removeFromTop(30));
+        tArea.removeFromTop(10);
 
-        auto bcRow1 = stArea.removeFromTop(26);
-        broadcastHostLabel.setBounds(bcRow1.removeFromLeft(170));
-        bcRow1.removeFromLeft(8);
-        broadcastHostEditor.setBounds(bcRow1);
-        stArea.removeFromTop(6);
+        auto destRow = tArea.removeFromTop(26);
+        broadcastDestLabel.setBounds(destRow.removeFromLeft(170));
+        destRow.removeFromLeft(8);
+        broadcastDestCombo.setBounds(destRow);
+        tArea.removeFromTop(10);
 
-        auto bcRow2 = stArea.removeFromTop(28);
-        broadcastPortLabel.setBounds(bcRow2.removeFromLeft(170));
-        bcRow2.removeFromLeft(8);
-        broadcastPortEditor.setBounds(bcRow2.removeFromLeft(100));
-        bcRow2.removeFromLeft(16);
-        broadcastMountLabel.setBounds(bcRow2.removeFromLeft(100));
-        bcRow2.removeFromLeft(8);
-        broadcastMountEditor.setBounds(bcRow2);
-        stArea.removeFromTop(6);
+        // Radio propia (Icecast)
+        broadcastSectionTitle.setBounds(tArea.removeFromTop(20));
+        tArea.removeFromTop(2);
+        broadcastDescLabel.setBounds(tArea.removeFromTop(16));
+        tArea.removeFromTop(4);
 
-        auto bcRow3 = stArea.removeFromTop(28);
-        broadcastPasswordLabel.setBounds(bcRow3.removeFromLeft(170));
-        bcRow3.removeFromLeft(8);
-        broadcastPasswordEditor.setBounds(bcRow3.removeFromLeft(200));
-        bcRow3.removeFromLeft(16);
-        broadcastNameLabel.setBounds(bcRow3.removeFromLeft(120));
-        bcRow3.removeFromLeft(8);
-        broadcastNameEditor.setBounds(bcRow3);
-        stArea.removeFromTop(6);
+        auto r1 = tArea.removeFromTop(26);
+        broadcastHostLabel.setBounds(r1.removeFromLeft(170));
+        r1.removeFromLeft(8);
+        broadcastHostEditor.setBounds(r1);
+        tArea.removeFromTop(6);
 
-        auto bcRow4 = stArea.removeFromTop(24);
-        broadcastBitrateLabel.setBounds(bcRow4.removeFromLeft(170));
-        bcRow4.removeFromLeft(8);
-        broadcastBitrateCombo.setBounds(bcRow4.removeFromLeft(120));
-        bcRow4.removeFromLeft(16);
-        broadcastStatusBadge.setBounds(bcRow4);
+        auto r2 = tArea.removeFromTop(28);
+        broadcastPortLabel.setBounds(r2.removeFromLeft(170));
+        r2.removeFromLeft(8);
+        broadcastPortEditor.setBounds(r2.removeFromLeft(100));
+        r2.removeFromLeft(16);
+        broadcastMountLabel.setBounds(r2.removeFromLeft(100));
+        r2.removeFromLeft(8);
+        broadcastMountEditor.setBounds(r2);
+        tArea.removeFromTop(6);
+
+        auto r3 = tArea.removeFromTop(28);
+        broadcastPasswordLabel.setBounds(r3.removeFromLeft(170));
+        r3.removeFromLeft(8);
+        broadcastPasswordEditor.setBounds(r3.removeFromLeft(200));
+        r3.removeFromLeft(16);
+        broadcastNameLabel.setBounds(r3.removeFromLeft(120));
+        r3.removeFromLeft(8);
+        broadcastNameEditor.setBounds(r3);
+        tArea.removeFromTop(6);
+
+        auto r4 = tArea.removeFromTop(24);
+        broadcastBitrateLabel.setBounds(r4.removeFromLeft(170));
+        r4.removeFromLeft(8);
+        broadcastBitrateCombo.setBounds(r4.removeFromLeft(120));
+
+        // RTMP (YouTube / Facebook / Twitch / personalizado)
+        auto rt1 = tArea.removeFromTop(26);
+        rtmpUrlLabel.setBounds(rt1.removeFromLeft(170));
+        rt1.removeFromLeft(8);
+        rtmpUrlEditor.setBounds(rt1);
+        tArea.removeFromTop(6);
+
+        auto rt2 = tArea.removeFromTop(26);
+        rtmpKeyLabel.setBounds(rt2.removeFromLeft(170));
+        rt2.removeFromLeft(8);
+        rtmpKeyEditor.setBounds(rt2);
+        tArea.removeFromTop(6);
+
+        auto rt3 = tArea.removeFromTop(26);
+        rtmpBitrateLabel.setBounds(rt3.removeFromLeft(170));
+        rt3.removeFromLeft(8);
+        rtmpBitrateCombo.setBounds(rt3.removeFromLeft(120));
+        rt3.removeFromLeft(16);
+        installFfmpegBtn.setBounds(rt3.removeFromLeft(130));
+        tArea.removeFromTop(4);
+        ffmpegStatusBadge.setBounds(tArea.removeFromTop(16));
+        tArea.removeFromTop(10);
+
+        // Emisión (toggle + estado)
+        broadcastEnabledToggle.setBounds(tArea.removeFromTop(24));
+        tArea.removeFromTop(6);
+        broadcastStatusBadge.setBounds(tArea.removeFromTop(20));
+        tArea.removeFromTop(14);
+
+        // Podcast (exportar grabación a MP3)
+        podcastSectionLabel.setBounds(tArea.removeFromTop(20));
+        tArea.removeFromTop(2);
+        podcastDescLabel.setBounds(tArea.removeFromTop(16));
+        tArea.removeFromTop(4);
+
+        auto p1 = tArea.removeFromTop(26);
+        podcastRefreshBtn.setBounds(p1.removeFromRight(110));
+        p1.removeFromRight(8);
+        podcastRecCombo.setBounds(p1);
+        tArea.removeFromTop(6);
+
+        auto p2 = tArea.removeFromTop(26);
+        podcastBitrateLabel.setBounds(p2.removeFromLeft(170));
+        p2.removeFromLeft(8);
+        podcastBitrateCombo.setBounds(p2.removeFromLeft(120));
+        p2.removeFromLeft(16);
+        podcastExportBtn.setBounds(p2.removeFromLeft(150));
+        tArea.removeFromTop(6);
+        podcastStatusBadge.setBounds(tArea.removeFromTop(18));
     }
 
     // --- Tab 6: AI Match Layout (Unconditionally set bounds) ---

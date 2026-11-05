@@ -85,6 +85,10 @@ target_sources(DiscNativePro
         src/audio/AudioRecorder.cpp
         src/audio/BroadcastService.h
         src/audio/BroadcastService.cpp
+        src/audio/Mp3Exporter.h
+        src/audio/Mp3Exporter.cpp
+        src/services/FfmpegLocator.h
+        src/services/FfmpegLocator.cpp
         src/audio/SampleTrackGenerator.h
         src/audio/SampleTrackGenerator.cpp
         src/midi/MidiManager.h
@@ -225,6 +229,20 @@ if(APPLE)
                 "${YT_DLP_CANDIDATE}"
                 "$<TARGET_BUNDLE_DIR:DiscNativePro>/Contents/Resources/yt-dlp"
             COMMENT "Bundling yt-dlp into app resources"
+        )
+    endif()
+
+    # ffmpeg (transporte RTMP del broadcast). Igual que yt-dlp: se copia al bundle
+    # si existe localmente; si no, la app lo descarga en runtime (FfmpegLocator).
+    set(FFMPEG_CANDIDATE "$ENV{HOME}/Library/Application Support/DiscNativePro/bin/ffmpeg")
+    if (EXISTS "${FFMPEG_CANDIDATE}")
+        add_custom_command(TARGET DiscNativePro POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E make_directory
+                "$<TARGET_BUNDLE_DIR:DiscNativePro>/Contents/Resources"
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                "${FFMPEG_CANDIDATE}"
+                "$<TARGET_BUNDLE_DIR:DiscNativePro>/Contents/Resources/ffmpeg"
+            COMMENT "Bundling ffmpeg into app resources"
         )
     endif()
 elseif(WIN32)

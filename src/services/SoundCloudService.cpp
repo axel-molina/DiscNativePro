@@ -247,7 +247,7 @@ void SoundCloudService::downloadTrackAsync(const SoundCloudTrackItem& item,
     }
 
     auto cacheDir = getCacheDirectory();
-    auto ext = item.progressiveStreamAuthUrl.isNotEmpty() ? ".mp3" : ".m4a";
+    juce::String ext = item.progressiveStreamAuthUrl.isNotEmpty() ? ".mp3" : ".m4a";
     auto targetFile = cacheDir.getChildFile("sc_" + item.id + ext);
 
     auto altTarget = cacheDir.getChildFile("sc_" + item.id + (ext == ".mp3" ? ".m4a" : ".mp3"));

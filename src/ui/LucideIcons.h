@@ -41,7 +41,8 @@ public:
         Check,
         Download,
         Video,
-        Tag
+        Tag,
+        Radio
     };
 
     // Draw the icon vector scaled into the destination rectangle

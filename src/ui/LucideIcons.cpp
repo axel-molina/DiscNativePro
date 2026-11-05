@@ -508,6 +508,21 @@ juce::Path LucideIcons::getPath(IconType icon)
             break;
         }
 
+        case IconType::Radio:
+        {
+            // Icono "radio" de Lucide: punto central con arcos a ambos lados
+            p.addEllipse(10.5f, 10.5f, 3.0f, 3.0f);
+            p.startNewSubPath(7.8f, 16.2f);
+            p.addCentredArc(12.0f, 12.0f, 6.0f, 6.0f, 0.0f, -juce::MathConstants<float>::pi * 0.75f, juce::MathConstants<float>::pi * 0.75f, false);
+            p.startNewSubPath(4.9f, 19.1f);
+            p.addCentredArc(12.0f, 12.0f, 10.0f, 10.0f, 0.0f, -juce::MathConstants<float>::pi * 0.75f, juce::MathConstants<float>::pi * 0.75f, false);
+            p.startNewSubPath(16.2f, 16.2f);
+            p.addCentredArc(12.0f, 12.0f, 6.0f, 6.0f, 0.0f, juce::MathConstants<float>::pi * 0.25f, juce::MathConstants<float>::pi * 1.75f, false);
+            p.startNewSubPath(19.1f, 19.1f);
+            p.addCentredArc(12.0f, 12.0f, 10.0f, 10.0f, 0.0f, juce::MathConstants<float>::pi * 0.25f, juce::MathConstants<float>::pi * 1.75f, false);
+            break;
+        }
+
         case IconType::Tag:
         {
             p.startNewSubPath(11.5f, 2.0f);

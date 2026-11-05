@@ -1,6 +1,16 @@
 #include "BroadcastService.h"
 
+#include "../services/FfmpegLocator.h"
+
 #include <lame.h>
+
+#ifdef _WIN32
+    #define BROADCAST_POPEN  _popen
+    #define BROADCAST_PCLOSE _pclose
+#else
+    #define BROADCAST_POPEN  popen
+    #define BROADCAST_PCLOSE pclose
+#endif
 
 BroadcastService::BroadcastService()
     : juce::Thread("DiscPro Broadcast Thread")
@@ -20,40 +30,68 @@ bool BroadcastService::startBroadcast(const Config& newConfig, double sampleRate
     config = newConfig;
     config.host = config.host.trim();
     config.mount = config.mount.trim();
-    if (config.host.isEmpty())
+    config.ingestUrl = config.ingestUrl.trim();
+
+    if (config.mode == Mode::Icecast)
     {
-        setError("Servidor vacio");
-        return false;
+        if (config.host.isEmpty())
+        {
+            setError("Servidor vacio");
+            return false;
+        }
+        if (!config.mount.startsWith("/"))
+            config.mount = "/" + config.mount;
     }
-    if (!config.mount.startsWith("/"))
-        config.mount = "/" + config.mount;
+    else
+    {
+        if (config.ingestUrl.isEmpty())
+        {
+            setError("URL de ingesta vacia");
+            return false;
+        }
+        if (!FfmpegLocator::locateFfmpeg().existsAsFile())
+        {
+            setError("ffmpeg no esta instalado");
+            return false;
+        }
+    }
 
     streamChannels = juce::jlimit(1, 2, numChannels);
+    streamSampleRate = sampleRate > 0.0 ? sampleRate : 44100.0;
 
-    auto* gfp = lame_init();
-    if (gfp == nullptr)
+    if (config.mode == Mode::Icecast)
     {
-        setError("No se pudo inicializar el codificador MP3");
-        return false;
+        auto* gfp = lame_init();
+        if (gfp == nullptr)
+        {
+            setError("No se pudo inicializar el codificador MP3");
+            return false;
+        }
+
+        lame_set_in_samplerate(gfp, (int) streamSampleRate);
+        lame_set_num_channels(gfp, streamChannels);
+        lame_set_brate(gfp, config.bitrateKbps);
+        lame_set_quality(gfp, 2);
+
+        if (lame_init_params(gfp) < 0)
+        {
+            lame_close(gfp);
+            setError("Parametros MP3 invalidos");
+            return false;
+        }
+
+        lameFlags = gfp;
     }
-
-    lame_set_in_samplerate(gfp, (int) sampleRate);
-    lame_set_num_channels(gfp, streamChannels);
-    lame_set_brate(gfp, config.bitrateKbps);
-    lame_set_quality(gfp, 2);
-
-    if (lame_init_params(gfp) < 0)
-    {
-        lame_close(gfp);
-        setError("Parametros MP3 invalidos");
-        return false;
-    }
-
-    lameFlags = gfp;
 
     pcmInterleaved.assign((size_t) 2048 * (size_t) streamChannels, 0);
-    // Tamaño requerido por LAME por llamada: 1.25 * numFrames + 7200 (con margen)
-    mp3Buffer.assign((size_t) (2048 * 5 / 4) + 7200 + 1024, 0);
+    if (config.mode == Mode::Icecast)
+    {
+        // Tamaño requerido por LAME por llamada: 1.25 * numFrames + 7200 (con margen)
+        mp3Buffer.assign((size_t) (2048 * 5 / 4) + 7200 + 1024, 0);
+    }
+
+    ffmpegLogFile = juce::File::getSpecialLocation(juce::File::userApplicationDataDirectory)
+                        .getChildFile("DiscNativePro/broadcast_ffmpeg.log");
 
     fifo.reset();
     fifoBuffer.setSize(streamChannels, fifoSize, false, false, false);
@@ -75,14 +113,21 @@ void BroadcastService::stopBroadcast()
     wakeEvent.signal();
     stopThread(3000);
 
-    // Flush final del codificador (el hilo de red ya no esta corriendo)
-    sendRemainingEncoderOutput();
+    if (config.mode == Mode::Rtmp)
+    {
+        closeFfmpeg();
+    }
+    else
+    {
+        // Flush final del codificador (el hilo de red ya no esta corriendo)
+        sendRemainingEncoderOutput();
 
-    if (auto* gfp = static_cast<lame_global_flags*>(lameFlags))
-        lame_close(gfp);
-    lameFlags = nullptr;
+        if (auto* gfp = static_cast<lame_global_flags*>(lameFlags))
+            lame_close(gfp);
+        lameFlags = nullptr;
 
-    closeConnection();
+        closeConnection();
+    }
 }
 
 void BroadcastService::pushAudioBlock(const juce::AudioBuffer<float>& buffer, int numSamples)
@@ -117,9 +162,11 @@ void BroadcastService::run()
 
     while (!threadShouldExit() && broadcasting.load(std::memory_order_relaxed))
     {
+        // 1. Asegurar el transporte (servidor Icecast o proceso ffmpeg)
         if (!connected.load(std::memory_order_relaxed))
         {
-            if (!connectToServer())
+            const bool up = (config.mode == Mode::Icecast) ? connectToServer() : launchFfmpeg();
+            if (!up)
             {
                 // Backoff: 1s, 2s, 4s ... max 30s. Despierta antes si se detiene.
                 const int waitMs = juce::jmin(30000, 1000 * (1 << juce::jmin(reconnectAttempt, 5)));
@@ -162,6 +209,17 @@ void BroadcastService::run()
         }
 
         fifo.finishedRead(total);
+
+        // 3. Enviar
+        if (config.mode == Mode::Rtmp)
+        {
+            if (!writePcmToFfmpeg(out, total))
+            {
+                closeFfmpeg();
+                setError("Conexion perdida con la salida RTMP, reconectando...");
+            }
+            continue;
+        }
 
         auto* gfp = static_cast<lame_global_flags*>(lameFlags);
         if (gfp == nullptr)
@@ -231,6 +289,67 @@ bool BroadcastService::connectToServer()
 
     socket = std::move(sock);
     connected.store(true);
+    return true;
+}
+
+bool BroadcastService::launchFfmpeg()
+{
+    auto ffmpeg = FfmpegLocator::locateFfmpeg();
+    if (!ffmpeg.existsAsFile())
+    {
+        setError("ffmpeg no esta instalado");
+        return false;
+    }
+
+    ffmpegLogFile.getParentDirectory().createDirectory();
+
+    // ffmpeg: PCM por stdin -> AAC -> FLV -> RTMP/RTMPS (TLS incluido en el build estatico)
+    juce::String cmd = "\"" + ffmpeg.getFullPathName() + "\""
+                       + " -hide_banner -loglevel error -nostdin"
+                       + " -f s16le -ar " + juce::String((int) streamSampleRate)
+                       + " -ac " + juce::String(streamChannels)
+                       + " -i pipe:0"
+                       + " -c:a aac -b:a " + juce::String(config.bitrateKbps) + "k"
+                       + " -f flv \"" + config.ingestUrl + "\""
+                       + " 2> \"" + ffmpegLogFile.getFullPathName() + "\"";
+
+    ffmpegPipe = BROADCAST_POPEN(cmd.toUTF8(), "w");
+    if (ffmpegPipe == nullptr)
+    {
+        setError("No se pudo iniciar ffmpeg");
+        return false;
+    }
+
+    // Sin buffering: el audio ya llega en tiempo real desde el FIFO
+    std::setvbuf(ffmpegPipe, nullptr, _IONBF, 0);
+
+    connected.store(true);
+    return true;
+}
+
+void BroadcastService::closeFfmpeg()
+{
+    connected.store(false);
+
+    if (ffmpegPipe != nullptr)
+    {
+        auto* pipe = ffmpegPipe;
+        ffmpegPipe = nullptr;
+        BROADCAST_PCLOSE(pipe);
+    }
+}
+
+bool BroadcastService::writePcmToFfmpeg(const short* interleaved, int numFrames)
+{
+    if (ffmpegPipe == nullptr)
+        return false;
+
+    const size_t numBytes = (size_t) numFrames * (size_t) streamChannels * sizeof(short);
+    const size_t written = std::fwrite(interleaved, 1, numBytes, ffmpegPipe);
+    if (written != numBytes)
+        return false;
+
+    bytesSent.fetch_add((int64_t) numBytes, std::memory_order_relaxed);
     return true;
 }
 

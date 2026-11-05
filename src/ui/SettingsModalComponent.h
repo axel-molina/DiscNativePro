@@ -39,6 +39,7 @@ private:
     void setupSoundTab();
     void setupMidiTab();
     void setupStreamingTab();
+    void setupTransmitTab();
     void setupAITab();
     void setupDonateTab();
     void setupDesignTab();
@@ -52,6 +53,10 @@ private:
     void updateBroadcastRuntime();
     void refreshBroadcastStatus();
     void persistBroadcastConfig();
+    void updateTransmitDestinationUI();
+    void refreshFfmpegStatus();
+    void refreshPodcastRecordings();
+    void exportPodcastMp3();
     void updateRecordingFolderUI();
     void refreshAiModelOptions();
 
@@ -70,6 +75,7 @@ private:
     DjButton tabDonateBtn;
     DjButton tabDesignBtn;
     DjButton tabVersionBtn;
+    DjButton tabTransmitBtn;
 
     // --- Tab 0: General Controls ---
     juce::Label languageSectionLabel;
@@ -181,6 +187,32 @@ private:
     juce::Label broadcastBitrateLabel;
     juce::ComboBox broadcastBitrateCombo;
     juce::Label broadcastStatusBadge;
+
+    // --- Tab 10: Transmitir (radio + RTMP + podcasts) ---
+    juce::Label transmitTitleLabel;
+    juce::Label transmitDescLabel;
+
+    juce::Label broadcastDestLabel;
+    juce::ComboBox broadcastDestCombo;
+
+    juce::Label rtmpUrlLabel;
+    juce::TextEditor rtmpUrlEditor;
+    juce::Label rtmpKeyLabel;
+    juce::TextEditor rtmpKeyEditor;
+    juce::Label rtmpBitrateLabel;
+    juce::ComboBox rtmpBitrateCombo;
+    DjButton installFfmpegBtn;
+    juce::Label ffmpegStatusBadge;
+
+    juce::Label podcastSectionLabel;
+    juce::Label podcastDescLabel;
+    juce::ComboBox podcastRecCombo;
+    DjButton podcastRefreshBtn;
+    juce::Label podcastBitrateLabel;
+    juce::ComboBox podcastBitrateCombo;
+    DjButton podcastExportBtn;
+    juce::Label podcastStatusBadge;
+    bool isExportingPodcast { false };
 
     // --- Tab 6: Inteligencia Artificial (AI Match) Controls ---
     juce::Label aiSectionTitle;
