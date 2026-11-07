@@ -73,11 +73,120 @@ jobs:
 
           iscc "/DMyAppVersion=$ver" "installer\windows\installer.iss"
 
+      - name: Package MSIX (Microsoft Store)
+        shell: pwsh
+        env:
+          # Partner Center asigna el Identity/Publisher exactos al reservar la
+          # app; sobreescribirlos aqui (env vars o defaults) antes de subir.
+          MSIX_IDENTITY_NAME: "DiscPro.DiscNativePro"
+          MSIX_PUBLISHER: "CN=DiscPro"
+        run: |
+          $ErrorActionPreference = "Stop"
+
+          # 1. Staging: ejecutable + DLL junto al manifest
+          New-Item -ItemType Directory -Force -Path msix | Out-Null
+          $exePath = Get-ChildItem -Path "build" -Filter "DiscNativePro.exe" -Recurse | Select-Object -First 1 -ExpandProperty FullName
+          if (-not $exePath) {
+            Write-Error "DiscNativePro.exe not found in build directory!"
+            exit 1
+          }
+          Copy-Item $exePath -Destination "msix\DiscNativePro.exe"
+          $exeDir = Split-Path -Parent $exePath
+          $dllPath = Join-Path $exeDir "WebView2Loader.dll"
+          if (Test-Path $dllPath) {
+            Copy-Item $dllPath -Destination "msix\WebView2Loader.dll"
+          }
+
+          # 2. Assets visuales desde el icono de la app (44/150/50 px)
+          New-Item -ItemType Directory -Force -Path msix\assets | Out-Null
+          Add-Type -AssemblyName System.Drawing
+          $icon = [System.Drawing.Image]::FromFile("$PWD\assets\icon.png")
+          foreach ($entry in @(@{Size=44; Name="Square44x44Logo.png"}, @{Size=150; Name="Square150x150Logo.png"}, @{Size=50; Name="StoreLogo.png"})) {
+            $bmp = New-Object System.Drawing.Bitmap $entry.Size, $entry.Size
+            $g = [System.Drawing.Graphics]::FromImage($bmp)
+            $g.InterpolationMode = [System.Drawing.Drawing2D.InterpolationMode]::HighQualityBicubic
+            $g.DrawImage($icon, 0, 0, $entry.Size, $entry.Size)
+            $g.Dispose()
+            $bmp.Save("$PWD\msix\assets\$($entry.Name)", [System.Drawing.Imaging.ImageFormat]::Png)
+            $bmp.Dispose()
+          }
+          $icon.Dispose()
+
+          # 3. Version X.Y.Z.0 desde el tag (mismo parseo que los demas pasos)
+          $ver = "${{ github.ref_name }}"
+          if ($ver.StartsWith("v")) { $ver = $ver.Substring(1) }
+          $projectVersion = (Select-String -Path CMakeLists.txt -Pattern 'project\(DiscNativePro VERSION ([0-9.]+)' | Select-Object -First 1).Matches.Groups[1].Value
+          if ($ver -match '^([0-9]+(?:\.[0-9]+){0,2})') { $ver = $Matches[1] } else { $ver = $projectVersion }
+          $msixVersion = "$ver.0"
+
+          # 4. AppxManifest (Win32 empaquetado: full trust)
+          $manifest = @"
+          <?xml version="1.0" encoding="utf-8"?>
+          <Package xmlns="http://schemas.microsoft.com/appx/manifest/foundation/windows10"
+                   xmlns:uap="http://schemas.microsoft.com/appx/manifest/uap/windows10"
+                   xmlns:rescap="http://schemas.microsoft.com/appx/manifest/foundation/windows10/restrictedcapabilities">
+            <Identity Name="$env:MSIX_IDENTITY_NAME" Publisher="$env:MSIX_PUBLISHER" Version="$msixVersion" />
+            <Properties>
+              <DisplayName>DiscNativePro</DisplayName>
+              <PublisherDisplayName>DiscPro</PublisherDisplayName>
+              <Logo>assets\StoreLogo.png</Logo>
+            </Properties>
+            <Dependencies>
+              <TargetDeviceFamily Name="Windows.Desktop" MinVersion="10.0.19041.0" MaxVersionTested="10.0.26100.0" />
+            </Dependencies>
+            <Resources>
+              <Resource Language="en-us" />
+            </Resources>
+            <Applications>
+              <Application Id="App" Executable="DiscNativePro.exe" EntryPoint="Windows.FullTrustApplication">
+                <uap:VisualElements DisplayName="DiscNativePro"
+                                    Description="Native DJ software for Windows"
+                                    BackgroundColor="#1a1d26"
+                                    Square150x150Logo="assets\Square150x150Logo.png"
+                                    Square44x44Logo="assets\Square44x44Logo.png" />
+              </Application>
+            </Applications>
+            <Capabilities>
+              <rescap:Capability Name="runFullTrust" />
+            </Capabilities>
+          </Package>
+          "@
+          Set-Content -Path "msix\AppxManifest.xml" -Value $manifest -Encoding utf8
+
+          $contentTypes = @"
+          <?xml version="1.0" encoding="utf-8"?>
+          <Types xmlns="http://schemas.microsoft.com/appx/2010/manifest">
+            <Default Extension="png" ContentType="image/png" />
+            <Default Extension="xml" ContentType="application/xml" />
+          </Types>
+          "@
+          Set-Content -LiteralPath "msix\[Content_Types].xml" -Value $contentTypes -Encoding utf8
+
+          # 5. Empaquetar con MakeAppx (Windows SDK del runner). Sin firma:
+          # Microsoft Store re-firma el paquete al publicarlo.
+          $makeAppx = Get-ChildItem "C:\Program Files (x86)\Windows Kits\10\bin" -Recurse -Filter "makeappx.exe" -ErrorAction SilentlyContinue |
+                      Where-Object { $_.DirectoryName -like "*x64" } |
+                      Sort-Object FullName -Descending |
+                      Select-Object -First 1 -ExpandProperty FullName
+          if (-not $makeAppx) {
+            Write-Error "MakeAppx.exe not found (Windows SDK missing on runner)"
+            exit 1
+          }
+          Write-Host "Using $makeAppx"
+          & $makeAppx pack /d msix /p DiscNativePro-Windows-x64.msix
+          if ($LASTEXITCODE -ne 0) {
+            Write-Error "MakeAppx pack failed (exit $LASTEXITCODE)"
+            exit 1
+          }
+          Write-Host "MSIX created: $((Get-Item DiscNativePro-Windows-x64.msix).Length) bytes"
+
       - name: Upload Windows Artifact
         uses: actions/upload-artifact@v4
         with:
           name: windows-artifact
-          path: DiscNativePro-Windows-x64-Setup.exe
+          path: |
+            DiscNativePro-Windows-x64-Setup.exe
+            DiscNativePro-Windows-x64.msix
           if-no-files-found: error
 
   build-linux:
@@ -228,6 +337,7 @@ jobs:
         with:
           files: |
             DiscNativePro-Windows-x64-Setup.exe
+            DiscNativePro-Windows-x64.msix
             DiscNativePro-Linux-x64.tar.gz
             DiscNativePro-macOS-Universal.zip
           generate_release_notes: true
