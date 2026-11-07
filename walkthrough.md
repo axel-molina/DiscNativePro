@@ -797,3 +797,140 @@ No se toca `outlineColourId`: ninguna de las otras vistas lo define, así que la
 - Bancos: `run_yt_date` 5/5 con fecha; `run_pause_seek`, `run_seek_isolation`, `run_fader_jump`, `run_phase_real`, `run_pos_merged` en verde.
 - CI de `main`: `build-linux.yml` y `build-windows.yml` en success en los tres commits.
 - Pendiente: prueba real del fix de Linux por el usuario (no había máquina Linux disponible al taggear).
+
+---
+
+# Issue #1 — binario macOS realmente universal (arm64 + x86_64)
+
+## 1. Diagnóstico
+- El job `build-macos` de `.github/workflows/release.yml` compilaba en `runs-on: macos-latest` **sin `CMAKE_OSX_ARCHITECTURES`**. `macos-latest` es hoy una imagen **arm64**, así que el `.app` salía con un único slice `arm64` aunque el job se llame `macOS Universal` y publique `DiscNativePro-macOS-Universal.zip`.
+- Reproducido en local (este Mac, arm64): `build/DiscNativePro_artefacts/Release/.../DiscNativePro` → `Non-fat file … architecture: arm64`.
+- `grep` de `OSX_ARCHITECTURES|lipo|universal` en el repo → solo coincidencias textuales; no había ningún paso que uniera los slices. `README.md:43` ya prometía Intel x86_64.
+
+## 2. Cambio
+`[MODIFY] .github/workflows/release.yml` (job `build-macos`; **no** se toca `CMakeLists.txt` ni código de la app, por decisión de alcance: la arquitectura se fija solo en CI):
+- `Configure CMake`: añadido `-DCMAKE_OSX_ARCHITECTURES="arm64;x86_64"`.
+- Nuevo paso `Verify universal binary (arm64 + x86_64)`: `lipo -archs` sobre el ejecutable del bundle y **falla el job** si falta `arm64` o `x86_64` (guardia contra la regresión silenciosa).
+
+## 3. Verificación
+- Build universal en dir temporal `build-universal/` (ya eliminado):
+  - `lipo -info` → `Architectures in the fat file … are: x86_64 arm64`.
+  - `file` → `Mach-O universal binary with 2 architectures`; `otool -hv` lista cabeceras `X86_64` y `ARM64`.
+  - Comparativa: binario antiguo (`build/`) = `arm64` solo (el bug); universal = 2 slices.
+- **Ejecución real del slice Intel**: `arch -x86_64 …/DiscNativePro` → proceso vivo; `vmmap` → `Code Type: X86-64 (translated)` con `/usr/libexec/rosetta/runtime` y `/Library/Apple/usr/libexec/oah/libRosettaRuntime` mapeados (Rosetta 2 instalado).
+- `yt-dlp` embebido en `Contents/Resources/`: ya era universal (`x86_64 arm64`), sin problema para el usuario Intel.
+- YAML válido (`yaml.safe_load` → 4 jobs: `build-windows`, `build-linux`, `build-macos`, `publish-release`).
+- Warnings del build: solo los preexistentes (`signalsmith-stretch` / harfbuzz de terceros y `SoundCloudService.cpp:253` `-Wstring-compare`); ninguno de la app.
+
+## 4. Relanzado y limpieza
+- App universal recién compilada abierta y confirmada con `pgrep` (PID 82218).
+- `build-universal/` eliminado (no está en `.gitignore`, así que no se deja basura sin trackear).
+- App normal de `build/` relanzada y confirmada (PID 82961).
+
+## 5. Pendiente / fuera de alcance
+- Sin commit ni push (no aprobado en esta tanda). Cambio local: `.github/workflows/release.yml` + `implementation_plan.md` + este `walkthrough.md`.
+- Comentario con diagnóstico y fix publicado en el issue [#1](https://github.com/axel-molina/DiscNativePro/issues/1#issuecomment-6643801351).
+- El binario corregido llegará a los usuarios en la **próxima release** (el fix solo aplica al CI; las releases ya publicadas siguen arm64-only).
+- No abordado (YAGNI): fijar `runs-on: macos-14` en vez de `macos-latest`; `CMAKE_OSX_DEPLOYMENT_TARGET` explícito.
+
+---
+
+# BUG-1 — comparación de punteros en la caché alternativa de SoundCloud
+
+## 1. Causa
+`src/services/SoundCloudService.cpp:253` comparaba punteros, no texto:
+```cpp
+auto ext = item.progressiveStreamAuthUrl.isNotEmpty() ? ".mp3" : ".m4a";                 // 250 → const char*
+auto altTarget = cacheDir.getChildFile("sc_" + item.id + (ext == ".mp3" ? ".m4a" : ".mp3")); // 253
+```
+`ext == ".mp3"` compara direcciones (`-Wstring-compare`). Tipo confirmado con `static_assert(std::is_same_v<decltype(ext), const char*>)`. En el `.o` real los literales `.mp3`/`.m4a` aparecían **una sola vez** en `__cstring` → clang los fusionaba y la comparación daba `true`: **funcionaba por accidente**. Riesgo: si no hay fusión (otro compilador/flags/LTO), `false` siempre → `altTarget` siempre `.mp3` → con `ext == ".mp3"` se perdería el fallback al `.m4a` cacheado (re-descarga innecesaria + fichero huérfano). Sin corrupción ni crash.
+
+## 2. Cambio
+`[MODIFY] src/services/SoundCloudService.cpp:250` — una palabra:
+```cpp
+juce::String ext = item.progressiveStreamAuthUrl.isNotEmpty() ? ".mp3" : ".m4a";
+```
+Así `ext == ".mp3"` usa `String::operator==(const char*)` (contenido) y la línea 251 concatena igual. Sin tocar el resto del flujo (HLS, nombres de fichero, umbral `> 10000`).
+
+## 3. Verificación
+- Compilación dirigida con las flags reales del proyecto (`-fsyntax-only -Wstring-compare … SoundCloudService.cpp`) → **0 warnings**.
+- `cmake --build build` → **0 errores** y **0 `-Wstring-compare`** (antes: 1). El TU se recompiló.
+- Warnings propios restantes: solo los preexistentes (`AsyncFolderScanner.cpp` ×3, `UsbLibraryView.cpp:172`); `SoundCloudService.cpp` ya no emite ninguno.
+- Relanzado: `build/…/DiscNativePro.app` abierta y confirmada con `pgrep` (PID 80345, arm64).
+
+## 4. Incidencia colateral encontrada y reparada (`build/`)
+`cmake --build build` falló al reconfigurar: `Unknown CMake command "juce_add_gui_app"`. Causa: `FETCHCONTENT_SOURCE_DIR_JUCE` apuntaba a `/private/tmp/discnativepro-juce`, y esa carpeta se quedó **sin `CMakeLists.txt`** (limpieza de `/tmp` de macOS; solo sobrevivía `modules/`). Reparación (local, sobre el directorio de build, reversible):
+- `FETCHCONTENT_SOURCE_DIR_JUCE` → checkout **completo** del repo (`build/_deps/juce-src`).
+- Eliminados `build/_deps/juce-subbuild` y `build/_deps/juce-build` (tenían cacheada la ruta muerta) → se regeneraron con el source correcto.
+- Reconfiguración y build OK; `build/` vuelve a funcionar sin depender de `/tmp`.
+
+## 5. Pendiente
+- Sin commit ni push (no aprobado).
+- `altTarget` no cambia de comportamiento observable (hoy ya resolvía bien por fusión); ahora es correcto **por contenido** y garantizado por el tipo.
+
+---
+
+# Walkthrough — P8: Broadcast (emitir la mezcla a servidor Icecast/Shoutcast propio)
+
+## Objetivo
+Funcionalidad solicitada por usuarios estilo VirtualDJ: emitir la mezcla master en vivo a un servidor propio de streaming. Distribución integrada (toggle en Settings → Streaming), sin carga dinámica.
+
+## Cambios
+- [NEW] `third_party/lame/`: codificador MP3 libmp3lame 3.100 vendorizado (solo encoder, 19 .c; fuente: build gyp de Chromium). `config/mac/config.h` con `HAVE_XMMINTRIN_H` desactivado → rutas C puras compatibles arm64/x86_64. Warnings de terceros silenciados con `-w` en su CMakeLists.
+- [NEW] `src/audio/BroadcastService.h/.cpp`: hilo de red + `AbstractFifo` lock-free (patrón `AudioRecorder`). `pushAudioBlock` real-time safe (early-return por atómico, sin allocs). `run()`: LAME (`lame_encode_buffer_interleaved`) → `juce::StreamingSocket` → handshake Icecast 2 (`PUT /mount`, Basic auth, headers `ice-*`). Reconexión con backoff 1→30 s; FIFO se limpia al reconectar. Estado (connected/bytesSent/lastError) en atómicos + CriticalSection.
+- [MODIFY] `src/audio/AudioEngine.h/.cpp`: miembro `broadcastService` + `getBroadcastService()`; en el callback de audio, `broadcastService.pushAudioBlock(masterBuffer, numSamples)` junto al recorder (línea 380); `stopBroadcast()` en `shutdown()`.
+- [MODIFY] `src/ui/SettingsModalComponent.h/.cpp`: sección "Emitir en vivo (Broadcast a servidor propio)" en la pestaña Streaming (tab 5): toggle de emisión, servidor/puerto/mount/contraseña/nombre/bitrate (128-320), badge de estado con Timer 2 Hz (Emitiendo/Reconectando/Error + MB enviados). Config en `settings.json` (claves `broadcast*`); contraseña en Keychain vía `SecretStore` ("broadcast.password"). i18n es/en.
+- [MODIFY] `CMakeLists.txt`: `add_subdirectory(third_party/lame)`, fuentes nuevas y link `mp3lame`.
+
+## Verificación
+- `cmake --build build` → 0 errores, 0 warnings en código del proyecto (LAME se compila con warnings base). `Built target DiscNativePro`.
+- Relanzamiento (regla AGENTS.md): `pkill` → `open build/DiscNativePro_artefacts/Release/DiscNativePro.app` (Release: configuración del build actual) → `pgrep` PID 11719 activo.
+- Pendiente de prueba en vivo por el usuario: icecast local (`brew install icecast`), VLC en `http://localhost:8000/stream`, resiliencia (matar servidor) y tiempo real sin dropouts.
+
+## Notas
+- Grabación local y emisión son independientes (se puede grabar y emitir a la vez).
+- Contraseña nunca en texto plano en settings.json (Keychain).
+
+---
+
+# Walkthrough — P9: Settings con menú lateral vertical (sidebar icono + etiqueta)
+
+## Objetivo
+Sustituir la fila horizontal de 10 pestañas (apretada en 740 px) por un menú lateral vertical con icono arriba y etiqueta debajo, con scroll del sidebar si no caben.
+
+## Cambios
+- [MODIFY] `src/ui/DjButton.h`: nuevo `setStackedLayout(bool)` — en modo apilado el botón dibuja el icono centrado arriba y la etiqueta centrada debajo (comportamiento por defecto intacto para el resto de la app).
+- [MODIFY] `src/ui/SettingsModalComponent.h/.cpp`:
+  - Nuevos `sideViewport` + `sideContent`: los 10 `tabXxxBtn` viven dentro del sidebar (96 px, fondo más oscuro, divisor vertical pintado en `paint()`).
+  - Botones de pestaña 80x44 apilados (gap 4, fuente 9.5 pt, layout apilado).
+  - `resized()`: sidebar a la izquierda (con scroll solo si el contenido excede la altura); body ocupa el área derecha completa (sin los 56 px superiores de la fila antigua).
+  - `paint()`: divisor horizontal y=48 eliminado → fondo sidebar `fromRGB(20,22,31)` + línea vertical en x=96.
+  - Tab Shortcuts (pintado directo): deja de descontar 88 px superiores y descuenta el sidebar (removeFromLeft(96)).
+- Altura del contenido del sidebar (484 px) cabe en la vista útil (488 px): sin scrollbar en el tamaño por defecto; aparece automáticamente si el modal fuera más bajo.
+
+## Verificación
+- `cmake --build build` → 0 errores, 0 warnings en ficheros tocados; `Built target DiscNativePro`.
+- Relanzamiento (regla AGENTS.md): `pkill` → `open .../Release/DiscNativePro.app` → `pgrep` PID 59907 activo.
+- Pendiente de confirmación visual del usuario (captura de ventana no disponible: sin permiso de accesibilidad para osascript).
+
+---
+
+# Walkthrough — P10: Transmitir (RTMP a redes + Podcasts MP3)
+
+## Objetivo
+Completar la suite de transmisión sin video: emitir a YouTube/Facebook/Twitch/RTMP propio vía ffmpeg, y exportar grabaciones a MP3. Pestaña nueva "Transmitir" en el sidebar.
+
+## Cambios
+- [MODIFY] `src/audio/BroadcastService.h/.cpp`: `Config::mode { Icecast, Rtmp }`. En modo Rtmp no se usa LAME: se escribe PCM s16le interleaved al stdin de un proceso ffmpeg (`popen`, porque `juce::ChildProcess` no expone stdin) que codifica AAC y empuja por RTMP/RTMPS. Mismo FIFO/hilo/backoff; al caer la conexión se relanza ffmpeg. Log de errores de ffmpeg en `~/Library/Application Support/DiscNativePro/broadcast_ffmpeg.log`.
+- [NEW] `src/services/FfmpegLocator.h/.cpp`: localiza ffmpeg (App Support/bin → Bundle Resources → Homebrew → PATH) e instala el binario estático oficial (evermeet.cx) si falta — mismo patrón que yt-dlp.
+- [NEW] `src/audio/Mp3Exporter.h/.cpp`: conversión offline WAV → MP3 con LAME (bloques de 4096, clamp, flush); hilo de trabajo, no audio.
+- [MODIFY] `src/ui/LucideIcons.h/.cpp`: icono nuevo `Radio` (punto + arcos).
+- [MODIFY] `src/ui/SettingsModalComponent.h/.cpp`: pestaña **Transmitir** (índice 10, sidebar). La sección Broadcast **se mueve** desde Streaming. Incluye: selector de destino (Radio propia / YouTube / Facebook / Twitch / RTMP personalizado con URLs prellenadas), campos RTMP (URL solo editable en personalizado, stream key enmascarada y guardada por destino en Keychain, bitrate AAC), botón "Instalar ffmpeg" + estado, toggle de emisión compartido y badge de estado; sección Podcast (combo de WAV de grabaciones + Refrescar, bitrate, "Exportar a MP3" con estado). i18n es/en.
+- [MODIFY] `CMakeLists.txt`: fuentes nuevas + copia opcional de ffmpeg al bundle (como yt-dlp).
+
+## Verificación
+- `cmake --build build` → 0 errores y 0 warnings en los ficheros tocados (`AsyncFolderScanner`/`UsbLibraryView` tienen warnings previos, no relacionados).
+- **Ruta RTMP validada end-to-end sin la UI**: receptor local falso (`ffmpeg -listen 1 -i rtmp://127.0.0.1:1935/live/test`) + el mismo comando que lanza la app con 5 s de senal PCM → captura verificada con `ffprobe`: `aac, 44100 Hz, 2 canales, 192 kbps, 5.04 s`.
+- ffmpeg de esta máquina: `/opt/homebrew/bin/ffmpeg` 9.0.2 → el localizador lo encuentra (no hace falta instalar).
+- Relanzamiento (regla AGENTS.md): `pkill` → `open .../Release/DiscNativePro.app` → `pgrep` PID 51474.
+- Pendiente de prueba por el usuario: emisión real a YouTube/Twitch/Facebook (requiere cuentas), regresión de radio Icecast y exportación MP3 de una grabación desde la UI.

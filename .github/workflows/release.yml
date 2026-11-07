@@ -155,11 +155,30 @@ jobs:
           VER="${GITHUB_REF_NAME}"; VER="${VER#v}"
           PROJECT_VERSION="$(sed -nE 's/^project\(DiscNativePro VERSION ([0-9.]+).*/\1/p' CMakeLists.txt | head -1)"
           if [[ "$VER" =~ ^([0-9]+(\.[0-9]+){0,2}) ]]; then VER="${BASH_REMATCH[1]}"; else VER="$PROJECT_VERSION"; fi
-          cmake -B build -DCMAKE_BUILD_TYPE=Release -DAPP_VERSION="$VER"
+          cmake -B build -DCMAKE_BUILD_TYPE=Release -DAPP_VERSION="$VER" -DCMAKE_OSX_ARCHITECTURES="arm64;x86_64"
 
       - name: Build DiscNativePro (Release)
         run: |
           cmake --build build --config Release --parallel
+
+      - name: Verify universal binary (arm64 + x86_64)
+        shell: bash
+        run: |
+          APP_PATH=$(find build -name "DiscNativePro.app" -maxdepth 4 | head -1)
+          if [ -z "$APP_PATH" ]; then
+            echo "DiscNativePro.app not found in build directory!"
+            exit 1
+          fi
+          BIN="$APP_PATH/Contents/MacOS/DiscNativePro"
+          ARCHS=$(lipo -archs "$BIN")
+          echo "Architectures in $BIN: $ARCHS"
+          for arch in arm64 x86_64; do
+            if ! echo "$ARCHS" | grep -qw "$arch"; then
+              echo "ERROR: missing $arch slice in the universal binary"
+              exit 1
+            fi
+          done
+          echo "OK: universal binary contains arm64 and x86_64"
 
       - name: Package macOS App (.zip)
         shell: bash
