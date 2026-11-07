@@ -934,3 +934,15 @@ Completar la suite de transmisión sin video: emitir a YouTube/Facebook/Twitch/R
 - ffmpeg de esta máquina: `/opt/homebrew/bin/ffmpeg` 9.0.2 → el localizador lo encuentra (no hace falta instalar).
 - Relanzamiento (regla AGENTS.md): `pkill` → `open .../Release/DiscNativePro.app` → `pgrep` PID 51474.
 - Pendiente de prueba por el usuario: emisión real a YouTube/Twitch/Facebook (requiere cuentas), regresión de radio Icecast y exportación MP3 de una grabación desde la UI.
+
+---
+
+# Walkthrough — P11: MSIX de Windows para Microsoft Store
+
+## Cambios
+- [MODIFY] `.github/workflows/release.yml` (job `build-windows`): paso "Package MSIX" — staging exe+DLL, `AppxManifest.xml` (Win32 full-trust, TargetDeviceFamily 10.0.19041+), assets 44/150/50 px generados con System.Drawing desde `assets/icon.png`, `[Content_Types].xml` y empaquetado con `MakeAppx.exe` del SDK del runner. Sin firma (la Store re-firma). Identity/Publisher en env vars (`MSIX_IDENTITY_NAME`/`MSIX_PUBLISHER`, placeholders DiscPro) para colocar los de Partner Center.
+- Artefacto `windows-artifact` ahora incluye Setup.exe + .msix; el Release publica ambos.
+
+## Verificación
+- YAML validado (yaml.safe_load) y here-strings PowerShell confirmados a columna 0 tras el parseo del bloque.
+- Verificación real pendiente de ejecución en Actions (workflow_dispatch al pushear) y validación final del .msix en Partner Center al reservar la app (ahí se obtienen los Identity/Publisher exactos).
