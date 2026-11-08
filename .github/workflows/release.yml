@@ -76,10 +76,10 @@ jobs:
       - name: Package MSIX (Microsoft Store)
         shell: pwsh
         env:
-          # Partner Center asigna el Identity/Publisher exactos al reservar la
-          # app; sobreescribirlos aqui (env vars o defaults) antes de subir.
-          MSIX_IDENTITY_NAME: "DiscPro.DiscNativePro"
-          MSIX_PUBLISHER: "CN=DiscPro"
+          # Identidad asignada por Partner Center para la app "DiscNativeDJ"
+          # (Product identity). No cambiar sin actualizar Partner Center.
+          MSIX_IDENTITY_NAME: "AXELCODE.DiscNativeDJ"
+          MSIX_PUBLISHER: "CN=149C2B2A-17D9-4485-91C7-64CC91A26D35"
         run: |
           $ErrorActionPreference = "Stop"
 
@@ -128,7 +128,7 @@ jobs:
             <Identity Name="$env:MSIX_IDENTITY_NAME" Publisher="$env:MSIX_PUBLISHER" Version="$msixVersion" />
             <Properties>
               <DisplayName>DiscNativePro</DisplayName>
-              <PublisherDisplayName>DiscPro</PublisherDisplayName>
+              <PublisherDisplayName>AXELCODE</PublisherDisplayName>
               <Logo>assets\StoreLogo.png</Logo>
             </Properties>
             <Dependencies>
