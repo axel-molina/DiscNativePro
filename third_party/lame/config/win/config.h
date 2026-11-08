@@ -113,8 +113,11 @@ void acm_Free( void * mem);
     #endif
 #endif
 
-#if defined(_M_X64) && !defined(HAVE_XMMINTRIN_H)
-        #define HAVE_XMMINTRIN_H
+/* SIMD x86 desactivado: el build vendorizado usa las rutas C puras
+   (el archivo vector/xmm_quantize_sub.c no se compila). Consistente
+   con config/mac/config.h. */
+#if defined(_M_X64) && defined(HAVE_XMMINTRIN_H)
+        #undef HAVE_XMMINTRIN_H
 #endif
 
 #endif
