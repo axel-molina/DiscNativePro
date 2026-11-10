@@ -305,11 +305,26 @@ jobs:
           APP_DIR=$(dirname "$APP_PATH")
           (cd "$APP_DIR" && ditto -c -k --sequesterRsrc --keepParent DiscNativePro.app "$GITHUB_WORKSPACE/DiscNativePro-macOS-Universal.zip")
 
+      - name: Package macOS DMG (drag-to-Applications)
+        shell: bash
+        run: |
+          APP_PATH=$(find build -name "DiscNativePro.app" -maxdepth 4 | head -1)
+          if [ -z "$APP_PATH" ]; then
+            echo "DiscNativePro.app not found in build directory!"
+            exit 1
+          fi
+          cp -R "$APP_PATH" ./DiscNativePro.app
+          npx -y appdmg@0.6 installer/macos/dmg.json DiscNativePro-macOS.dmg
+          rm -rf ./DiscNativePro.app
+          ls -lh DiscNativePro-macOS.dmg
+
       - name: Upload macOS Artifact
         uses: actions/upload-artifact@v4
         with:
           name: macos-artifact
-          path: DiscNativePro-macOS-Universal.zip
+          path: |
+            DiscNativePro-macOS-Universal.zip
+            DiscNativePro-macOS.dmg
           if-no-files-found: error
 
   publish-release:
@@ -340,4 +355,5 @@ jobs:
             DiscNativePro-Windows-x64.msix
             DiscNativePro-Linux-x64.tar.gz
             DiscNativePro-macOS-Universal.zip
+            DiscNativePro-macOS.dmg
           generate_release_notes: true

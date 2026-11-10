@@ -1,0 +1,13 @@
+{
+  "title": "DiscNativePro",
+  "icon-size": 110,
+  "background": "dmg-background@2x.png",
+  "window": {
+    "position": { "x": 240, "y": 240 },
+    "size": { "width": 660, "height": 400 }
+  },
+  "contents": [
+    { "x": 170, "y": 215, "type": "file", "path": "../../DiscNativePro.app" },
+    { "x": 490, "y": 215, "type": "link", "path": "/Applications" }
+  ]
+}
