@@ -12,6 +12,17 @@
     #define BROADCAST_PCLOSE pclose
 #endif
 
+namespace
+{
+    // Escapado para /bin/sh: envuelve en comillas simples y sustituye cada '
+    // interna por '"'"' (convencion POSIX). Sin esto, una stream key con
+    // comillas/backticks/$(...) ejecutaria comandos via popen.
+    juce::String shellQuote(const juce::String& value)
+    {
+        return "'" + value.replace("'", "'\\''") + "'";
+    }
+}
+
 BroadcastService::BroadcastService()
     : juce::Thread("DiscPro Broadcast Thread")
 {
@@ -29,7 +40,10 @@ bool BroadcastService::startBroadcast(const Config& newConfig, double sampleRate
 
     config = newConfig;
     config.host = config.host.trim();
-    config.mount = config.mount.trim();
+    // Sin CR/LF: mount y stationName viajan en la request line y en la cabecera
+    // ice-name del handshake Icecast; un salto de linea inyectaria cabeceras.
+    config.mount = config.mount.trim().replace("\r", "").replace("\n", "");
+    config.stationName = config.stationName.replace("\r", "").replace("\n", "");
     config.ingestUrl = config.ingestUrl.trim();
 
     if (config.mode == Mode::Icecast)
@@ -41,6 +55,13 @@ bool BroadcastService::startBroadcast(const Config& newConfig, double sampleRate
         }
         if (!config.mount.startsWith("/"))
             config.mount = "/" + config.mount;
+
+        // Un espacio rompe la request line ("PUT <mount> HTTP/1.0")
+        if (config.mount.contains(" "))
+        {
+            setError("Mount no puede contener espacios");
+            return false;
+        }
     }
     else
     {
@@ -304,14 +325,14 @@ bool BroadcastService::launchFfmpeg()
     ffmpegLogFile.getParentDirectory().createDirectory();
 
     // ffmpeg: PCM por stdin -> AAC -> FLV -> RTMP/RTMPS (TLS incluido en el build estatico)
-    juce::String cmd = "\"" + ffmpeg.getFullPathName() + "\""
+    juce::String cmd = shellQuote(ffmpeg.getFullPathName())
                        + " -hide_banner -loglevel error -nostdin"
                        + " -f s16le -ar " + juce::String((int) streamSampleRate)
                        + " -ac " + juce::String(streamChannels)
                        + " -i pipe:0"
                        + " -c:a aac -b:a " + juce::String(config.bitrateKbps) + "k"
-                       + " -f flv \"" + config.ingestUrl + "\""
-                       + " 2> \"" + ffmpegLogFile.getFullPathName() + "\"";
+                       + " -f flv " + shellQuote(config.ingestUrl)
+                       + " 2> " + shellQuote(ffmpegLogFile.getFullPathName());
 
     ffmpegPipe = BROADCAST_POPEN(cmd.toUTF8(), "w");
     if (ffmpegPipe == nullptr)

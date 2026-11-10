@@ -870,6 +870,42 @@ Así `ext == ".mp3"` usa `String::operator==(const char*)` (contenido) y la lín
 
 ---
 
+# Plan P12 — seguridad del transporte de emisión (RTMP + Icecast)
+
+## 1. Hallazgos
+1. **Inyección de shell** (`BroadcastService.cpp:307-314`): la URL de ingesta RTMP (con stream key) se interpolaba en el comando de `popen` (`/bin/sh -c`) solo entre comillas dobles; dentro de ellas POSIX sigue interpretando `"` (cierra), `` ` ``, `$(`/`${` y `\` → con una key maliciosa se ejecutaba código arbitrario como el usuario.
+2. **Inyección de cabeceras Icecast** (`connectToServer`, líneas 252-257): `mount` (request line) y `stationName` (`ice-name:`) viajaban sin filtrar CR/LF → se podían forjar cabeceras.
+3. Defaults RTMP planos: YouTube y Twitch usaban `rtmp://` en vez de `rtmps://`.
+
+Contexto: la key vive en el Keychain (`SecretStore`), solo la escribe el usuario y la URL base solo es editable en "personalizado" → severidad media-baja, explotable al pegar una URL a ciegas.
+
+## 2. Cambios
+- `[MODIFY] src/audio/BroadcastService.cpp`:
+  - Nuevo helper (namespace anónimo) `shellQuote()`: comillas simples POSIX con `'` → `'"'"'`.
+  - `launchFfmpeg()`: el comando se arma con `shellQuote()` para **ingestUrl**, la ruta de ffmpeg y la del log (números de bitrate/muestreo aparte, que son numéricos). Mismo `popen`/`setvbuf`/FIFO, sin cambios de firma.
+  - `startBroadcast()` (Icecast): `mount` y `stationName` sin CR/LF; mount con espacio → `setError("Mount no puede contener espacios")` + `return false`.
+- `[MODIFY] src/ui/SettingsModalComponent.cpp`: defaults a RTMPS (YouTube `rtmps://a.rtmp.youtube.com/live2/`, Twitch `rtmps://live.twitch.tv:443/app/`; Facebook ya lo era). No requiere migración: esas URLs no se persisten, se resetean al default al abrir el modal o cambiar destino.
+
+## 3. Verificación
+- `cmake --build build` → **0 errores, 0 warnings propios** (solo recompilaron `BroadcastService.cpp` y `SettingsModalComponent.cpp`).
+- **Repro end-to-end del escapado** (scratchpad, algoritmo idéntico + `popen` real con un "ffmpeg" falso que vuelca su argv):
+  - `x'; touch <sentinel>; '`, `` x`touch …`y ``, `x$(touch …)y` → el centinela **nunca se crea** y la URL llega como **un único argumento literal** (`ARG18=[rtmp://…/x'; touch …; ']`).
+  - Keys legítimas con espacios, `&`, `;`, `|` → pasan intactas.
+  - Ruta de log con espacio en el directorio → el redirect `2>` se resuelve bien.
+- Saneado Icecast: revisión de código (recorte de CR/LF + rechazo de espacios en mount). Sin prueba en vivo contra servidor Icecast (no había servidor disponible): **pendiente de ojo** como en fases anteriores.
+- Defaults RTMPS: revisión estática (`rtmpUrlEditor` se resetea con `defaultRtmpUrlForDestination`); sin prueba contra YouTube/Twitch reales → **pendiente de ojo**.
+- Relanzado: `build/…/DiscNativePro.app` abierta, `pgrep` PID 86560.
+
+## 4. Limitación conocida (documentada, fuera de alcance)
+- La stream key sigue siendo visible en el **argv** de ffmpeg (columna COMMAND de `ps`) mientras se emite. Ocultarla exige embeber RTMP nativo (`libavformat`) en vez de orquestar ffmpeg; no es viable hoy porque `juce::ChildProcess` no expone escritura a stdin (necesaria para el PCM). Recomendación al usuario: emitir por **RTMPS** (ahora default) y renovar keys si se compartió el equipo.
+- `FfmpegLocator::ensureInstalled` usa shell con `curl` pero ya escapa comillas simples correctamente y las rutas son controladas por la app.
+
+## 5. Pendiente
+- Sin commit ni push (no aprobado).
+- Prueba real de RTMPS contra YouTube/Twitch y contra un Icecast local, cuando haya servidores disponibles.
+
+---
+
 # Walkthrough — P8: Broadcast (emitir la mezcla a servidor Icecast/Shoutcast propio)
 
 ## Objetivo

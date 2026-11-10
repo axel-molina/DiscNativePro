@@ -81,9 +81,9 @@ namespace
     {
         switch (comboId)
         {
-            case 2: return "rtmp://a.rtmp.youtube.com/live2/";
+            case 2: return "rtmps://a.rtmp.youtube.com/live2/";
             case 3: return "rtmps://live-api-s.facebook.com:443/rtmp/";
-            case 4: return "rtmp://live.twitch.tv/app/";
+            case 4: return "rtmps://live.twitch.tv:443/app/";
             default: return {};
         }
     }
