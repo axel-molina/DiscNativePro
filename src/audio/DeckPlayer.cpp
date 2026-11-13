@@ -1274,7 +1274,9 @@ void DeckPlayer::startStems2Stream(std::shared_ptr<juce::AudioFormatReader> read
                 return 0;
             if (!resample)
             {
-                const auto toRead = juce::jmin<juce::int64>(kFeed, totalSrc - (juce::int64)rd);
+                // jmin con template explícito instanciaría SIMDRegister<int64> en GCC
+                // (overload de juce_SIMDRegister_Impl.h) y no compila en Linux.
+                const auto toRead = juce::jmin((juce::int64) kFeed, totalSrc - (juce::int64) rd);
                 if (toRead <= 0)
                     return 0;
                 if (winStart != (juce::int64)rd || winLen < toRead)
@@ -1296,7 +1298,7 @@ void DeckPlayer::startStems2Stream(std::shared_ptr<juce::AudioFormatReader> read
                 if (i0 < winStart || i0 + 1 >= winStart + winLen)
                 {
                     winStart = i0;
-                    winLen = juce::jmin<juce::int64>(65536, totalSrc - i0);
+                    winLen = juce::jmin((juce::int64) 65536, totalSrc - (juce::int64) i0);
                     srcBuf.setSize(2, (int)winLen, false, false, false);
                     reader->read(&srcBuf, 0, (int)winLen, winStart, true, true);
                 }

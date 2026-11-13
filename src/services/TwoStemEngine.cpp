@@ -365,8 +365,15 @@ bool TwoStemEngine::init(juce::String* error)
         }
     }
 
-    ORT_CHECK(api->CreateSession(impl->env, model.getFullPathName().toUTF8(),
+    // ORTCHAR_T es wchar_t en Windows y char en macOS/Linux: convertir según plataforma.
+#if JUCE_WINDOWS
+    const juce::CharPointer_UTF16 modelPathUtf16 (model.getFullPathName().toUTF16());
+    ORT_CHECK(api->CreateSession(impl->env, reinterpret_cast<const ORTCHAR_T*> (modelPathUtf16.getAddress()),
                                  impl->options, &impl->session), error);
+#else
+    ORT_CHECK(api->CreateSession(impl->env, reinterpret_cast<const ORTCHAR_T*> (model.getFullPathName().toUTF8().getAddress()),
+                                 impl->options, &impl->session), error);
+#endif
     ORT_CHECK(api->CreateCpuMemoryInfo(OrtArenaAllocator, OrtMemTypeDefault, &impl->memInfo), error);
 
     OrtAllocator* allocator = nullptr;
