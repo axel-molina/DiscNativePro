@@ -3,10 +3,61 @@
 #include "../services/WaveformTheme.h"
 #include "../services/SecretStore.h"
 #include "../services/FfmpegLocator.h"
+#include "../services/StemSeparationService.h"
+#include "../services/LibraryCacheManager.h"
+#include "../services/MixxxPresetCatalog.h"
+#include "../services/MixxxMappingImporter.h"
+#include "../services/VdjMappingImporter.h"
 #include "../audio/Mp3Exporter.h"
 
 namespace
 {
+    // P29: reporte de importación de mappings (Mixxx / VDJ) en un diálogo.
+    void showMappingImportResult(const juce::String& title,
+                                 const juce::String& error,
+                                 const juce::String& headerLines,
+                                 int imported, int outputsImported,
+                                 int skipped, const juce::StringArray& unknown)
+    {
+        juce::String msg;
+        if (!error.isEmpty())
+        {
+            msg = error;
+        }
+        else
+        {
+            msg = headerLines + "\n\n"
+                + juce::String(imported)
+                + LanguageManager::trUtf8(" controles importados y activos.", " controls imported and active.") + "\n";
+            if (outputsImported > 0)
+                msg += juce::String(outputsImported)
+                     + LanguageManager::trUtf8(" salidas (LED) importadas.", " outputs (LED) imported.") + "\n";
+            if (skipped > 0)
+                msg += juce::String(skipped)
+                     + LanguageManager::trUtf8(" controles omitidos (sin equivalente o script).",
+                                                     " controls skipped (no equivalent or script-bound).") + "\n";
+            if (unknown.size() > 0)
+            {
+                msg += "\n" + LanguageManager::trUtf8("Sin equivalente (no importados):",
+                                                            "Without equivalent (not imported):") + "\n";
+                const int shown = juce::jmin(8, unknown.size());
+                for (int i = 0; i < shown; ++i)
+                    msg += "  • " + unknown[i] + "\n";
+                if (unknown.size() > shown)
+                    msg += "  … +" + juce::String(unknown.size() - shown) + "\n";
+            }
+        }
+
+        auto opts = juce::MessageBoxOptions()
+                        .withTitle(error.isEmpty() ? title
+                                                   : LanguageManager::trUtf8("Error al importar", "Import error"))
+                        .withMessage(msg)
+                        .withButton("OK")
+                        .withIconType(error.isEmpty() ? juce::MessageBoxIconType::InfoIcon
+                                                      : juce::MessageBoxIconType::WarningIcon);
+        juce::AlertWindow::showAsync(opts, nullptr);
+    }
+
     // Ajustes de broadcast (strings/numeros) en el mismo settings.json del resto de la app.
     // La contraseña NUNCA va al JSON: se guarda en el llavero via SecretStore.
     constexpr const char* broadcastHostProperty = "broadcastHost";
@@ -402,6 +453,70 @@ void SettingsModalComponent::setupGeneralTab()
 
     updateRecordingFolderUI();
 
+    // Section 3b: Stems (separación automática, P22)
+    stemsSectionLabel.setText(juce::String::fromUTF8("Stems (Separación de Pistas)"), juce::dontSendNotification);
+    stemsSectionLabel.setFont(juce::FontOptions(11.5f, juce::Font::bold));
+    stemsSectionLabel.setColour(juce::Label::textColourId, juce::Colour::fromRGB(0, 180, 216));
+    bodyContent.addChildComponent(stemsSectionLabel);
+
+    {
+        const bool demucs = StemSeparationService::isModelAvailable();
+        juce::String txt;
+        if (demucs)
+            txt = juce::String::fromUTF8("Motor de separación embebido. Modo Rápido: voz/instrumental en vivo mientras suena la pista (voz muteada en ~segundos) y caché instantánea en la segunda carga. Modo Completo: 4 stems precalculados (vocals/drums/bass/other) listos al terminar la separación.");
+        else
+            txt = juce::String::fromUTF8("Motor de separación: no disponible — el modelo no está incluido en esta build.");
+        stemsStatusDescLabel.setText(txt, juce::dontSendNotification);
+    }
+    stemsStatusDescLabel.setFont(juce::FontOptions(10.5f, juce::Font::plain));
+    stemsStatusDescLabel.setColour(juce::Label::textColourId, juce::Colour::fromRGB(150, 155, 170));
+    bodyContent.addChildComponent(stemsStatusDescLabel);
+
+    // P25 Fase D: selector de modo de stems (Rápido = 2-stem en vivo, default).
+    stemsModeLabel.setText(juce::String::fromUTF8("Modo de Stems:"), juce::dontSendNotification);
+    stemsModeLabel.setFont(juce::FontOptions(11.0f, juce::Font::plain));
+    stemsModeLabel.setColour(juce::Label::textColourId, juce::Colour::fromRGB(160, 165, 180));
+    bodyContent.addChildComponent(stemsModeLabel);
+
+    stemsModeCombo.addItem(juce::String::fromUTF8("Rápido — 2 stems en vivo (voz/instrumental)"), 1);
+    stemsModeCombo.addItem(juce::String::fromUTF8("Completo — 4 stems precalculados"), 2);
+    stemsModeCombo.setSelectedId(audioEngine.getDeck(0).isStemsPrecompute4() ? 2 : 1,
+                                 juce::dontSendNotification);
+    stemsModeCombo.onChange = [this]() {
+        const bool precompute4 = (stemsModeCombo.getSelectedId() == 2);
+        audioEngine.getDeck(0).setStemsPrecompute4(precompute4);
+        audioEngine.getDeck(1).setStemsPrecompute4(precompute4);
+        DeckPlayer::saveStemsModeDefault(precompute4);
+    };
+    bodyContent.addChildComponent(stemsModeCombo);
+
+    // P26: precálculo en lote de toda la biblioteca indexada (4 stems).
+    stemsPrecalcBtn.setText(juce::String::fromUTF8("Precalcular biblioteca (4 stems)"));
+    stemsPrecalcBtn.setFontSize(10.5f);
+    stemsPrecalcBtn.setCornerRadius(5.0f);
+    stemsPrecalcBtn.setCustomColours(juce::Colour::fromRGB(26, 28, 36),
+                                     juce::Colour::fromRGB(140, 145, 160),
+                                     juce::Colour::fromRGB(200, 205, 220),
+                                     juce::Colour::fromRGB(40, 44, 58));
+    stemsPrecalcBtn.onClick = [this]() {
+        auto tracks = LibraryCacheManager::getInstance().getCachedTracks();
+        stemsPrecalcBtn.setEnabled(false);
+        stemsPrecalcBtn.setText(juce::String::fromUTF8("Encolando..."));
+        StemSeparationService::getInstance().enqueueBatchAsync(tracks, [this](int enqueued) {
+            stemsPrecalcBtn.setEnabled(true);
+            updateStemsPrecalcButton();
+            juce::AlertWindow::showMessageBoxAsync(
+                juce::MessageBoxIconType::InfoIcon,
+                juce::String::fromUTF8("Separación de stems"),
+                enqueued > 0
+                    ? juce::String::fromUTF8("Encoladas para separar 4 stems: ") + juce::String(enqueued)
+                                          + juce::String::fromUTF8("\nLa separación corre en segundo plano (una pista por vez).")
+                    : juce::String::fromUTF8("No hay pistas pendientes: toda la biblioteca ya está separada, en cola o supera el límite de 15 minutos."));
+        });
+    };
+    updateStemsPrecalcButton();
+    bodyContent.addChildComponent(stemsPrecalcBtn);
+
     // Section 4: Descargas de YouTube y Archivos Locales
     downloadsSectionLabel.setText(juce::String::fromUTF8("Descargas de YouTube y Archivos Locales"), juce::dontSendNotification);
     downloadsSectionLabel.setFont(juce::FontOptions(11.5f, juce::Font::bold));
@@ -496,6 +611,22 @@ void SettingsModalComponent::updateRecordingFolderUI()
     auto dir = audioEngine.getRecordingDirectory();
     recFolderEditor.setText(dir.getFullPathName(), juce::dontSendNotification);
     recFolderEditor.setCaretPosition(recFolderEditor.getText().length());
+}
+
+void SettingsModalComponent::updateStemsPrecalcButton()
+{
+    const int pending = StemSeparationService::getInstance().getQueueCount();
+    if (pending > 0)
+    {
+        stemsPrecalcBtn.setEnabled(false);
+        stemsPrecalcBtn.setText(juce::String::fromUTF8("En cola: ")
+                                + juce::String(pending) + juce::String::fromUTF8(" pistas"));
+    }
+    else
+    {
+        stemsPrecalcBtn.setEnabled(true);
+        stemsPrecalcBtn.setText(juce::String::fromUTF8("Precalcular biblioteca (4 stems)"));
+    }
 }
 
 void SettingsModalComponent::updateDownloadsFolderUI()
@@ -644,6 +775,8 @@ void SettingsModalComponent::refreshLanguage()
 
     masterLimiterToggle.setButtonText(LanguageManager::trUtf8("Limitador Master de Seguridad (Evita distorsión digital y clipping)", "Safety Master Limiter (Prevents digital distortion and clipping)"));
 
+    ceilingLabel.setText(LanguageManager::trUtf8("Techo del Limitador (CEILING):", "Limiter Ceiling (CEILING):"), juce::dontSendNotification);
+
     soundSectionPhones.setText(LanguageManager::trUtf8("Monitoreo y Auriculares (Preescucha CUE)", "Monitoring & Headphones (CUE Cueing)"), juce::dontSendNotification);
     cueMixLabel.setText(LanguageManager::trUtf8("Mezcla Auriculares (CUE a la izquierda / MASTER a la derecha):", "Headphone Mix (CUE left / MASTER right):"), juce::dontSendNotification);
     cueVolumeLabel.setText(LanguageManager::trUtf8("Volumen Master de Auriculares:", "Headphone Master Volume:"), juce::dontSendNotification);
@@ -652,6 +785,8 @@ void SettingsModalComponent::refreshLanguage()
     midiTitleLabel.setText(LanguageManager::trUtf8("Controladores USB MIDI", "USB MIDI Controllers"), juce::dontSendNotification);
     midiDescLabel.setText(LanguageManager::trUtf8("DiscNativePro detecta automáticamente cualquier controladora DJ física conectada por USB (Pioneer DDJ, Hercules, Numark, Native Instruments). Mapea jog wheels, perillas de EQ, faders y pads.", "DiscNativePro automatically detects any USB physical DJ controller (Pioneer DDJ, Hercules, Numark, Native Instruments). Maps jog wheels, EQ knobs, faders and pads."), juce::dontSendNotification);
     midiScanBtn.setButtonText(LanguageManager::trUtf8("Escanear Puertos", "Scan Ports"));
+    midiImportMixxxBtn.setButtonText(LanguageManager::trUtf8("Importar Mixxx", "Import Mixxx"));
+    midiImportVdjBtn.setButtonText(LanguageManager::trUtf8("Importar VDJ", "Import VDJ"));
     midiMonitorHeader.setText(LanguageManager::trUtf8("MONITOR DE SEÑALES MIDI EN VIVO", "LIVE MIDI SIGNAL MONITOR"), juce::dontSendNotification);
     midiMonitorText.setText(LanguageManager::trUtf8("Esperando movimiento de fader, jog o pad...", "Waiting for fader, jog or pad movement..."), juce::dontSendNotification);
     midiMappingHeader.setText(LanguageManager::trUtf8("MAPEO PERSONALIZADO (MIDI LEARN)", "CUSTOM MAPPING (MIDI LEARN)"), juce::dontSendNotification);
@@ -875,6 +1010,68 @@ void SettingsModalComponent::setupSoundTab()
     masterLimiterToggle.setColour(juce::ToggleButton::textColourId, juce::Colours::white.withAlpha(0.85f));
     bodyContent.addChildComponent(masterLimiterToggle);
 
+    ceilingLabel.setText(juce::String::fromUTF8("Techo del Limitador (CEILING):"), juce::dontSendNotification);
+    ceilingLabel.setFont(juce::FontOptions(11.0f, juce::Font::plain));
+    ceilingLabel.setColour(juce::Label::textColourId, juce::Colour::fromRGB(160, 165, 180));
+    bodyContent.addChildComponent(ceilingLabel);
+
+    ceilingSlider.setRange(-12.0, 0.0, 0.1);
+    ceilingSlider.setValue(audioEngine.getMasterLimiter().ceilingDb.load(), juce::dontSendNotification);
+    ceilingSlider.setTextBoxStyle(juce::Slider::TextBoxRight, false, 60, 22);
+    ceilingSlider.setDoubleClickReturnValue(true, -0.3);
+    ceilingSlider.onValueChange = [this]() {
+        audioEngine.setMasterCeilingDb((float) ceilingSlider.getValue());
+    };
+    bodyContent.addChildComponent(ceilingSlider);
+
+    // Section 5: Micrófono (Talkover) — control completo desde aquí (P18d)
+    soundSectionMic.setText(juce::String::fromUTF8("Micrófono (Talkover)"), juce::dontSendNotification);
+    soundSectionMic.setFont(juce::FontOptions(11.5f, juce::Font::bold));
+    soundSectionMic.setColour(juce::Label::textColourId, juce::Colour::fromRGB(0, 180, 216));
+    bodyContent.addChildComponent(soundSectionMic);
+
+    micEnableToggle.setButtonText(juce::String::fromUTF8("Habilitar micrófono (envía tu voz a la mezcla master)"));
+    micEnableToggle.setToggleState(audioEngine.getMicChannel().isEnabled(), juce::dontSendNotification);
+    micEnableToggle.setColour(juce::ToggleButton::textColourId, juce::Colours::white.withAlpha(0.85f));
+    micEnableToggle.onClick = [this]() {
+        audioEngine.setMicEnabled(micEnableToggle.getToggleState());
+    };
+    bodyContent.addChildComponent(micEnableToggle);
+
+    micGainLabel.setText(juce::String::fromUTF8("Ganancia de entrada (GAIN):"), juce::dontSendNotification);
+    micGainLabel.setFont(juce::FontOptions(11.0f, juce::Font::plain));
+    micGainLabel.setColour(juce::Label::textColourId, juce::Colour::fromRGB(160, 165, 180));
+    bodyContent.addChildComponent(micGainLabel);
+
+    micGainSlider.setRange(-40.0, 12.0, 0.5);
+    micGainSlider.setValue(audioEngine.getMicChannel().gainDb.load(), juce::dontSendNotification);
+    micGainSlider.setTextBoxStyle(juce::Slider::NoTextBox, false, 0, 0);
+    micGainSlider.onValueChange = [this]() {
+        audioEngine.setMicGainDb((float) micGainSlider.getValue());
+    };
+    bodyContent.addChildComponent(micGainSlider);
+
+    micDuckLabel.setText(juce::String::fromUTF8("Profundidad del Duck (bajada de música al hablar):"), juce::dontSendNotification);
+    micDuckLabel.setFont(juce::FontOptions(11.0f, juce::Font::plain));
+    micDuckLabel.setColour(juce::Label::textColourId, juce::Colour::fromRGB(160, 165, 180));
+    bodyContent.addChildComponent(micDuckLabel);
+
+    micDuckSlider.setRange(-24.0, 0.0, 0.5);
+    micDuckSlider.setValue(audioEngine.getMicChannel().duckDepthDb.load(), juce::dontSendNotification);
+    micDuckSlider.setTextBoxStyle(juce::Slider::NoTextBox, false, 0, 0);
+    micDuckSlider.onValueChange = [this]() {
+        audioEngine.setMicDuckDepthDb((float) micDuckSlider.getValue());
+    };
+    bodyContent.addChildComponent(micDuckSlider);
+
+    micDuckAutoToggle.setButtonText(juce::String::fromUTF8("Duck automático al hablar (detecta voz y baja la música)"));
+    micDuckAutoToggle.setToggleState(audioEngine.getMicChannel().duckEnabled.load(), juce::dontSendNotification);
+    micDuckAutoToggle.setColour(juce::ToggleButton::textColourId, juce::Colours::white.withAlpha(0.85f));
+    micDuckAutoToggle.onClick = [this]() {
+        audioEngine.setMicDuckEnabled(micDuckAutoToggle.getToggleState());
+    };
+    bodyContent.addChildComponent(micDuckAutoToggle);
+
     // Section 4: Monitoreo & Auriculares (CUE)
     soundSectionPhones.setText(juce::String::fromUTF8("Monitoreo y Auriculares (Preescucha CUE)"), juce::dontSendNotification);
     soundSectionPhones.setFont(juce::FontOptions(11.5f, juce::Font::bold));
@@ -933,6 +1130,18 @@ void SettingsModalComponent::setupMidiTab()
         refreshMidiDevices();
     };
     bodyContent.addChildComponent(midiScanBtn);
+
+    // P26/P29: presets de comunidad Mixxx (con catálogo online) y mappings
+    // VirtualDJ (definition + mapper por FileChooser).
+    midiImportMixxxBtn.setColour(juce::TextButton::buttonColourId, juce::Colour::fromRGB(24, 28, 36));
+    midiImportMixxxBtn.setColour(juce::TextButton::textColourOffId, juce::Colour::fromRGB(255, 159, 28));
+    midiImportMixxxBtn.onClick = [this]() { importMixxxPreset(); };
+    bodyContent.addChildComponent(midiImportMixxxBtn);
+
+    midiImportVdjBtn.setColour(juce::TextButton::buttonColourId, juce::Colour::fromRGB(24, 28, 36));
+    midiImportVdjBtn.setColour(juce::TextButton::textColourOffId, juce::Colour::fromRGB(255, 159, 28));
+    midiImportVdjBtn.onClick = [this]() { importVdjMapping(); };
+    bodyContent.addChildComponent(midiImportVdjBtn);
 
     midiMonitorHeader.setText(juce::String::fromUTF8("MONITOR DE SEÑALES MIDI EN VIVO"), juce::dontSendNotification);
     midiMonitorHeader.setFont(juce::FontOptions(9.5f, juce::Font::bold));
@@ -2023,6 +2232,129 @@ void SettingsModalComponent::refreshMidiDevices()
     repaint();
 }
 
+// P26/P29: preset de la comunidad Mixxx para la controladora conectada;
+// sin match, FileChooser manual de cualquier .midi.xml. Descarga/parse en
+// thread de fondo (no toca audio).
+void SettingsModalComponent::importMixxxPreset()
+{
+    MixxxPresetEntry entry;
+    juce::String matchedDevice;
+    for (const auto& d : midi.getConnectedDeviceNames())
+    {
+        if (MixxxPresetCatalog::findForDevice(d, entry))
+        {
+            matchedDevice = d;
+            break;
+        }
+    }
+
+    if (matchedDevice.isEmpty())
+    {
+        auto chooser = std::make_shared<juce::FileChooser>(
+            LanguageManager::trUtf8("Seleccionar preset .midi.xml de Mixxx", "Select Mixxx .midi.xml preset"),
+            MixxxPresetCatalog::presetsFolder(), "*.midi.xml;*.xml");
+        chooser->launchAsync(juce::FileBrowserComponent::openMode | juce::FileBrowserComponent::canSelectFiles,
+            [this, chooser](const juce::FileChooser& fc) {
+                auto f = fc.getResult();
+                if (!f.existsAsFile())
+                    return;
+                auto report = MixxxMappingImporter::importFile(f);
+                if (report.ok)
+                {
+                    midi.getMappingManager().applyImportedBindings(report.bindings);
+                    if (report.outputsImported > 0)
+                        midi.getMappingManager().applyImportedOutputBindings(report.outputBindings);
+                }
+                showMappingImportResult(
+                    LanguageManager::trUtf8("Preset Mixxx importado", "Mixxx preset imported"),
+                    report.error,
+                    LanguageManager::trUtf8("Preset: ", "Preset: ") + report.presetName,
+                    report.imported, report.outputsImported,
+                    report.skippedScriptBinding, report.unknownKeys);
+            });
+        return;
+    }
+
+    midiImportMixxxBtn.setEnabled(false);
+    midiImportMixxxBtn.setButtonText(LanguageManager::trUtf8("Descargando…", "Downloading…"));
+
+    const auto presetFile = entry.presetFile;
+    juce::Thread::launch([safe = juce::Component::SafePointer<SettingsModalComponent>(this), presetFile]() {
+        juce::String error;
+        const bool ok = MixxxPresetCatalog::downloadPreset(presetFile, error);
+
+        juce::MessageManager::callAsync([safe, presetFile, ok, error]() {
+            if (safe == nullptr)
+                return;
+            safe->midiImportMixxxBtn.setEnabled(true);
+            safe->midiImportMixxxBtn.setButtonText(LanguageManager::trUtf8("Importar Mixxx", "Import Mixxx"));
+
+            if (!ok)
+            {
+                showMappingImportResult({}, error, {}, 0, 0, 0, {});
+                return;
+            }
+
+            auto report = MixxxMappingImporter::importFile(MixxxPresetCatalog::localPresetFile(presetFile));
+            if (report.ok)
+            {
+                safe->midi.getMappingManager().applyImportedBindings(report.bindings);
+                if (report.outputsImported > 0)
+                    safe->midi.getMappingManager().applyImportedOutputBindings(report.outputBindings);
+            }
+            showMappingImportResult(
+                LanguageManager::trUtf8("Preset Mixxx importado", "Mixxx preset imported"),
+                report.error,
+                LanguageManager::trUtf8("Preset: ", "Preset: ") + report.presetName,
+                report.imported, report.outputsImported,
+                report.skippedScriptBinding, report.unknownKeys);
+        });
+    });
+}
+
+// P29: mappings VirtualDJ — el usuario aporta mapper + definition (dos XML).
+void SettingsModalComponent::importVdjMapping()
+{
+    auto chooser = std::make_shared<juce::FileChooser>(
+        LanguageManager::trUtf8("Seleccionar el MAPPER de VirtualDJ (*.xml)", "Select the VirtualDJ MAPPER (*.xml)"),
+        juce::File::getSpecialLocation(juce::File::userDocumentsDirectory).getChildFile("VirtualDJ").getChildFile("Mappers"),
+        "*.xml");
+    chooser->launchAsync(juce::FileBrowserComponent::openMode | juce::FileBrowserComponent::canSelectFiles,
+        [this, chooser](const juce::FileChooser& fc) {
+            auto mapperFile = fc.getResult();
+            if (!mapperFile.existsAsFile())
+                return;
+
+            auto chooserDef = std::make_shared<juce::FileChooser>(
+                LanguageManager::trUtf8("Seleccionar el DEFINITION del dispositivo (*.xml)", "Select the device DEFINITION (*.xml)"),
+                mapperFile.getParentDirectory(), "*.xml");
+            chooserDef->launchAsync(juce::FileBrowserComponent::openMode | juce::FileBrowserComponent::canSelectFiles,
+                [this, chooserDef, mapperFile](const juce::FileChooser& fc2) {
+                    auto defFile = fc2.getResult();
+                    if (!defFile.existsAsFile())
+                        return;
+
+                    auto report = VdjMappingImporter::importFiles(defFile, mapperFile);
+                    if (report.ok)
+                    {
+                        midi.getMappingManager().applyImportedBindings(report.bindings);
+                        if (report.outputsImported > 0)
+                            midi.getMappingManager().applyImportedOutputBindings(report.outputBindings);
+                    }
+                    juce::StringArray unknown = report.unknownActions;
+                    showMappingImportResult(
+                        LanguageManager::trUtf8("Mapper VirtualDJ importado", "VirtualDJ mapper imported"),
+                        report.error,
+                        LanguageManager::trUtf8("Dispositivo: ", "Device: ")
+                            + (report.mapperName.isNotEmpty() ? report.mapperName : "--")
+                            + "\n" + LanguageManager::trUtf8("Definition: ", "Definition: ")
+                            + (report.definitionName.isNotEmpty() ? report.definitionName : "--"),
+                        report.imported, report.outputsImported,
+                        report.controlsWithoutDefinition, unknown);
+                });
+        });
+}
+
 void SettingsModalComponent::updateTabVisibility()
 {
     // General components (Tab 0)
@@ -2049,6 +2381,12 @@ void SettingsModalComponent::updateTabVisibility()
     recOpenBtn.setVisible(isGeneral);
     recResetBtn.setVisible(isGeneral);
 
+    stemsSectionLabel.setVisible(isGeneral);
+    stemsStatusDescLabel.setVisible(isGeneral);
+    stemsModeLabel.setVisible(isGeneral);
+    stemsModeCombo.setVisible(isGeneral);
+    stemsPrecalcBtn.setVisible(isGeneral);
+
     downloadsSectionLabel.setVisible(isGeneral);
     saveDownloadsToggle.setVisible(isGeneral);
     downloadsFolderDescLabel.setVisible(isGeneral);
@@ -2061,6 +2399,7 @@ void SettingsModalComponent::updateTabVisibility()
     {
         updateRecordingFolderUI();
         updateDownloadsFolderUI();
+        updateStemsPrecalcButton();
     }
 
     // Devices component (Tab 1)
@@ -2110,6 +2449,8 @@ void SettingsModalComponent::updateTabVisibility()
     headroomLabel.setVisible(isSound);
     headroomCombo.setVisible(isSound);
     masterLimiterToggle.setVisible(isSound);
+    ceilingLabel.setVisible(isSound);
+    ceilingSlider.setVisible(isSound);
 
     // MIDI components (Tab 3)
     bool isMidi = (activeTab == 3);
@@ -2117,6 +2458,8 @@ void SettingsModalComponent::updateTabVisibility()
     midiDescLabel.setVisible(isMidi);
     midiDevicesHeader.setVisible(isMidi);
     midiScanBtn.setVisible(isMidi);
+    midiImportMixxxBtn.setVisible(isMidi);
+    midiImportVdjBtn.setVisible(isMidi);
     midiMonitorHeader.setVisible(isMidi);
     midiMonitorText.setVisible(isMidi);
     midiMappingHeader.setVisible(isMidi);
@@ -2613,6 +2956,19 @@ void SettingsModalComponent::resized()
         recFolderEditor.setBounds(recRow);
         gArea.removeFromTop(12);
 
+        // Section 3b: Stems (estado del motor de separación)
+        stemsSectionLabel.setBounds(gArea.removeFromTop(18));
+        gArea.removeFromTop(4);
+        stemsStatusDescLabel.setBounds(gArea.removeFromTop(46));
+
+        auto stemsModeRow = gArea.removeFromTop(24);
+        stemsModeRow.removeFromRight(8);
+        stemsModeCombo.setBounds(stemsModeRow.removeFromRight(280));
+        stemsModeLabel.setBounds(stemsModeRow);
+        gArea.removeFromTop(6);
+        stemsPrecalcBtn.setBounds(gArea.removeFromTop(24).removeFromLeft(230));
+        gArea.removeFromTop(12);
+
         // Section 4: Descargas de YouTube y Archivos Locales
         downloadsSectionLabel.setBounds(gArea.removeFromTop(18));
         gArea.removeFromTop(4);
@@ -2710,6 +3066,30 @@ void SettingsModalComponent::resized()
         sArea.removeFromTop(4);
 
         masterLimiterToggle.setBounds(sArea.removeFromTop(22));
+        sArea.removeFromTop(4);
+
+        auto ceilRow = sArea.removeFromTop(22);
+        ceilingLabel.setBounds(ceilRow.removeFromLeft(220));
+        ceilingSlider.setBounds(ceilRow);
+        sArea.removeFromTop(8);
+
+        soundSectionMic.setBounds(sArea.removeFromTop(18));
+        sArea.removeFromTop(4);
+
+        micEnableToggle.setBounds(sArea.removeFromTop(22));
+        sArea.removeFromTop(4);
+
+        auto mgRow = sArea.removeFromTop(22);
+        micGainLabel.setBounds(mgRow.removeFromLeft(280));
+        micGainSlider.setBounds(mgRow);
+        sArea.removeFromTop(4);
+
+        auto mdRow = sArea.removeFromTop(22);
+        micDuckLabel.setBounds(mdRow.removeFromLeft(280));
+        micDuckSlider.setBounds(mdRow);
+        sArea.removeFromTop(4);
+
+        micDuckAutoToggle.setBounds(sArea.removeFromTop(22));
     }
 
     // --- Tab 3: MIDI Layout (Unconditionally set bounds) ---
@@ -2721,8 +3101,13 @@ void SettingsModalComponent::resized()
         mArea.removeFromTop(10);
 
         auto devHeaderRow = mArea.removeFromTop(26);
-        midiDevicesHeader.setBounds(devHeaderRow.removeFromLeft(250));
-        midiScanBtn.setBounds(devHeaderRow.removeFromRight(130));
+        midiDevicesHeader.setBounds(devHeaderRow.removeFromLeft(220));
+        devHeaderRow.removeFromRight(10);
+        midiScanBtn.setBounds(devHeaderRow.removeFromRight(120));
+        devHeaderRow.removeFromRight(10);
+        midiImportVdjBtn.setBounds(devHeaderRow.removeFromRight(110));
+        devHeaderRow.removeFromRight(10);
+        midiImportMixxxBtn.setBounds(devHeaderRow.removeFromRight(130));
 
         mArea.removeFromTop(8);
         midiDeviceListBox = mArea.removeFromTop(110);
@@ -2777,42 +3162,48 @@ void SettingsModalComponent::resized()
         broadcastDestCombo.setBounds(destRow);
         tArea.removeFromTop(10);
 
-        // Radio propia (Icecast)
-        broadcastSectionTitle.setBounds(tArea.removeFromTop(20));
-        tArea.removeFromTop(2);
-        broadcastDescLabel.setBounds(tArea.removeFromTop(16));
-        tArea.removeFromTop(4);
+        // Radio propia (Icecast): su bloque solo ocupa espacio cuando es visible
+        // (destino = radio); con Twitch/YouTube etc. el RTMP sube sin hueco.
+        const bool radioVisible = broadcastSectionTitle.isVisible();
+        if (radioVisible)
+        {
+            broadcastSectionTitle.setBounds(tArea.removeFromTop(20));
+            tArea.removeFromTop(2);
+            broadcastDescLabel.setBounds(tArea.removeFromTop(16));
+            tArea.removeFromTop(4);
 
-        auto r1 = tArea.removeFromTop(26);
-        broadcastHostLabel.setBounds(r1.removeFromLeft(170));
-        r1.removeFromLeft(8);
-        broadcastHostEditor.setBounds(r1);
-        tArea.removeFromTop(6);
+            auto r1 = tArea.removeFromTop(26);
+            broadcastHostLabel.setBounds(r1.removeFromLeft(170));
+            r1.removeFromLeft(8);
+            broadcastHostEditor.setBounds(r1);
+            tArea.removeFromTop(6);
 
-        auto r2 = tArea.removeFromTop(28);
-        broadcastPortLabel.setBounds(r2.removeFromLeft(170));
-        r2.removeFromLeft(8);
-        broadcastPortEditor.setBounds(r2.removeFromLeft(100));
-        r2.removeFromLeft(16);
-        broadcastMountLabel.setBounds(r2.removeFromLeft(100));
-        r2.removeFromLeft(8);
-        broadcastMountEditor.setBounds(r2);
-        tArea.removeFromTop(6);
+            auto r2 = tArea.removeFromTop(28);
+            broadcastPortLabel.setBounds(r2.removeFromLeft(170));
+            r2.removeFromLeft(8);
+            broadcastPortEditor.setBounds(r2.removeFromLeft(100));
+            r2.removeFromLeft(16);
+            broadcastMountLabel.setBounds(r2.removeFromLeft(100));
+            r2.removeFromLeft(8);
+            broadcastMountEditor.setBounds(r2);
+            tArea.removeFromTop(6);
 
-        auto r3 = tArea.removeFromTop(28);
-        broadcastPasswordLabel.setBounds(r3.removeFromLeft(170));
-        r3.removeFromLeft(8);
-        broadcastPasswordEditor.setBounds(r3.removeFromLeft(200));
-        r3.removeFromLeft(16);
-        broadcastNameLabel.setBounds(r3.removeFromLeft(120));
-        r3.removeFromLeft(8);
-        broadcastNameEditor.setBounds(r3);
-        tArea.removeFromTop(6);
+            auto r3 = tArea.removeFromTop(28);
+            broadcastPasswordLabel.setBounds(r3.removeFromLeft(170));
+            r3.removeFromLeft(8);
+            broadcastPasswordEditor.setBounds(r3.removeFromLeft(200));
+            r3.removeFromLeft(16);
+            broadcastNameLabel.setBounds(r3.removeFromLeft(120));
+            r3.removeFromLeft(8);
+            broadcastNameEditor.setBounds(r3);
+            tArea.removeFromTop(6);
 
-        auto r4 = tArea.removeFromTop(24);
-        broadcastBitrateLabel.setBounds(r4.removeFromLeft(170));
-        r4.removeFromLeft(8);
-        broadcastBitrateCombo.setBounds(r4.removeFromLeft(120));
+            auto r4 = tArea.removeFromTop(24);
+            broadcastBitrateLabel.setBounds(r4.removeFromLeft(170));
+            r4.removeFromLeft(8);
+            broadcastBitrateCombo.setBounds(r4.removeFromLeft(120));
+            tArea.removeFromTop(10);
+        }
 
         // RTMP (YouTube / Facebook / Twitch / personalizado)
         auto rt1 = tArea.removeFromTop(26);

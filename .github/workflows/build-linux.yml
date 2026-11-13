@@ -51,6 +51,8 @@ jobs:
         run: |
           mkdir -p dist
           find build -name "DiscNativePro" -type f -perm /111 -exec cp {} dist/ \;
+          # P27: el runtime ONNX vive junto al exe (post-build); sin él la app pierde stems
+          find build -name "libonnxruntime.so*" -type f -exec cp {} dist/ \;
           cp assets/icon.png dist/ 2>/dev/null || true
           cat << 'EOF' > dist/run.sh
           #!/usr/bin/env bash
@@ -61,9 +63,24 @@ jobs:
           tar -czvf DiscNativePro-Linux-x64.tar.gz -C dist .
           echo "Package created: DiscNativePro-Linux-x64.tar.gz"
 
+      - name: Package Linux (.deb)
+        shell: bash
+        run: |
+          cd build && cpack -G DEB
+          cd ..
+          find build -name "*.deb" -exec cp {} . \;
+          ls -la *.deb
+
       - name: Upload Linux Executable Artifact
         uses: actions/upload-artifact@v4
         with:
           name: DiscNativePro-Linux-x64
           path: DiscNativePro-Linux-x64.tar.gz
+          retention-days: 90
+
+      - name: Upload Linux .deb Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: DiscNativePro-Linux-deb
+          path: "*.deb"
           retention-days: 90

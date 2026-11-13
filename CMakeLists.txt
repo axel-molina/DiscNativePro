@@ -1,5 +1,13 @@
 cmake_minimum_required(VERSION 3.22)
 
+# Piso de macOS: el dylib vendorizado de ONNX Runtime en uso (libonnxruntime.1.dylib
+# → wheel 1.27.0, minos 14.0) marca el mínimo; si se vuelve a 1.22.0 (minos 13.3),
+# este piso puede bajar. Sin esto el target hereda el macOS de la máquina que
+# compila (CI macos-latest) y el binario queda "requires macOS 26.0".
+if(APPLE AND NOT DEFINED CMAKE_OSX_DEPLOYMENT_TARGET)
+    set(CMAKE_OSX_DEPLOYMENT_TARGET "14.0")
+endif()
+
 project(DiscNativePro VERSION 1.3.3 LANGUAGES C CXX)
 
 if(APPLE)
@@ -85,6 +93,10 @@ target_sources(DiscNativePro
         src/audio/AudioRecorder.cpp
         src/audio/BroadcastService.h
         src/audio/BroadcastService.cpp
+        src/audio/MicChannel.h
+        src/audio/MicChannel.cpp
+        src/audio/MasterLimiter.h
+        src/audio/MasterLimiter.cpp
         src/audio/Mp3Exporter.h
         src/audio/Mp3Exporter.cpp
         src/services/FfmpegLocator.h
@@ -99,6 +111,12 @@ target_sources(DiscNativePro
         src/services/YouTubeService.cpp
         src/services/YouTubeAudioDownloader.h
         src/services/YouTubeAudioDownloader.cpp
+        src/services/MixxxPresetCatalog.h
+        src/services/MixxxPresetCatalog.cpp
+        src/services/MixxxMappingImporter.h
+        src/services/MixxxMappingImporter.cpp
+        src/services/VdjMappingImporter.h
+        src/services/VdjMappingImporter.cpp
         src/services/ThumbnailCache.h
         src/services/ThumbnailCache.cpp
         src/services/AIService.h
@@ -115,6 +133,15 @@ target_sources(DiscNativePro
         src/services/UsbDriveScanner.cpp
         src/services/LibraryCacheManager.h
         src/services/LibraryCacheManager.cpp
+        src/services/PlaylistStore.h
+        src/services/PlaylistStore.cpp
+        src/services/StemSeparationService.h
+        src/services/StemSeparationService.cpp
+        src/services/OnnxStemEngine.cpp
+        src/services/TwoStemEngine.h
+        src/services/TwoStemEngine.cpp
+        third_party/kissfft/kiss_fft.c
+        third_party/kissfft/kiss_fftr.c
         src/services/AsyncFolderScanner.h
         src/services/AsyncFolderScanner.cpp
         src/services/SoundCloudService.h
@@ -138,6 +165,8 @@ target_sources(DiscNativePro
         src/ui/ScrollingWaveform.cpp
         src/ui/DeckComponent.h
         src/ui/DeckComponent.cpp
+        src/ui/GridEditorComponent.h
+        src/ui/GridEditorComponent.cpp
         src/ui/YouTubeVideoComponent.h
         src/ui/YouTubeEmbedHtml.h
         src/ui/YouTubeEmbedHtml.cpp
@@ -181,6 +210,16 @@ target_sources(DiscNativePro
 target_include_directories(DiscNativePro
     PRIVATE
         src
+        third_party/kissfft
+)
+
+# P26: kissfft es vendorizado (BSD) y compila dentro del target principal;
+# sus warnings de conversión propios se silencian sin relajar el nivel
+# estricto del resto del proyecto (mismo criterio que StretchAdapter).
+set_source_files_properties(
+    third_party/kissfft/kiss_fft.c
+    third_party/kissfft/kiss_fftr.c
+    PROPERTIES COMPILE_OPTIONS "-w"
 )
 
 target_compile_definitions(DiscNativePro
@@ -202,6 +241,124 @@ target_link_libraries(DiscNativePro
         juce::juce_recommended_warning_flags
         mp3lame
 )
+
+# -----------------------------------------------------------------------------
+# P23: ONNX Runtime (motor ML de stems, vendorizado en third_party/onnxruntime).
+# La runtime se enlaza y el dylib/dll/so se copia al bundle/junto al exe en el
+# post-build. El modelo (assets/models/htdemucs_fp32.onnx, gitignored) se copia
+# a Resources / junto al exe SOLO si existe; sin modelo la app degrada con
+# gracia (sin separación de stems).
+# -----------------------------------------------------------------------------
+set(ORT_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/third_party/onnxruntime")
+set(STEMS_MODEL "${CMAKE_CURRENT_SOURCE_DIR}/assets/models/htdemucs_fp32.onnx")
+
+if(APPLE)
+    target_include_directories(DiscNativePro PRIVATE "${ORT_ROOT}/macos/include")
+    target_link_libraries(DiscNativePro PRIVATE "${ORT_ROOT}/macos/lib/libonnxruntime.dylib")
+    set_target_properties(DiscNativePro PROPERTIES
+        BUILD_RPATH "@executable_path/../Frameworks"
+        INSTALL_RPATH "@executable_path/../Frameworks"
+    )
+    add_custom_command(TARGET DiscNativePro POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E make_directory
+            "$<TARGET_BUNDLE_DIR:DiscNativePro>/Contents/Frameworks"
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            "${ORT_ROOT}/macos/lib/libonnxruntime-wheel-1.27.0.dylib"
+            "$<TARGET_BUNDLE_DIR:DiscNativePro>/Contents/Frameworks/"
+        COMMENT "Bundling ONNX Runtime into app Frameworks"
+    )
+    if (EXISTS "${STEMS_MODEL}")
+        add_custom_command(TARGET DiscNativePro POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E make_directory
+                "$<TARGET_BUNDLE_DIR:DiscNativePro>/Contents/Resources/models"
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                "${STEMS_MODEL}"
+                "$<TARGET_BUNDLE_DIR:DiscNativePro>/Contents/Resources/models/"
+            COMMENT "Bundling htdemucs model into app resources"
+        )
+    endif()
+elseif(WIN32)
+    target_include_directories(DiscNativePro PRIVATE "${ORT_ROOT}/windows/include")
+    target_link_libraries(DiscNativePro PRIVATE "${ORT_ROOT}/windows/lib/onnxruntime.lib")
+    add_custom_command(TARGET DiscNativePro POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            "${ORT_ROOT}/windows/lib/onnxruntime.dll"
+            "$<TARGET_FILE_DIR:DiscNativePro>/onnxruntime.dll"
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            "${ORT_ROOT}/windows/lib/onnxruntime_providers_shared.dll"
+            "$<TARGET_FILE_DIR:DiscNativePro>/onnxruntime_providers_shared.dll"
+        COMMENT "Bundling ONNX Runtime next to executable"
+    )
+    if (EXISTS "${STEMS_MODEL}")
+        add_custom_command(TARGET DiscNativePro POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                "${STEMS_MODEL}"
+                "$<TARGET_FILE_DIR:DiscNativePro>/models/htdemucs_fp32.onnx"
+            COMMENT "Bundling htdemucs model next to executable"
+        )
+    endif()
+elseif(UNIX AND NOT APPLE)
+    target_include_directories(DiscNativePro PRIVATE "${ORT_ROOT}/linux/include")
+    target_link_libraries(DiscNativePro PRIVATE "${ORT_ROOT}/linux/lib/libonnxruntime.so")
+    set_target_properties(DiscNativePro PROPERTIES
+        BUILD_RPATH "$ORIGIN"
+        INSTALL_RPATH "$ORIGIN"
+    )
+    add_custom_command(TARGET DiscNativePro POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            "${ORT_ROOT}/linux/lib/libonnxruntime.so.1.31.1"
+            "$<TARGET_FILE_DIR:DiscNativePro>/"
+        COMMENT "Bundling ONNX Runtime next to executable"
+    )
+    if (EXISTS "${STEMS_MODEL}")
+        add_custom_command(TARGET DiscNativePro POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E make_directory
+                "$<TARGET_FILE_DIR:DiscNativePro>/models"
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                "${STEMS_MODEL}"
+                "$<TARGET_FILE_DIR:DiscNativePro>/models/"
+            COMMENT "Bundling htdemucs model next to executable"
+        )
+    endif()
+endif()
+
+# P25: modelo 2-stem (uvr_mdxnet_voc_ft_fp16.onnx, gitignored) junto al de
+# 4 stems; sin él la app degrada a la separación completa.
+set(STEMS2_MODEL "${CMAKE_CURRENT_SOURCE_DIR}/assets/models/uvr_mdxnet_voc_ft_fp16.onnx")
+if(APPLE)
+    if (EXISTS "${STEMS2_MODEL}")
+        add_custom_command(TARGET DiscNativePro POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E make_directory
+                "$<TARGET_BUNDLE_DIR:DiscNativePro>/Contents/Resources/models"
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                "${STEMS2_MODEL}"
+                "$<TARGET_BUNDLE_DIR:DiscNativePro>/Contents/Resources/models/"
+            COMMENT "Bundling 2-stem model into app resources"
+        )
+    endif()
+elseif(WIN32)
+    if (EXISTS "${STEMS2_MODEL}")
+        add_custom_command(TARGET DiscNativePro POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E make_directory
+                "$<TARGET_FILE_DIR:DiscNativePro>/models"
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                "${STEMS2_MODEL}"
+                "$<TARGET_FILE_DIR:DiscNativePro>/models/"
+            COMMENT "Bundling 2-stem model next to executable"
+        )
+    endif()
+elseif(UNIX AND NOT APPLE)
+    if (EXISTS "${STEMS2_MODEL}")
+        add_custom_command(TARGET DiscNativePro POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E make_directory
+                "$<TARGET_FILE_DIR:DiscNativePro>/models"
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                "${STEMS2_MODEL}"
+                "$<TARGET_FILE_DIR:DiscNativePro>/models/"
+            COMMENT "Bundling 2-stem model next to executable"
+        )
+    endif()
+endif()
 
 if(APPLE)
     target_sources(DiscNativePro
@@ -319,4 +476,37 @@ elseif(UNIX AND NOT APPLE)
             PkgConfig::GTK3
             PkgConfig::WEBKIT
     )
+endif()
+
+# -----------------------------------------------------------------------------
+# P27: empaquetado Linux (.deb) — binario, runtime ONNX, .desktop e icono.
+# Los modelos ONNX siguen gitignored y NO van al paquete (stems degradan con
+# aviso, igual que el tar.gz). El .so de ONNX va a /usr/lib/DiscNativePro y el
+# INSTALL_RPATH lo incluye.
+# -----------------------------------------------------------------------------
+if(UNIX AND NOT APPLE)
+    set_target_properties(DiscNativePro PROPERTIES
+        INSTALL_RPATH "$ORIGIN:/usr/lib/DiscNativePro"
+    )
+    install(TARGETS DiscNativePro RUNTIME DESTINATION bin)
+    if(EXISTS "${ORT_ROOT}/linux/lib/libonnxruntime.so.1.31.1")
+        install(FILES "${ORT_ROOT}/linux/lib/libonnxruntime.so.1.31.1"
+                RENAME "libonnxruntime.so.1"
+                DESTINATION lib/DiscNativePro)
+    endif()
+    install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/assets/icon.png"
+            RENAME "discnativepro.png"
+            DESTINATION share/icons/hicolor/256x256/apps)
+    install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/install/linux/discnativepro.desktop"
+            DESTINATION share/applications)
+
+    set(CPACK_GENERATOR "DEB")
+    set(CPACK_PACKAGE_NAME "discnativepro")
+    set(CPACK_PACKAGE_VENDOR "DiscNativePro")
+    set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "Consola DJ nativa: doble deck, stems, FX sincronizados y MIDI")
+    set(CPACK_DEBIAN_PACKAGE_MAINTAINER "Axel Molina <ivanmolina052@gmail.com>")
+    set(CPACK_DEBIAN_PACKAGE_SECTION "sound")
+    set(CPACK_DEBIAN_PACKAGE_DEPENDS "libgtk-3-0, libwebkit2gtk-4.1-0 | libwebkit2gtk-4.0-37, libasound2, libjack-jackd2-0 | libjack0, libfreetype6, libcurl4, libx11-6, libxcomposite1, libxcursor1, libxext6, libxinerama1, libxrandr2, libxrender1, libglu1-mesa, libgl1")
+    set(CPACK_DEBIAN_FILE_NAME "DEB-DEFAULT")
+    include(CPack)
 endif()

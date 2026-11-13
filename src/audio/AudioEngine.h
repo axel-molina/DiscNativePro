@@ -7,6 +7,8 @@
 #include "AudioRecorder.h"
 #include "BroadcastService.h"
 #include "SamplerBank.h"
+#include "MicChannel.h"
+#include "MasterLimiter.h"
 
 class AudioEngine : public juce::AudioIODeviceCallback,
                     public juce::ChangeListener,
@@ -44,6 +46,18 @@ public:
     juce::AudioFormatManager& getFormatManager() { return formatManager; }
     AudioRecorder& getRecorder()       { return audioRecorder; }
     BroadcastService& getBroadcastService() { return broadcastService; }
+    MicChannel& getMicChannel()        { return micChannel; }
+    bool isMicAvailable() const        { return micAvailable.load(std::memory_order_relaxed); }
+    MasterLimiter& getMasterLimiter()  { return masterLimiter; }
+
+    // Micrófono: setters con persistencia en settings.json (patrón loadLock).
+    void setMicEnabled(bool on);
+    void setMicDuckEnabled(bool on);
+    void setMicGainDb(float db);
+    void setMicDuckDepthDb(float db);
+
+    // Limiter master: techo en dBFS (persistido en settings.json).
+    void setMasterCeilingDb(float db);
 
     // Recording convenience methods
     bool toggleRecording(juce::String& outFilePath);
@@ -117,6 +131,9 @@ private:
     SamplerBank samplerBank;
     AudioRecorder audioRecorder;
     BroadcastService broadcastService;
+    MicChannel micChannel;
+    MasterLimiter masterLimiter;
+    std::atomic<bool> micAvailable { false };
 
     // Preallocated buffers for real-time safety (no malloc in audio callback)
     juce::AudioBuffer<float> deck1Buffer;
@@ -160,6 +177,11 @@ private:
     juce::uint32 lastUserSeek2 { 0 };
 
     void processPhaseAlign();
+
+    // Abre el dispositivo por defecto intentando 2 entradas + 4 salidas (mic);
+    // si el dispositivo no tiene entradas, cae a solo salida. Actualiza
+    // currentNumOutputChannels y micAvailable.
+    bool openDefaultAudioDevice();
 
     std::atomic<bool> isShuttingDown { false };
     std::atomic<bool> isRecoveringDevice { false };

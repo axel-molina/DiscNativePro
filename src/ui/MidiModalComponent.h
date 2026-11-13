@@ -1,6 +1,7 @@
 #pragma once
 
 #include <juce_gui_basics/juce_gui_basics.h>
+#include <atomic>
 #include "../midi/MidiManager.h"
 #include "../services/LanguageManager.h"
 #include "LucideIcons.h"
@@ -19,6 +20,7 @@ public:
 
 private:
     void refreshDeviceList();
+    void importMixxxPreset();
 
     MidiManager& midi;
 
@@ -26,6 +28,8 @@ private:
     juce::Label descLabel;
     juce::Label devicesHeader;
     juce::TextButton scanBtn { "Escanear" };
+    juce::TextButton mixxxBtn { "Importar Mixxx" };
+    std::atomic<bool> importing { false };
 
     // Device list container
     juce::StringArray currentDevices;

@@ -31,6 +31,16 @@ size_t LibraryCacheManager::getCachedCount()
     return cache.size();
 }
 
+std::vector<juce::File> LibraryCacheManager::getCachedTracks()
+{
+    std::lock_guard<std::mutex> lock(cacheMutex);
+    std::vector<juce::File> out;
+    out.reserve(cache.size());
+    for (const auto& kv : cache)
+        out.emplace_back(kv.first);
+    return out;
+}
+
 void LibraryCacheManager::clear()
 {
     std::lock_guard<std::mutex> lock(cacheMutex);
@@ -108,6 +118,127 @@ void LibraryCacheManager::updateBpmAndKey(const juce::File& file, double bpm, co
     }
 }
 
+void LibraryCacheManager::updateGrid(const juce::File& file, double gridBpm, double gridFirstBeatOffset)
+{
+    auto path = file.getFullPathName();
+    bool updated = false;
+
+    {
+        std::lock_guard<std::mutex> lock(cacheMutex);
+        auto it = cache.find(path);
+        if (it == cache.end())
+        {
+            // Pista nunca escaneada por la biblioteca: entrada mínima con la
+            // misma firma de validez (modTime/size) que usa getTrack().
+            CachedTrackMetadata meta;
+            meta.title = file.getFileNameWithoutExtension();
+            meta.duration = 0.0;
+            meta.lastModifiedTime = file.getLastModificationTime().toMilliseconds();
+            meta.fileSizeBytes = file.getSize();
+            it = cache.emplace(path, std::move(meta)).first;
+        }
+        it->second.gridBpm = gridBpm;
+        it->second.gridFirstBeatOffset = gridFirstBeatOffset;
+        isDirty = true;
+        updated = true;
+    }
+
+    if (updated)
+    {
+        auto now = juce::Time::getMillisecondCounter();
+        if (now - lastSaveTick > 3000)
+        {
+            saveCache();
+            lastSaveTick = now;
+        }
+    }
+}
+
+void LibraryCacheManager::updateHotCues(const juce::File& file, const std::array<double, 4>& hotCues)
+{
+    auto path = file.getFullPathName();
+    bool updated = false;
+
+    {
+        std::lock_guard<std::mutex> lock(cacheMutex);
+        auto it = cache.find(path);
+        if (it == cache.end())
+        {
+            // Entrada mínima con la misma firma de validez que usa getTrack().
+            CachedTrackMetadata meta;
+            meta.title = file.getFileNameWithoutExtension();
+            meta.lastModifiedTime = file.getLastModificationTime().toMilliseconds();
+            meta.fileSizeBytes = file.getSize();
+            it = cache.emplace(path, std::move(meta)).first;
+        }
+        it->second.hotCues = hotCues;
+        isDirty = true;
+        updated = true;
+    }
+
+    if (updated)
+    {
+        auto now = juce::Time::getMillisecondCounter();
+        if (now - lastSaveTick > 3000)
+        {
+            saveCache();
+            lastSaveTick = now;
+        }
+    }
+}
+
+void LibraryCacheManager::updateStemsStatus(const juce::File& file, const juce::String& status, const juce::String& dir)
+{
+    auto path = file.getFullPathName();
+    bool updated = false;
+
+    {
+        std::lock_guard<std::mutex> lock(cacheMutex);
+        auto it = cache.find(path);
+        if (it == cache.end())
+        {
+            // Entrada mínima con la misma firma de validez que usa getTrack().
+            CachedTrackMetadata meta;
+            meta.title = file.getFileNameWithoutExtension();
+            meta.lastModifiedTime = file.getLastModificationTime().toMilliseconds();
+            meta.fileSizeBytes = file.getSize();
+            it = cache.emplace(path, std::move(meta)).first;
+        }
+        it->second.stemsStatus = status;
+        it->second.stemsDir = dir;
+        isDirty = true;
+        updated = true;
+    }
+
+    if (updated)
+    {
+        auto now = juce::Time::getMillisecondCounter();
+        if (now - lastSaveTick > 3000)
+        {
+            saveCache();
+            lastSaveTick = now;
+        }
+    }
+}
+
+juce::String LibraryCacheManager::getStemsStatus(const juce::File& file)
+{
+    std::lock_guard<std::mutex> lock(cacheMutex);
+    auto it = cache.find(file.getFullPathName());
+    if (it == cache.end())
+        return juce::String();
+    return it->second.stemsStatus;
+}
+
+bool LibraryCacheManager::hasStemsJobInProgress()
+{
+    std::lock_guard<std::mutex> lock(cacheMutex);
+    for (const auto& [path, meta] : cache)
+        if (meta.stemsStatus == "processing")
+            return true;
+    return false;
+}
+
 void LibraryCacheManager::loadCache()
 {
     auto file = getCacheFile();
@@ -147,6 +278,15 @@ void LibraryCacheManager::loadCache()
                 meta.key = itemObj->getProperty("key").toString();
                 meta.lastModifiedTime = static_cast<juce::int64>(itemObj->getProperty("modTime"));
                 meta.fileSizeBytes = static_cast<juce::int64>(itemObj->getProperty("size"));
+                meta.gridBpm = static_cast<double>(itemObj->getProperty("gridBpm"));
+                meta.gridFirstBeatOffset = static_cast<double>(itemObj->getProperty("gridOffset"));
+                if (auto* hcArr = itemObj->getProperty("hotCues").getArray())
+                {
+                    for (int i = 0; i < 4 && i < (int)hcArr->size(); ++i)
+                        meta.hotCues[static_cast<size_t>(i)] = static_cast<double>((*hcArr)[i]);
+                }
+                meta.stemsStatus = itemObj->getProperty("stemsStatus").toString();
+                meta.stemsDir = itemObj->getProperty("stemsDir").toString();
 
                 cache[path] = meta;
             }
@@ -179,6 +319,14 @@ void LibraryCacheManager::saveCache()
         itemObj->setProperty("key", meta.key);
         itemObj->setProperty("modTime", meta.lastModifiedTime);
         itemObj->setProperty("size", meta.fileSizeBytes);
+        itemObj->setProperty("gridBpm", meta.gridBpm);
+        itemObj->setProperty("gridOffset", meta.gridFirstBeatOffset);
+        juce::Array<juce::var> hcArr;
+        for (const auto hc : meta.hotCues)
+            hcArr.add(hc);
+        itemObj->setProperty("hotCues", hcArr);
+        itemObj->setProperty("stemsStatus", meta.stemsStatus);
+        itemObj->setProperty("stemsDir", meta.stemsDir);
 
         rootObj->setProperty(path, juce::var(itemObj.release()));
     }

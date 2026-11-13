@@ -50,6 +50,11 @@ namespace
     constexpr const char* tempoBlendProperty = "tempoBlend";
     constexpr const char* loadLockProperty = "loadLock";
     constexpr const char* autoplayOnLoadProperty = "autoplayOnLoad";
+    constexpr const char* micEnabledProperty = "mic.enabled";
+    constexpr const char* micDuckEnabledProperty = "mic.duckEnabled";
+    constexpr const char* micGainProperty = "mic.gainDb";
+    constexpr const char* micDuckDepthProperty = "mic.duckDepthDb";
+    constexpr const char* masterCeilingProperty = "master.ceilingDb";
 
     // Merge sobre el settings.json existente: se respetan las demas claves
     // (p. ej. recordingDirectory) y solo se toca la propiedad propia.
@@ -82,6 +87,34 @@ namespace
 
         file.replaceWithText(juce::JSON::toString(json));
     }
+
+    float readFloatSetting(const char* property, float defaultValue)
+    {
+        auto file = AudioEngine::getSettingsFile();
+        if (!file.existsAsFile())
+            return defaultValue;
+
+        auto json = juce::JSON::parse(file);
+        if (!json.isObject() || !json.hasProperty(property))
+            return defaultValue;
+
+        return (float) (double) json[property];
+    }
+
+    void writeFloatSetting(const char* property, float value)
+    {
+        auto file = AudioEngine::getSettingsFile();
+        juce::var json;
+        if (file.existsAsFile())
+            json = juce::JSON::parse(file);
+        if (!json.isObject())
+            json = juce::var(new juce::DynamicObject());
+
+        if (auto* obj = json.getDynamicObject())
+            obj->setProperty(property, (double) value);
+
+        file.replaceWithText(juce::JSON::toString(json));
+    }
 }
 
 AudioEngine::AudioEngine()
@@ -103,6 +136,17 @@ AudioEngine::AudioEngine()
 
     // Autoplay al cargar: activado de fabrica (default ON) y persistido.
     autoplayOnLoadEnabled.store(readBoolSetting(autoplayOnLoadProperty, true));
+
+    // Microfono: restaurar lo persistido (disabled de fabrica; duck -12 dB).
+    micChannel.enabled.store(readBoolSetting(micEnabledProperty, false));
+    micChannel.duckEnabled.store(readBoolSetting(micDuckEnabledProperty, true));
+    micChannel.gainDb.store(readFloatSetting(micGainProperty, 0.0f));
+    micChannel.duckDepthDb.store(juce::jlimit(-60.0f, 0.0f,
+                                              readFloatSetting(micDuckDepthProperty, -12.0f)));
+
+    // Limiter master: techo restaurado (default -0.3 dBFS).
+    masterLimiter.ceilingDb.store(juce::jlimit(-12.0f, 0.0f,
+                                               readFloatSetting(masterCeilingProperty, -0.3f)));
 }
 
 AudioEngine::~AudioEngine()
@@ -110,19 +154,32 @@ AudioEngine::~AudioEngine()
     shutdown();
 }
 
-bool AudioEngine::initialise()
+bool AudioEngine::openDefaultAudioDevice()
 {
-    isShuttingDown.store(false);
+    // 2 entradas + 4 salidas (mic + Master Ch 1-2 / Phones Ch 3-4). Si el
+    // dispositivo no tiene entradas (o no se pueden activar), caer a solo salida.
+    auto err = deviceManager.initialiseWithDefaultDevices(2, 4);
 
-    // Start background disk streaming thread (priority normal for smooth file prefetching)
-    diskReaderThread.startThread(juce::Thread::Priority::normal);
-
-    // Initialise audio device manager with 0 inputs, up to 4 outputs (Master Ch 1-2, Phones Ch 3-4)
-    auto err = deviceManager.initialiseWithDefaultDevices(0, 4);
-    if (!err.isEmpty())
+    bool hasInputs = false;
+    if (err.isEmpty())
     {
-        DBG("Audio device error: " << err);
-        return false;
+        if (auto* dev = deviceManager.getCurrentAudioDevice())
+            hasInputs = dev->getActiveInputChannels().countNumberOfSetBits() > 0;
+    }
+
+    if (!err.isEmpty() || !hasInputs)
+    {
+        if (!err.isEmpty())
+            DBG("Audio device error (con entradas): " << err);
+
+        deviceManager.closeAudioDevice();
+        err = deviceManager.initialiseWithDefaultDevices(0, 4);
+        if (!err.isEmpty())
+        {
+            DBG("Audio device error: " << err);
+            micAvailable.store(false);
+            return false;
+        }
     }
 
     // Ensure all available physical output channels (up to 4) are activated
@@ -134,7 +191,23 @@ bool AudioEngine::initialise()
         currentNumOutputChannels.store(numAvail);
         setup.outputChannels.setRange(0, juce::jmin(4, numAvail), true);
         deviceManager.setAudioDeviceSetup(setup, true);
+
+        // Re-verificar tras el cambio de setup (la reconfiguracion puede cerrar entradas).
+        hasInputs = currentDev->getActiveInputChannels().countNumberOfSetBits() > 0;
     }
+    micAvailable.store(hasInputs);
+    return true;
+}
+
+bool AudioEngine::initialise()
+{
+    isShuttingDown.store(false);
+
+    // Start background disk streaming thread (priority normal for smooth file prefetching)
+    diskReaderThread.startThread(juce::Thread::Priority::normal);
+
+    if (!openDefaultAudioDevice())
+        return false;
 
     deviceManager.addAudioCallback(this);
     deviceManager.addChangeListener(this);
@@ -247,6 +320,9 @@ void AudioEngine::audioDeviceAboutToStart(juce::AudioIODevice* device)
     currentSampleRate = device->getCurrentSampleRate();
     currentBlockSize = device->getCurrentBufferSizeSamples();
     currentNumOutputChannels.store(device->getActiveOutputChannels().countNumberOfSetBits());
+    micAvailable.store(device->getActiveInputChannels().countNumberOfSetBits() > 0);
+    micChannel.prepare(currentSampleRate, currentBlockSize);
+    masterLimiter.prepare(currentSampleRate, currentBlockSize);
 
     // Preallocate buffers for zero runtime heap allocation (real-time safe)
     deck1Buffer.setSize(2, currentBlockSize, false, true, true);
@@ -320,31 +396,21 @@ bool AudioEngine::ensureAudioDeviceRunning()
     }
 
     // 2. Si restartLastAudioDevice fallo, re-inicializar con dispositivos predeterminados
-    auto err = deviceManager.initialiseWithDefaultDevices(0, 4);
-    if (err.isEmpty())
+    if (!openDefaultAudioDevice())
     {
-        auto setup = deviceManager.getAudioDeviceSetup();
-        if (auto* newDev = deviceManager.getCurrentAudioDevice())
-        {
-            auto outNames = newDev->getOutputChannelNames();
-            int numAvail = outNames.size();
-            currentNumOutputChannels.store(numAvail);
-            setup.outputChannels.setRange(0, juce::jmin(4, numAvail), true);
-            deviceManager.setAudioDeviceSetup(setup, true);
-        }
-        deviceManager.addAudioCallback(this);
-        DBG("[AudioEngine] Restored audio device successfully via initialiseWithDefaultDevices");
+        DBG("[AudioEngine] Error restoring audio device");
         isRecoveringDevice.store(false);
-        return true;
+        return false;
     }
 
-    DBG("[AudioEngine] Error restoring audio device: " << err);
+    deviceManager.addAudioCallback(this);
+    DBG("[AudioEngine] Restored audio device successfully via initialiseWithDefaultDevices");
     isRecoveringDevice.store(false);
-    return false;
+    return true;
 }
 
-void AudioEngine::audioDeviceIOCallbackWithContext(const float* const* /*inputChannelData*/,
-                                                  int /*numInputChannels*/,
+void AudioEngine::audioDeviceIOCallbackWithContext(const float* const* inputChannelData,
+                                                  int numInputChannels,
                                                   float* const* outputChannelData,
                                                   int numOutputChannels,
                                                   int numSamples,
@@ -372,10 +438,27 @@ void AudioEngine::audioDeviceIOCallbackWithContext(const float* const* /*inputCh
     // 2. Process DSP: Channel EQ, Color Filters, Deck FX Chains, Channel Faders, Crossfader, Master Gain, Cue Preescucha & Meters
     djMixer.setDeckBpm(0, static_cast<float>(deck1.getBpm()));
     djMixer.setDeckBpm(1, static_cast<float>(deck2.getBpm()));
+    djMixer.setDeckBeatPhase(0, deck1.getBeatPhase());
+    djMixer.setDeckBeatPhase(1, deck2.getBeatPhase());
     djMixer.process(deck1Buffer, deck2Buffer, masterBuffer, cueBuffer, numSamples);
 
     // 2b. Sampler one-shots al master post-crossfader (entran a la grabación)
     samplerBank.process(masterBuffer, numSamples);
+
+    // 2c. Micrófono (talkover): duck de la música (auto) y suma de la voz al
+    //     master post-mezcla, antes de recorder/broadcast para heredar ambos.
+    const int numMicInputs = juce::jmin(2, numInputChannels);
+    if (numMicInputs > 0 && inputChannelData != nullptr && micChannel.isEnabled())
+    {
+        const float duck = micChannel.getCurrentDuckGain();
+        if (duck < 0.999f)
+            masterBuffer.applyGain(0, numSamples, duck);
+
+        micChannel.process(inputChannelData, numMicInputs, numSamples, masterBuffer);
+    }
+
+    // 2d. Limiter master (siempre activo): limita salida + grabación + emisión.
+    masterLimiter.process(masterBuffer, numSamples);
 
     // 3. Push to master recorder + broadcast (lock-free, zero allocation)
     audioRecorder.pushAudioBlock(masterBuffer, numSamples);
@@ -452,6 +535,36 @@ void AudioEngine::setAutoplayOnLoadEnabled(bool enabled)
 {
     autoplayOnLoadEnabled.store(enabled);
     writeBoolSetting(autoplayOnLoadProperty, enabled);
+}
+
+void AudioEngine::setMicEnabled(bool on)
+{
+    micChannel.enabled.store(on);
+    writeBoolSetting(micEnabledProperty, on);
+}
+
+void AudioEngine::setMicDuckEnabled(bool on)
+{
+    micChannel.duckEnabled.store(on);
+    writeBoolSetting(micDuckEnabledProperty, on);
+}
+
+void AudioEngine::setMicGainDb(float db)
+{
+    micChannel.gainDb.store(juce::jlimit(-60.0f, 24.0f, db));
+    writeFloatSetting(micGainProperty, micChannel.gainDb.load());
+}
+
+void AudioEngine::setMicDuckDepthDb(float db)
+{
+    micChannel.duckDepthDb.store(juce::jlimit(-60.0f, 0.0f, db));
+    writeFloatSetting(micDuckDepthProperty, micChannel.duckDepthDb.load());
+}
+
+void AudioEngine::setMasterCeilingDb(float db)
+{
+    masterLimiter.ceilingDb.store(juce::jlimit(-12.0f, 0.0f, db));
+    writeFloatSetting(masterCeilingProperty, masterLimiter.ceilingDb.load());
 }
 
 double AudioEngine::normalizeBpmTo(double bpm, double referenceBpm)

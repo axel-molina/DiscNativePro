@@ -177,21 +177,23 @@ void VerticalWaveform::renderDeckHalf(juce::Graphics& g,
     g.setColour(juce::Colours::black.withAlpha(0.25f));
     g.fillRect(startX, centerY, deckWidth, totalHeight - centerY);
 
-    // Beatgrid lines and downbeat measure numbers
-    int firstBeat = static_cast<int>(std::floor(minVisibleTime / beatInterval));
-    int lastBeat = static_cast<int>(std::ceil(maxVisibleTime / beatInterval));
+    // Beatgrid lines and downbeat measure numbers (P16: respetan el offset del
+    // primer beat; antes se dibujaban desde t=0 y el grid editado no se veía).
+    const double firstBeatOffset = player.getFirstBeatOffset();
+    int firstBeat = static_cast<int>(std::floor((minVisibleTime - firstBeatOffset) / beatInterval));
+    int lastBeat = static_cast<int>(std::ceil((maxVisibleTime - firstBeatOffset) / beatInterval));
 
     g.setFont(juce::FontOptions(10.0f, juce::Font::bold));
 
     for (int b = firstBeat; b <= lastBeat; ++b)
     {
-        double beatTime = (double)b * beatInterval;
+        double beatTime = firstBeatOffset + (double)b * beatInterval;
         float y = centerY - static_cast<float>((beatTime - currentTime) * (double)pixelsPerSecond);
 
         if (y >= 0.0f && y <= totalHeight)
         {
-            bool isBar = (b % 4 == 0);
-            int measureNum = (b / 4) + 1;
+            bool isBar = (((b % 4) + 4) % 4) == 0;
+            int measureNum = (b >= 0 ? b : b - 3) / 4 + 1;
 
             if (isBar)
             {

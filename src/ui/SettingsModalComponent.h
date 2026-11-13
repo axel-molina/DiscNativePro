@@ -58,6 +58,7 @@ private:
     void refreshPodcastRecordings();
     void exportPodcastMp3();
     void updateRecordingFolderUI();
+    void updateStemsPrecalcButton();
     void refreshAiModelOptions();
 
     AudioEngine& audioEngine;
@@ -98,6 +99,13 @@ private:
 
     juce::Label recSectionLabel;
     juce::Label recFolderDescLabel;
+
+    // --- Tab 0: Stems (separación automática) — estado del binario demucs ---
+    juce::Label stemsSectionLabel;
+    juce::Label stemsStatusDescLabel;
+    juce::Label stemsModeLabel;
+    juce::ComboBox stemsModeCombo;
+    DjButton stemsPrecalcBtn;
     juce::TextEditor recFolderEditor;
     DjButton recBrowseBtn;
     DjButton recOpenBtn;
@@ -146,17 +154,32 @@ private:
     juce::Label headroomLabel;
     juce::ComboBox headroomCombo;
     juce::ToggleButton masterLimiterToggle;
+    juce::Label ceilingLabel;
+    juce::Slider ceilingSlider;
+
+    // --- Tab 2: Micrófono (Talkover) — control completo (P18d) ---
+    juce::Label soundSectionMic;
+    juce::Label micGainLabel;
+    juce::Slider micGainSlider;
+    juce::ToggleButton micEnableToggle;
+    juce::Label micDuckLabel;
+    juce::Slider micDuckSlider;
+    juce::ToggleButton micDuckAutoToggle;
 
     // --- Tab 3: MIDI Controls ---
     juce::Label midiTitleLabel;
     juce::Label midiDescLabel;
     juce::Label midiDevicesHeader;
     juce::TextButton midiScanBtn { "Escanear Puertos" };
+    juce::TextButton midiImportMixxxBtn { "Importar Mixxx" }; // P26/P29: presets de comunidad
+    juce::TextButton midiImportVdjBtn { "Importar VDJ" };     // P29: definition + mapper VDJ
     juce::StringArray midiConnectedDevices;
     juce::Label midiMonitorHeader;
     juce::Label midiMonitorText;
     juce::Label midiMappingHeader;
     std::unique_ptr<MidiMappingTableComponent> midiMappingTable;
+    void importMixxxPreset();
+    void importVdjMapping();
 
     // --- Tab 4: Shortcuts Controls ---
     // (Rendered directly in paint/custom cards)

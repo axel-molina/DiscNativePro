@@ -5,6 +5,7 @@ CenterColumnComponent::CenterColumnComponent(AudioEngine& engine)
       mixer(engine.getMixer()),
       verticalWaveform(engine.getDeck(0), engine.getDeck(1))
 {
+
     // Top Controls: Master, Meter, Phones
     masterKnob.setRange(0.0, 1.5, 0.01);
     masterKnob.setValue(1.0);
@@ -17,6 +18,11 @@ CenterColumnComponent::CenterColumnComponent(AudioEngine& engine)
     phonesKnob.setValue(1.0);
     phonesKnob.onValueChange = [this]() { mixer.setPhonesVolume((float)phonesKnob.getValue()); };
     addAndMakeVisible(phonesKnob);
+
+    loudnessLabel.setFont(juce::FontOptions(9.5f, juce::Font::bold));
+    loudnessLabel.setJustificationType(juce::Justification::centred);
+    loudnessLabel.setColour(juce::Label::textColourId, juce::Colour::fromRGB(142, 149, 165));
+    addAndMakeVisible(loudnessLabel);
 
     // Middle: Dual Vertical Waveform
     addAndMakeVisible(verticalWaveform);
@@ -99,6 +105,22 @@ void CenterColumnComponent::timerCallback()
 
     // El motor es la unica verdad del Tempo Blend (AutoMix tambien lo cambia por codigo)
     syncTempoBlendState();
+
+    // Loudness (LUFS) y gain reduction del limiter master
+    const auto& limiter = audioEngine.getMasterLimiter();
+    const float lufsS = limiter.getLufsShortTerm();
+    const float lufsM = limiter.getLufsMomentary();
+    const float grDb = limiter.getGainReductionDb();
+    const auto infinity = juce::String(juce::juce_wchar(0x221E));
+    auto fmtLufs = [infinity](float v) {
+        return (v <= -60.0f) ? juce::String("-") + infinity : juce::String(v, 1);
+    };
+    loudnessLabel.setText("LUFS-S " + fmtLufs(lufsS) + "   M " + fmtLufs(lufsM)
+                              + "   GR " + juce::String(grDb, 1) + " dB",
+                          juce::dontSendNotification);
+    loudnessLabel.setColour(juce::Label::textColourId,
+                            (grDb > 0.05f) ? juce::Colour::fromRGB(245, 158, 11)
+                                           : juce::Colour::fromRGB(142, 149, 165));
 }
 
 void CenterColumnComponent::updateTempoBlendAppearance(bool active)
@@ -190,11 +212,14 @@ void CenterColumnComponent::resized()
 {
     auto area = getLocalBounds();
 
-    // 1. Top Section (46px)
-    auto topArea = area.removeFromTop(46).reduced(6, 2);
-    masterKnob.setBounds(topArea.removeFromLeft(48).reduced(0, 1));
-    phonesKnob.setBounds(topArea.removeFromRight(48).reduced(0, 1));
-    masterMeter.setBounds(topArea.reduced(8, 4));
+    // 1. Top Section (62px): fila de knobs + readout de loudness
+    auto topArea = area.removeFromTop(62).reduced(6, 2);
+    auto knobRow = topArea.removeFromTop(46);
+    // P19: fila 1-1 alrededor del meter (CEILING vive ahora en la Top Bar)
+    masterKnob.setBounds(knobRow.removeFromLeft(48).reduced(0, 1));
+    phonesKnob.setBounds(knobRow.removeFromRight(48).reduced(0, 1));
+    masterMeter.setBounds(knobRow.reduced(8, 4));
+    loudnessLabel.setBounds(topArea.reduced(4, 0));
 
     // 2. Bottom Section (64px)
     auto bottomArea = area.removeFromBottom(64).reduced(6, 4);

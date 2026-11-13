@@ -1,4 +1,62 @@
 #include "MidiModalComponent.h"
+#include "../services/MixxxPresetCatalog.h"
+#include "../services/MixxxMappingImporter.h"
+
+namespace
+{
+void showMixxxImportResult(MidiManager& midi, const MixxxImportReport& report, const juce::String& extraError)
+{
+    juce::String title;
+    juce::String msg;
+
+    if (!report.ok)
+    {
+        title = LanguageManager::trUtf8("Error al importar preset", "Preset import error");
+        msg = report.error.isNotEmpty() ? report.error : extraError;
+        if (msg.isEmpty())
+            msg = LanguageManager::trUtf8("No se pudo importar el preset.", "Could not import the preset.");
+    }
+    else
+    {
+        midi.getMappingManager().applyImportedBindings(report.bindings);
+        if (report.outputsImported > 0)
+            midi.getMappingManager().applyImportedOutputBindings(report.outputBindings);
+
+        title = LanguageManager::trUtf8("Preset Mixxx importado", "Mixxx preset imported");
+        msg = juce::String(LanguageManager::trUtf8("Preset: ", "Preset: ")) + report.presetName + "\n"
+            + LanguageManager::trUtf8("Autor: ", "Author: ") + (report.author.isNotEmpty() ? report.author : "--")
+            + LanguageManager::trUtf8("  (comunidad Mixxx)", "  (Mixxx community)") + "\n\n"
+            + juce::String(report.imported)
+            + LanguageManager::trUtf8(" controles importados y activos.", " controls imported and active.") + "\n";
+
+        if (report.outputsImported > 0)
+            msg += juce::String(report.outputsImported)
+                 + LanguageManager::trUtf8(" salidas (LED) importadas.", " outputs (LED) imported.") + "\n";
+
+        if (report.skippedScriptBinding > 0)
+            msg += juce::String(report.skippedScriptBinding)
+                 + LanguageManager::trUtf8(" controles script-binding omitidos (requieren scripts JS de Mixxx).",
+                                           " script-binding controls skipped (require Mixxx JS scripts).") + "\n";
+
+        if (report.unknownKeys.size() > 0)
+        {
+            msg += "\n" + LanguageManager::trUtf8("Controles sin equivalente (no importados):", "Controls without equivalent (not imported):") + "\n";
+            const int shown = juce::jmin(8, report.unknownKeys.size());
+            for (int i = 0; i < shown; ++i)
+                msg += "  • " + report.unknownKeys[i] + "\n";
+            if (report.unknownKeys.size() > shown)
+                msg += "  … +" + juce::String(report.unknownKeys.size() - shown) + "\n";
+        }
+    }
+
+    auto opts = juce::MessageBoxOptions()
+                    .withTitle(title)
+                    .withMessage(msg)
+                    .withButton("OK")
+                    .withIconType(juce::MessageBoxIconType::InfoIcon);
+    juce::AlertWindow::showAsync(opts, nullptr);
+}
+}
 
 MidiModalComponent::MidiModalComponent(MidiManager& midiMgr)
     : midi(midiMgr)
@@ -22,6 +80,12 @@ MidiModalComponent::MidiModalComponent(MidiManager& midiMgr)
         refreshDeviceList();
     };
     addAndMakeVisible(scanBtn);
+
+    // P26: importar preset de la comunidad Mixxx (.midi.xml)
+    mixxxBtn.setColour(juce::TextButton::buttonColourId, juce::Colour::fromRGB(24, 28, 36));
+    mixxxBtn.setColour(juce::TextButton::textColourOffId, juce::Colour::fromRGB(255, 159, 28));
+    mixxxBtn.onClick = [this]() { importMixxxPreset(); };
+    addAndMakeVisible(mixxxBtn);
 
     monitorHeader.setFont(juce::FontOptions(9.5f, juce::Font::bold));
     monitorHeader.setColour(juce::Label::textColourId, juce::Colour::fromRGB(100, 108, 125));
@@ -59,6 +123,7 @@ void MidiModalComponent::refreshLanguage()
     descLabel.setText(LanguageManager::trUtf8("DiscNativePro detecta automáticamente cualquier controladora DJ física conectada por USB (Pioneer DDJ, Hercules, Numark, Native Instruments). Mapea jog wheels, perillas de EQ, faders y pads.",
                                              "DiscNativePro automatically detects any physical DJ controller connected via USB (Pioneer DDJ, Hercules, Numark, Native Instruments). Maps jog wheels, EQ knobs, faders and pads."), juce::dontSendNotification);
     scanBtn.setButtonText(LanguageManager::trUtf8("Escanear", "Scan"));
+    mixxxBtn.setButtonText(LanguageManager::trUtf8("Importar Mixxx", "Import Mixxx"));
     monitorHeader.setText(LanguageManager::trUtf8("MONITOR DE SEÑALES MIDI EN VIVO", "LIVE MIDI SIGNAL MONITOR"), juce::dontSendNotification);
     monitorText.setText(LanguageManager::trUtf8("Esperando movimiento de fader, jog o pad...", "Waiting for fader, jog or pad movement..."), juce::dontSendNotification);
     refreshDeviceList();
@@ -70,6 +135,69 @@ void MidiModalComponent::refreshDeviceList()
     devicesHeader.setText(LanguageManager::trUtf8("DISPOSITIVOS CONECTADOS (", "CONNECTED DEVICES (") + juce::String(currentDevices.size()) + ")",
                           juce::dontSendNotification);
     repaint();
+}
+
+void MidiModalComponent::importMixxxPreset()
+{
+    if (importing.load())
+        return;
+
+    // 1. Detectar controladora conectada con preset en el catálogo de Mixxx
+    MixxxPresetEntry entry;
+    juce::String matchedDevice;
+    for (const auto& d : midi.getConnectedDeviceNames())
+    {
+        if (MixxxPresetCatalog::findForDevice(d, entry))
+        {
+            matchedDevice = d;
+            break;
+        }
+    }
+
+    if (matchedDevice.isEmpty())
+    {
+        // Sin match: FileChooser manual para importar cualquier .midi.xml
+        auto chooser = std::make_shared<juce::FileChooser>(
+            LanguageManager::trUtf8("Seleccionar preset .midi.xml de Mixxx", "Select Mixxx .midi.xml preset"),
+            MixxxPresetCatalog::presetsFolder(), "*.midi.xml;*.xml");
+        chooser->launchAsync(juce::FileBrowserComponent::openMode | juce::FileBrowserComponent::canSelectFiles,
+            [this, chooser](const juce::FileChooser& fc) {
+                auto f = fc.getResult();
+                if (f.existsAsFile())
+                    showMixxxImportResult(midi, MixxxMappingImporter::importFile(f), {});
+            });
+        return;
+    }
+
+    // 2. Descarga del preset oficial en thread de fondo (HTTP, no toca audio)
+    importing.store(true);
+    mixxxBtn.setEnabled(false);
+    mixxxBtn.setButtonText(LanguageManager::trUtf8("Descargando…", "Downloading…"));
+
+    const auto presetFile = entry.presetFile;
+    juce::Thread::launch([safe = juce::Component::SafePointer<MidiModalComponent>(this), presetFile]() {
+        juce::String error;
+        const bool ok = MixxxPresetCatalog::downloadPreset(presetFile, error);
+
+        juce::MessageManager::callAsync([safe, presetFile, ok, error]() {
+            if (safe == nullptr)
+                return;
+            safe->mixxxBtn.setEnabled(true);
+            safe->importing.store(false);
+            safe->mixxxBtn.setButtonText(LanguageManager::trUtf8("Importar Mixxx", "Import Mixxx"));
+
+            if (!ok)
+            {
+                MixxxImportReport fail;
+                fail.error = error;
+                showMixxxImportResult(safe->midi, fail, {});
+                return;
+            }
+
+            auto report = MixxxMappingImporter::importFile(MixxxPresetCatalog::localPresetFile(presetFile));
+            showMixxxImportResult(safe->midi, report, {});
+        });
+    });
 }
 
 void MidiModalComponent::paint(juce::Graphics& g)
@@ -176,8 +304,9 @@ void MidiModalComponent::resized()
     descLabel.setBounds(16, 48, getWidth() - 32, 42);
 
     // Devices bar
-    devicesHeader.setBounds(16, 98, 260, 22);
+    devicesHeader.setBounds(16, 98, 236, 22);
     scanBtn.setBounds(getWidth() - 96, 98, 80, 22);
+    mixxxBtn.setBounds(getWidth() - 210, 98, 106, 22);
 
     // Monitor text
     monitorHeader.setBounds(24, 252, getWidth() - 48, 16);

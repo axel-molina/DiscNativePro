@@ -15,11 +15,13 @@ public:
         ChevronLeft,
         ChevronRight,
         ChevronDown,
+        ChevronUp,
         Folder,
         FolderPlus,
         FolderX,
         Sparkles,
         Music,
+        ListMusic,
         Volume2,
         Settings,
         Maximize,
@@ -42,7 +44,8 @@ public:
         Download,
         Video,
         Tag,
-        Radio
+        Radio,
+        Mic
     };
 
     // Draw the icon vector scaled into the destination rectangle

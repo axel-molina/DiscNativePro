@@ -47,6 +47,7 @@ public:
     void paintCell(juce::Graphics& g, int rowNumber, int columnId, int width, int height, bool rowIsSelected) override;
     juce::Component* refreshComponentForCell(int rowNumber, int columnId, bool isRowSelected, juce::Component* existingComponentToUpdate) override;
     void cellDoubleClicked(int rowNumber, int columnId, const juce::MouseEvent&) override;
+    void cellClicked(int rowNumber, int columnId, const juce::MouseEvent& e) override;
     juce::var getDragSourceDescription(const juce::SparseSet<int>& currentlySelectedRows) override;
     void sortOrderChanged(int newSortColumnId, bool isForwards) override;
 
@@ -86,6 +87,11 @@ public:
     void updateTrackBpm(const juce::File& file, double bpm);
     void updateTrackKey(const juce::File& file, const juce::String& key);
     void updateTrackBpmAndKey(const juce::File& file, double bpm, const juce::String& key);
+
+    // P17: playlists
+    void refreshPlaylists();
+    bool isPlaylistView() const { return currentSelectedFolder.startsWith("playlist:"); }
+    juce::String currentPlaylistId() const { return currentSelectedFolder.substring((int) juce::String("playlist:").length()); }
 
     // MIDI / Hardware Browser Navigation
     void navigateBrowser(int delta);
@@ -146,6 +152,12 @@ private:
     int currentSortColumnId { 0 };
     bool currentSortForwards { true };
 
+    // P17: playlists (drag reorder dentro de la vista de playlist)
+    int playlistDropRow { -1 };
+    void showTrackContextMenu(int rowNumber);
+    void showPlaylistNameDialog(const juce::String& title, const juce::String& initialName,
+                                const std::function<void(const juce::String&)>& onAccepted);
+
     // Automix state
     std::vector<TrackItem> automixQueue;
     juce::Rectangle<float> automixDropArea;
@@ -168,6 +180,7 @@ private:
     std::unordered_set<juce::String> knownTrackPaths;
     bool isFolderSyncing { false };
     bool tableNeedsRepaint { false };
+    bool stemsRepaintLatch { false };
     void updateSyncStatus(int count, bool isScanning, const juce::String& currentFolder = {});
 
     // Hardware browsing state

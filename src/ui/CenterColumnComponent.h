@@ -26,10 +26,11 @@ private:
     AudioEngine& audioEngine;
     DjMixer& mixer;
 
-    // Top section: Master & Phones
+    // Top section: Master, Meter, Phones + loudness readout
     DjKnob masterKnob { "MASTER", juce::Colour::fromRGB(156, 163, 175) };
     VuMeter masterMeter;
     DjKnob phonesKnob { "PHONES", juce::Colour::fromRGB(156, 163, 175) };
+    juce::Label loudnessLabel;
 
     // Middle section: Dual Vertical Waveform
     VerticalWaveform verticalWaveform;

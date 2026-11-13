@@ -184,10 +184,10 @@ void FxSlotComponent::cycleParam()
 
     if (fx == FxType::Echo || fx == FxType::Gate)
     {
-        if (p < 0.25f) p = 0.35f;       // 1/4 -> 1/2
-        else if (p < 0.50f) p = 0.60f;  // 1/2 -> 3/4
-        else if (p < 0.75f) p = 0.85f;  // 3/4 -> 1/1
-        else p = 0.15f;                 // 1/1 -> 1/4
+        // P21: cicla la división de beat (0=1/4 ... 4=2/1)
+        int d = slot.beatDivision.load();
+        d = (d + 1) % 5;
+        slot.beatDivision.store(d);
     }
     else
     {
@@ -207,10 +207,8 @@ juce::String FxSlotComponent::getParamText() const
 
     if (fx == FxType::Echo || fx == FxType::Gate)
     {
-        if (p < 0.25f) return "1/4";
-        if (p < 0.50f) return "1/2";
-        if (p < 0.75f) return "3/4";
-        return "1/1";
+        static const char* divNames[] = { "1/4", "1/2", "3/4", "1/1", "2/1" };
+        return divNames[juce::jlimit(0, 4, slot.beatDivision.load())];
     }
     else if (fx == FxType::Reverb)
     {

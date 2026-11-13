@@ -1,6 +1,7 @@
 #include "MainComponent.h"
 #include "MidiModalComponent.h"
 #include "SettingsModalComponent.h"
+#include "GridEditorComponent.h"
 #include "CoverArtGenerator.h"
 #include "../services/LanguageManager.h"
 #include "../services/AIService.h"
@@ -127,6 +128,10 @@ MainComponent::MainComponent()
         library.updateTrackKey(file, deck2.getTrackKey());
     };
 
+    // P16: editor de beat grid por deck
+    deck1.onEditGrid = [this](int deckIndex) { openGridEditor(deckIndex); };
+    deck2.onEditGrid = [this](int deckIndex) { openGridEditor(deckIndex); };
+
     library.onLoadYouTubeTrack = [this](int deckIndex, const YouTubeSearchResult& video) {
         if (deckIndex == 0)
             deck1.loadYouTubeVideo(video);
@@ -178,27 +183,47 @@ MainComponent::MainComponent()
     };
     midiManager.onPlayPause = [this](int deckIndex) {
         if (deckIndex == 0)
-        {
             deck1.togglePlayPause();
-            midiManager.sendMidiMessage(juce::MidiMessage::noteOn(1, 11, (juce::uint8)(deck1.isPlaying() ? 127 : 0)));
-        }
         else
-        {
             deck2.togglePlayPause();
-            midiManager.sendMidiMessage(juce::MidiMessage::noteOn(2, 11, (juce::uint8)(deck2.isPlaying() ? 127 : 0)));
-        }
     };
     midiManager.onCue = [this](int deckIndex) {
         if (deckIndex == 0)
-        {
             deck1.triggerCue();
-            midiManager.sendMidiMessage(juce::MidiMessage::noteOn(1, 11, (juce::uint8)0));
-        }
         else
-        {
             deck2.triggerCue();
-            midiManager.sendMidiMessage(juce::MidiMessage::noteOn(2, 11, (juce::uint8)0));
+    };
+    // P27: feedback LED — el follower de MidiManager consulta este proveedor.
+    midiManager.setLedStateProvider([this](const juce::String& actionId) {
+        const int d = actionId.contains("_d2") ? 1 : 0;
+        auto& deck = audioEngine.getDeck(d);
+        if (actionId.startsWith("deck") && actionId.contains("_play"))
+            return deck.isPlaying();
+        if (actionId.startsWith("mixer_cue"))
+            return audioEngine.getMixer().getChannel(d).isCue();
+        if (actionId.contains("_range"))
+            return deck.isKeylock();
+        if (actionId.contains("_slip"))
+            return deck.isSlipEnabled();
+        if (actionId.contains("_hotcue"))
+        {
+            const int idx = actionId.fromFirstOccurrenceOf("hotcue", false, false)
+                                 .upToFirstOccurrenceOf("_d", false, false).getIntValue() - 1;
+            return deck.hasHotCue(juce::jlimit(0, 3, idx));
         }
+        if (actionId.contains("_stems_active"))
+            return deck.isStemsMasterActive();
+        return false;
+    });
+    // P15: performance (beat jump / loop roll / slip) via los decks de UI,
+    // así el MIDI usa el mismo size selector que la pantalla.
+    midiManager.onPerformanceAction = [this](int deckIndex, const juce::String& action) {
+        auto& dc = (deckIndex == 0) ? deck1 : deck2;
+        if (action == "jump_back")          dc.beatJump(-1);
+        else if (action == "jump_fwd")      dc.beatJump(1);
+        else if (action == "roll_start")    dc.startRoll();
+        else if (action == "roll_release")  dc.releaseRoll();
+        else if (action == "slip")          dc.toggleSlip();
     };
 
     addAndMakeVisible(library);
@@ -405,7 +430,7 @@ void MainComponent::resized()
 
     // 4. Center workspace: Deck 1 (left), Center Mixer, Deck 2 (right)
     area.reduce(6, 4);
-    int mixerWidth = 430; // 96px Ch1 + 238px Center + 96px Ch2
+    int mixerWidth = 508; // 96px Ch1 + 238px Center + 96px Ch2 + 78px Mic
     int deckWidth = (area.getWidth() - mixerWidth - 12) / 2;
 
     deck1.setBounds(area.removeFromLeft(deckWidth));
@@ -928,6 +953,33 @@ void MainComponent::openSettings(int targetTab)
         {
             settingsWindow->closeButtonPressed();
         }
+    };
+}
+
+void MainComponent::openGridEditor(int deckIndex)
+{
+    if (gridWindow != nullptr)
+    {
+        gridWindow->toFront(true);
+        return;
+    }
+
+    auto& deck = audioEngine.getDeck(deckIndex);
+    auto* modal = new GridEditorComponent(deck, audioEngine, deckIndex);
+    modal->setSize(720, 440);
+    juce::DialogWindow::LaunchOptions opt;
+    opt.dialogTitle = LanguageManager::trUtf8("Editor de Beat Grid — Deck ", "Beat Grid Editor — Deck ")
+                    + juce::String(deckIndex + 1);
+    opt.dialogBackgroundColour = juce::Colour::fromRGB(20, 22, 30);
+    opt.content.setOwned(modal);
+    opt.resizable = false;
+    opt.useNativeTitleBar = true;
+    opt.escapeKeyTriggersCloseButton = true;
+    gridWindow = opt.launchAsync();
+
+    modal->onClosed = [this]() {
+        if (gridWindow != nullptr)
+            gridWindow->closeButtonPressed();
     };
 }
 

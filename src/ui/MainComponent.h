@@ -43,6 +43,7 @@ private:
     bool isFxPanelVisible { true };
     bool isSamplerPanelVisible { false };
     juce::Component::SafePointer<juce::DialogWindow> settingsWindow;
+    juce::Component::SafePointer<juce::DialogWindow> gridWindow; // P16: editor de beat grid
     std::unique_ptr<juce::TooltipWindow> tooltipWindow;
 
     // Automix orchestration state
@@ -60,6 +61,7 @@ private:
     void automixAdvance();
     void startSmartAutomix();
     void openSettings(int targetTab = 0);
+    void openGridEditor(int deckIndex);
 
     // Update notification (GitHub Releases, once per launch)
     UpdateInfo pendingUpdate;

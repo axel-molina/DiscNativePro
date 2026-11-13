@@ -201,6 +201,11 @@ cmake --build build --config Release --parallel
 
 ---
 
+## Documentación de Uso
+
+- [Manual de Usuario](docs/manual_usuario.md) — guía completa de uso
+  (biblioteca, decks, hotcues, stems, FX, MIDI y presets de Mixxx, transmitir).
+
 ## Licencia
 
 Desarrollado para la suite **DiscPro**. Todos los derechos reservados.

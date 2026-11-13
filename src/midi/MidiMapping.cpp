@@ -37,6 +37,9 @@ void MidiMappingManager::initialiseDefaultDefinitions()
     add("deck1_cue", "Cue", "Cue", MidiActionCategory::Transport, 0, MidiMessageType::NoteOn, 1, 12);
     add("deck1_sync", "Sync Tempo", "Sync Tempo", MidiActionCategory::Transport, 0, MidiMessageType::NoteOn, 1, 88);
     add("deck1_range", "KeyLock / Rango Pitch", "KeyLock / Pitch Range", MidiActionCategory::Transport, 0, MidiMessageType::NoteOn, 1, 96);
+    add("deck1_keyshift_up", "Key Shift +1 (Deck 1)", "Key Shift +1 (Deck 1)", MidiActionCategory::Transport, 0, MidiMessageType::NoteOn, 1, 97);
+    add("deck1_keyshift_down", "Key Shift -1 (Deck 1)", "Key Shift -1 (Deck 1)", MidiActionCategory::Transport, 0, MidiMessageType::NoteOn, 1, 98);
+    add("deck1_keyshift_reset", "Key Shift Reset (Deck 1)", "Key Shift Reset (Deck 1)", MidiActionCategory::Transport, 0, MidiMessageType::NoteOn, 1, 99);
     add("deck1_tempo", "Fader de Pitch (Tempo)", "Pitch (Tempo) Fader", MidiActionCategory::Transport, 0, MidiMessageType::PitchBend, 1, 0);
     add("deck1_jog_ring", "Jog Wheel Anillo (Pitch Bend)", "Jog Wheel Outer Ring (Nudge)", MidiActionCategory::Transport, 0, MidiMessageType::CC, 1, 33);
     add("deck1_jog_platter", "Jog Wheel Platter (Scratch)", "Jog Wheel Platter (Scratch)", MidiActionCategory::Transport, 0, MidiMessageType::CC, 1, 34);
@@ -48,6 +51,9 @@ void MidiMappingManager::initialiseDefaultDefinitions()
     add("deck2_cue", "Cue", "Cue", MidiActionCategory::Transport, 1, MidiMessageType::NoteOn, 2, 12);
     add("deck2_sync", "Sync Tempo", "Sync Tempo", MidiActionCategory::Transport, 1, MidiMessageType::NoteOn, 2, 88);
     add("deck2_range", "KeyLock / Rango Pitch", "KeyLock / Pitch Range", MidiActionCategory::Transport, 1, MidiMessageType::NoteOn, 2, 96);
+    add("deck2_keyshift_up", "Key Shift +1 (Deck 2)", "Key Shift +1 (Deck 2)", MidiActionCategory::Transport, 1, MidiMessageType::NoteOn, 2, 97);
+    add("deck2_keyshift_down", "Key Shift -1 (Deck 2)", "Key Shift -1 (Deck 2)", MidiActionCategory::Transport, 1, MidiMessageType::NoteOn, 2, 98);
+    add("deck2_keyshift_reset", "Key Shift Reset (Deck 2)", "Key Shift Reset (Deck 2)", MidiActionCategory::Transport, 1, MidiMessageType::NoteOn, 2, 99);
     add("deck2_tempo", "Fader de Pitch (Tempo)", "Pitch (Tempo) Fader", MidiActionCategory::Transport, 1, MidiMessageType::PitchBend, 2, 0);
     add("deck2_jog_ring", "Jog Wheel Anillo (Pitch Bend)", "Jog Wheel Outer Ring (Nudge)", MidiActionCategory::Transport, 1, MidiMessageType::CC, 2, 33);
     add("deck2_jog_platter", "Jog Wheel Platter (Scratch)", "Jog Wheel Platter (Scratch)", MidiActionCategory::Transport, 1, MidiMessageType::CC, 2, 34);
@@ -90,6 +96,30 @@ void MidiMappingManager::initialiseDefaultDefinitions()
     add("pad_hotcue2_d2", "Hot Cue 2 (Deck 2)", "Hot Cue 2 (Deck 2)", MidiActionCategory::Pads, 1, MidiMessageType::NoteOn, 9, 1);
     add("pad_hotcue3_d2", "Hot Cue 3 (Deck 2)", "Hot Cue 3 (Deck 2)", MidiActionCategory::Pads, 1, MidiMessageType::NoteOn, 9, 2);
     add("pad_hotcue4_d2", "Hot Cue 4 (Deck 2)", "Hot Cue 4 (Deck 2)", MidiActionCategory::Pads, 1, MidiMessageType::NoteOn, 9, 3);
+
+    // P15: performance (beat jump usa el size selector de la UI; roll es hold)
+    add("pad_jumpback_d1", "Beat Jump Atrás (Deck 1)", "Beat Jump Back (Deck 1)", MidiActionCategory::Pads, 0, MidiMessageType::NoteOn, 8, 4);
+    add("pad_jumpfwd_d1", "Beat Jump Adelante (Deck 1)", "Beat Jump Forward (Deck 1)", MidiActionCategory::Pads, 0, MidiMessageType::NoteOn, 8, 5);
+    add("pad_roll_d1", "Loop Roll (mantener, Deck 1)", "Loop Roll (hold, Deck 1)", MidiActionCategory::Pads, 0, MidiMessageType::NoteOn, 8, 6);
+    add("pad_slip_d1", "Slip Mode (Deck 1)", "Slip Mode (Deck 1)", MidiActionCategory::Pads, 0, MidiMessageType::NoteOn, 8, 7);
+
+    add("pad_jumpback_d2", "Beat Jump Atrás (Deck 2)", "Beat Jump Back (Deck 2)", MidiActionCategory::Pads, 1, MidiMessageType::NoteOn, 9, 4);
+    add("pad_jumpfwd_d2", "Beat Jump Adelante (Deck 2)", "Beat Jump Forward (Deck 2)", MidiActionCategory::Pads, 1, MidiMessageType::NoteOn, 9, 5);
+    add("pad_roll_d2", "Loop Roll (mantener, Deck 2)", "Loop Roll (hold, Deck 2)", MidiActionCategory::Pads, 1, MidiMessageType::NoteOn, 9, 6);
+    add("pad_slip_d2", "Slip Mode (Deck 2)", "Slip Mode (Deck 2)", MidiActionCategory::Pads, 1, MidiMessageType::NoteOn, 9, 7);
+
+    // P22: stems (toggle binario de ganancia + master on/off)
+    add("pad_stems_active_d1", "Stems ON/OFF (Deck 1)", "Stems ON/OFF (Deck 1)", MidiActionCategory::Pads, 0, MidiMessageType::NoteOn, 8, 100);
+    add("pad_stem_vocals_d1", "Stem Vocals (Deck 1)", "Stem Vocals (Deck 1)", MidiActionCategory::Pads, 0, MidiMessageType::NoteOn, 8, 101);
+    add("pad_stem_drums_d1", "Stem Drums (Deck 1)", "Stem Drums (Deck 1)", MidiActionCategory::Pads, 0, MidiMessageType::NoteOn, 8, 102);
+    add("pad_stem_bass_d1", "Stem Bass (Deck 1)", "Stem Bass (Deck 1)", MidiActionCategory::Pads, 0, MidiMessageType::NoteOn, 8, 103);
+    add("pad_stem_other_d1", "Stem Other (Deck 1)", "Stem Other (Deck 1)", MidiActionCategory::Pads, 0, MidiMessageType::NoteOn, 8, 104);
+
+    add("pad_stems_active_d2", "Stems ON/OFF (Deck 2)", "Stems ON/OFF (Deck 2)", MidiActionCategory::Pads, 1, MidiMessageType::NoteOn, 9, 100);
+    add("pad_stem_vocals_d2", "Stem Vocals (Deck 2)", "Stem Vocals (Deck 2)", MidiActionCategory::Pads, 1, MidiMessageType::NoteOn, 9, 101);
+    add("pad_stem_drums_d2", "Stem Drums (Deck 2)", "Stem Drums (Deck 2)", MidiActionCategory::Pads, 1, MidiMessageType::NoteOn, 9, 102);
+    add("pad_stem_bass_d2", "Stem Bass (Deck 2)", "Stem Bass (Deck 2)", MidiActionCategory::Pads, 1, MidiMessageType::NoteOn, 9, 103);
+    add("pad_stem_other_d2", "Stem Other (Deck 2)", "Stem Other (Deck 2)", MidiActionCategory::Pads, 1, MidiMessageType::NoteOn, 9, 104);
 
     // -------------------------------------------------------------------------
     // 6. BIBLIOTECA Y NAVEGACIÓN
@@ -229,6 +259,51 @@ void MidiMappingManager::resetToDefaults()
         onMappingChanged();
 }
 
+int MidiMappingManager::applyImportedBindings(const std::vector<std::pair<juce::String, MidiBinding>>& bindings)
+{
+    int applied = 0;
+    for (const auto& [actionId, binding] : bindings)
+    {
+        if (!binding.isValid())
+            continue;
+        if (auto* a = findAction(actionId))
+        {
+            a->binding = binding;
+            ++applied;
+        }
+    }
+
+    if (applied > 0)
+    {
+        saveToUserFile();
+        if (onMappingChanged)
+            onMappingChanged();
+    }
+    return applied;
+}
+
+int MidiMappingManager::applyImportedOutputBindings(const std::vector<std::pair<juce::String, MidiBinding>>& bindings)
+{
+    int applied = 0;
+    for (const auto& [actionId, binding] : bindings)
+    {
+        if (!binding.isValid())
+            continue;
+        outputBindings[actionId] = binding;
+        ++applied;
+    }
+
+    if (applied > 0)
+        saveToUserFile();
+    return applied;
+}
+
+const MidiBinding* MidiMappingManager::findOutputBinding(const juce::String& actionId) const
+{
+    auto it = outputBindings.find(actionId);
+    return (it != outputBindings.end()) ? &it->second : nullptr;
+}
+
 juce::File MidiMappingManager::getUserMappingFile() const
 {
     auto appDir = juce::File::getSpecialLocation(juce::File::userApplicationDataDirectory)
@@ -264,6 +339,26 @@ juce::var MidiMappingManager::toVar() const
     }
 
     rootObj->setProperty("mappings", arr);
+
+    // P27: salidas (LEDs) — misma codificación que los mappings.
+    juce::Array<juce::var> outArr;
+    for (const auto& [actionId, b] : outputBindings)
+    {
+        auto* outObj = new juce::DynamicObject();
+        outObj->setProperty("id", actionId);
+
+        juce::String typeStr = "none";
+        if (b.type == MidiMessageType::NoteOn) typeStr = "note";
+        else if (b.type == MidiMessageType::CC) typeStr = "cc";
+        else if (b.type == MidiMessageType::PitchBend) typeStr = "pitchbend";
+
+        outObj->setProperty("type", typeStr);
+        outObj->setProperty("channel", b.channel);
+        outObj->setProperty("number", b.number);
+        outArr.add(juce::var(outObj));
+    }
+    rootObj->setProperty("outputs", outArr);
+
     return juce::var(rootObj);
 }
 
@@ -302,6 +397,31 @@ bool MidiMappingManager::fromVar(const juce::var& v)
 
             if (auto* a = findAction(id))
                 a->binding = b;
+        }
+    }
+
+    if (auto outputsVar = obj->getProperty("outputs"); outputsVar.isArray())
+    {
+        outputBindings.clear();
+        for (const auto& item : *outputsVar.getArray())
+        {
+            if (!item.isObject())
+                continue;
+            auto* itemObj = item.getDynamicObject();
+            juce::String id = itemObj->getProperty("id").toString();
+            juce::String typeStr = itemObj->getProperty("type").toString();
+
+            MidiBinding b;
+            if (typeStr == "note") b.type = MidiMessageType::NoteOn;
+            else if (typeStr == "cc") b.type = MidiMessageType::CC;
+            else if (typeStr == "pitchbend") b.type = MidiMessageType::PitchBend;
+
+            if (b.isValid() && id.isNotEmpty())
+            {
+                b.channel = (int)itemObj->getProperty("channel");
+                b.number = (int)itemObj->getProperty("number");
+                outputBindings[id] = b;
+            }
         }
     }
 

@@ -34,6 +34,16 @@ struct FlatFolderRow
     bool isSystem { false };
     bool hasChildren { false };
     bool isExpanded { false };
+    bool isPlaylistHeader { false };
+    bool isPlaylist { false };
+};
+
+// P17: fila mínima para la sección Playlists del árbol.
+struct PlaylistRowInfo
+{
+    juce::String id;
+    juce::String name;
+    int trackCount { 0 };
 };
 
 class FolderTreeComponent : public juce::Component,
@@ -49,6 +59,7 @@ public:
     void refreshLanguage();
 
     void updateTree(const std::vector<TrackItem>& tracks);
+    void setPlaylists(const std::vector<PlaylistRowInfo>& playlists);
     void setSelectedFolder(const juce::String& folderPath);
     juce::String getSelectedFolder() const { return selectedFolder; }
     void expandFolder(const juce::String& folderPath);
@@ -58,9 +69,16 @@ public:
     std::function<void(const juce::String& folderPath)> onSelectFolder;
     std::function<void()> onAddFolder;
     std::function<void(const juce::String& folderPath)> onUnsyncFolder;
+    std::function<void(const juce::String& folderPath)> onPrecalcFolder;
+    std::function<void()> onCreatePlaylist;
+    std::function<void(const juce::String& playlistId)> onRenamePlaylist;
+    std::function<void(const juce::String& playlistId)> onDeletePlaylist;
+    // P17: soltar pistas (rutas "\n"-separadas) sobre una fila de playlist las añade
+    std::function<void(const juce::String& playlistId, const juce::StringArray& paths)> onTracksDroppedIntoPlaylist;
 
 private:
-    class TreeViewInternal : public juce::Component
+    class TreeViewInternal : public juce::Component,
+                             public juce::DragAndDropTarget
     {
     public:
         TreeViewInternal(FolderTreeComponent& owner);
@@ -69,6 +87,12 @@ private:
         void mouseMove(const juce::MouseEvent& e) override;
         void mouseExit(const juce::MouseEvent& e) override;
         void mouseDown(const juce::MouseEvent& e) override;
+
+        bool isInterestedInDragSource(const SourceDetails&) override { return true; }
+        void itemDragEnter(const SourceDetails& d) override { itemDragMove(d); }
+        void itemDragMove(const SourceDetails& d) override;
+        void itemDragExit(const SourceDetails&) override;
+        void itemDropped(const SourceDetails& d) override;
 
         int getRowHeight() const { return 28; }
         int getTotalContentHeight() const;
@@ -88,6 +112,9 @@ private:
 
     std::vector<FolderNode> rootNodes;
     std::vector<FlatFolderRow> flatRows;
+    std::vector<PlaylistRowInfo> playlistsInfo;
+    bool playlistRowsVisible { true };
+    int dragHoverRow { -1 };
     std::set<juce::String> expandedFolders;
     juce::String selectedFolder { "Todas las Pistas" };
 

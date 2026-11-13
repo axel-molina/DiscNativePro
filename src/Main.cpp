@@ -1,5 +1,6 @@
 #include <juce_gui_extra/juce_gui_extra.h>
 #include "ui/MainComponent.h"
+#include "services/StemSeparationService.h"
 
 #if JUCE_LINUX
     #include <cstdlib>
@@ -87,6 +88,9 @@ public:
 
     void shutdown() override
     {
+        // ORT antes que nada: libera la sesión en contexto vivo (el teardown
+        // estático de exit() la mata con abort()).
+        StemSeparationService::getInstance().shutdown();
         mainWindow = nullptr;
     }
 
@@ -123,7 +127,16 @@ public:
            #else
             setResizable(true, true);
             setResizeLimits(900, 600, 3840, 2160);
-            centreWithSize(getWidth(), getHeight());
+
+            // P27: el tamaño natural del layout (1360x860) puede exceder el
+            // área de trabajo lógica en pantallas chicas o con scaling de
+            // Windows al 125/150 %; se acota al display antes de centrar.
+            juce::Rectangle<int> workArea(0, 0, 1360, 860);
+            if (auto* disp = juce::Desktop::getInstance().getDisplays().getPrimaryDisplay())
+                workArea = disp->userArea;
+            const int w = juce::jmax(900, juce::jmin(1360, (int)(static_cast<float>(workArea.getWidth()) * 0.92f)));
+            const int h = juce::jmax(600, juce::jmin(860, (int)(static_cast<float>(workArea.getHeight()) * 0.92f)));
+            centreWithSize(w, h);
            #endif
 
             setVisible(true);

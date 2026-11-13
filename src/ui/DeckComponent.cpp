@@ -1,10 +1,12 @@
 #include "DeckComponent.h"
 #include "BpmFormat.h"
+#include "LucideIcons.h"
 #include "YouTubeVideoComponent.h"
 #include "../services/YouTubeService.h"
 #include "../services/YouTubeAudioDownloader.h"
 #include "../services/ThumbnailCache.h"
 #include "../audio/AudioEngine.h"
+#include "../services/LibraryCacheManager.h"
 #include <cstdio>
 #include <cmath>
 #include <thread>
@@ -107,6 +109,54 @@ DeckComponent::DeckComponent(int deckNum, DeckPlayer& player, AudioEngine& audio
     };
     keyLockButton.setTooltip(LanguageManager::trUtf8("Key Lock: el pitch no desafina", "Key Lock: pitch keeps key"));
     addAndMakeVisible(keyLockButton);
+
+    // P20: Key Shift — transpone ±1 semitono por clic (±6 máx., mezcla armónica)
+    auto ksNeutral = [](DjButton& b) {
+        b.setFontSize(10.0f);
+        b.setCornerRadius(4.0f);
+        b.setCustomColours(juce::Colour::fromRGB(24, 27, 36),
+                           juce::Colours::white,
+                           juce::Colour::fromRGB(142, 149, 165),
+                           juce::Colour::fromRGB(38, 43, 56));
+    };
+    ksNeutral(keyShiftDownButton);
+    ksNeutral(keyShiftUpButton);
+    keyShiftDownButton.setIcon(LucideIcons::IconType::ChevronDown, 12.0f);
+    keyShiftUpButton.setIcon(LucideIcons::IconType::ChevronUp, 12.0f);
+    keyShiftDownButton.onClick = [this]() {
+        deck.setKeyShiftSemitones(deck.getKeyShiftSemitones() - 1);
+        updateKeyShiftDisplay();
+    };
+    keyShiftUpButton.onClick = [this]() {
+        deck.setKeyShiftSemitones(deck.getKeyShiftSemitones() + 1);
+        updateKeyShiftDisplay();
+    };
+    keyShiftDownButton.setTooltip(LanguageManager::trUtf8("Key Shift: baja 1 semitono (±6 máx.)", "Key Shift: down 1 semitone (±6 max)"));
+    keyShiftUpButton.setTooltip(LanguageManager::trUtf8("Key Shift: sube 1 semitono (±6 máx.)", "Key Shift: up 1 semitone (±6 max)"));
+    addAndMakeVisible(keyShiftDownButton);
+    addAndMakeVisible(keyShiftUpButton);
+
+    keyShiftLabel.setFont(juce::FontOptions(9.0f, juce::Font::bold));
+    keyShiftLabel.setJustificationType(juce::Justification::centred);
+    keyShiftLabel.setColour(juce::Label::textColourId, juce::Colour::fromRGB(142, 149, 165));
+    keyShiftLabel.setInterceptsMouseClicks(true, false);
+    keyShiftLabel.setTooltip(LanguageManager::trUtf8("Key Shift activo (clic para resetear a 0)", "Active Key Shift (click to reset to 0)"));
+    addAndMakeVisible(keyShiftLabel);
+    updateKeyShiftDisplay();
+
+    // P16: abre el editor de beat grid
+    gridButton.setFontSize(10.0f);
+    gridButton.setCornerRadius(4.0f);
+    gridButton.setCustomColours(juce::Colour::fromRGB(24, 27, 36),
+                                juce::Colour::fromRGB(142, 149, 165),
+                                juce::Colour::fromRGB(142, 149, 165),
+                                juce::Colour::fromRGB(38, 43, 56));
+    gridButton.onClick = [this]() {
+        if (!isVideoMode && deck.isLoaded() && onEditGrid)
+            onEditGrid(deckIndex);
+    };
+    gridButton.setTooltip(LanguageManager::trUtf8("Editor de beat grid", "Beat grid editor"));
+    addAndMakeVisible(gridButton);
 
     pitchBpmLabel.setText(juce::String(initialBpm, 1), juce::dontSendNotification);
     pitchBpmLabel.setFont(juce::FontOptions(12.0f, juce::Font::bold));
@@ -214,9 +264,12 @@ DeckComponent::DeckComponent(int deckNum, DeckPlayer& player, AudioEngine& audio
             else
             {
                 deck.setHotCue(i, deck.getPosition());
+                persistHotCues();
             }
             refreshHotCueButtons();
         };
+        // P27: el clic derecho (borrado) llega por el listener del componente
+        pad.addMouseListener(this, false);
         addAndMakeVisible(pad);
     }
     refreshHotCueButtons();
@@ -285,6 +338,115 @@ DeckComponent::DeckComponent(int deckNum, DeckPlayer& player, AudioEngine& audio
         }
     };
     addAndMakeVisible(loopNextButton);
+
+    // P15: Performance row (beat jump cuantizado, loop roll, slip)
+    jumpBackButton.setIcon(LucideIcons::IconType::ChevronLeft, 11.0f);
+    jumpBackButton.setCornerRadius(4.0f);
+    jumpBackButton.setCustomColours(juce::Colour::fromRGB(20, 23, 30),
+                                    juce::Colour::fromRGB(142, 149, 165),
+                                    juce::Colour::fromRGB(142, 149, 165),
+                                    juce::Colour::fromRGB(38, 43, 56));
+    jumpBackButton.onClick = [this]() { beatJump(-1); };
+    jumpBackButton.setTooltip(LanguageManager::trUtf8("Beat jump atrás", "Beat jump back"));
+    addAndMakeVisible(jumpBackButton);
+
+    jumpSizeButton.setText(jumpSizeLabel(jumpSizeIdx));
+    jumpSizeButton.setFontSize(9.0f);
+    jumpSizeButton.setCornerRadius(4.0f);
+    jumpSizeButton.setCustomColours(juce::Colour::fromRGB(20, 23, 30),
+                                    juce::Colours::white,
+                                    juce::Colour::fromRGB(142, 149, 165),
+                                    juce::Colour::fromRGB(38, 43, 56));
+    jumpSizeButton.onClick = [this]() {
+        jumpSizeIdx = (jumpSizeIdx + 1) % 6;
+        jumpSizeButton.setText(jumpSizeLabel(jumpSizeIdx));
+    };
+    jumpSizeButton.setTooltip(LanguageManager::trUtf8("Tamaño del beat jump", "Beat jump size"));
+    addAndMakeVisible(jumpSizeButton);
+
+    jumpFwdButton.setIcon(LucideIcons::IconType::ChevronRight, 11.0f);
+    jumpFwdButton.setCornerRadius(4.0f);
+    jumpFwdButton.setCustomColours(juce::Colour::fromRGB(20, 23, 30),
+                                   juce::Colour::fromRGB(142, 149, 165),
+                                   juce::Colour::fromRGB(142, 149, 165),
+                                   juce::Colour::fromRGB(38, 43, 56));
+    jumpFwdButton.onClick = [this]() { beatJump(1); };
+    jumpFwdButton.setTooltip(LanguageManager::trUtf8("Beat jump adelante", "Beat jump forward"));
+    addAndMakeVisible(jumpFwdButton);
+
+    rollPadButton.setText("ROLL");
+    rollPadButton.setFontSize(9.5f);
+    rollPadButton.setCornerRadius(4.0f);
+    rollPadButton.setCustomColours(juce::Colour::fromRGB(20, 23, 30),
+                                   juce::Colour::fromRGB(142, 149, 165),
+                                   juce::Colour::fromRGB(142, 149, 165),
+                                   juce::Colour::fromRGB(38, 43, 56));
+    rollPadButton.setTooltip(LanguageManager::trUtf8("Loop roll momentáneo (mantener)", "Momentary loop roll (hold)"));
+    addAndMakeVisible(rollPadButton); // hold via buttonStateChanged
+
+    rollSizeButton.setText(rollSizeLabel(rollSizeIdx));
+    rollSizeButton.setFontSize(8.5f);
+    rollSizeButton.setCornerRadius(4.0f);
+    rollSizeButton.setCustomColours(juce::Colour::fromRGB(20, 23, 30),
+                                    juce::Colours::white,
+                                    juce::Colour::fromRGB(142, 149, 165),
+                                    juce::Colour::fromRGB(38, 43, 56));
+    rollSizeButton.onClick = [this]() {
+        rollSizeIdx = (rollSizeIdx + 1) % 6;
+        rollSizeButton.setText(rollSizeLabel(rollSizeIdx));
+    };
+    rollSizeButton.setTooltip(LanguageManager::trUtf8("Tamaño del loop roll", "Loop roll size"));
+    addAndMakeVisible(rollSizeButton);
+
+    slipToggleButton.setText("SLIP");
+    slipToggleButton.setFontSize(9.5f);
+    slipToggleButton.setCornerRadius(4.0f);
+    slipToggleButton.setClickingTogglesState(true);
+    slipToggleButton.setToggleState(deck.isSlipEnabled(), juce::dontSendNotification);
+    slipToggleButton.onClick = [this]() {
+        deck.setSlipEnabled(slipToggleButton.getToggleState());
+        refreshPerformanceButtons();
+    };
+    slipToggleButton.setTooltip(LanguageManager::trUtf8("Slip mode: al soltar loop/scratch retoma donde iba", "Slip mode: resumes where it would be"));
+    addAndMakeVisible(slipToggleButton);
+    refreshPerformanceButtons();
+
+    // P25: stems — master toggle + VOC/INST (2-stem) o VOC/DRM/BAS/OTH (4-stem).
+    stemsMasterButton.setText("STEMS");
+    stemsMasterButton.setFontSize(9.5f);
+    stemsMasterButton.setCornerRadius(4.0f);
+    stemsMasterButton.onClick = [this]() {
+        deck.toggleStemsMaster();
+        refreshStemButtons();
+    };
+    stemsMasterButton.setTooltip(LanguageManager::trUtf8(
+        "Modo stems: reproduce la suma de stems (original muteado)",
+        "Stems mode: plays the stem sum (original muted)"));
+    addAndMakeVisible(stemsMasterButton);
+
+    for (int i = 0; i < 4; ++i)
+    {
+        juce::String lbl;
+        switch (i)
+        {
+            case 0: lbl = "VOC"; break;
+            case 1: lbl = "DRM"; break;
+            case 2: lbl = "BAS"; break;
+            default: lbl = "OTH"; break;
+        }
+        stemButtons[(size_t)i].setText(lbl);
+        stemButtons[(size_t)i].setFontSize(9.5f);
+        stemButtons[(size_t)i].setCornerRadius(4.0f);
+        const int idx = i; // captura estable
+        stemButtons[(size_t)i].onClick = [this, idx]() {
+            const float g = deck.getStemGain(idx);
+            deck.setStemGain(idx, g > 0.5f ? 0.0f : 1.0f);
+            refreshStemButtons();
+        };
+        stemButtons[(size_t)i].setTooltip(juce::String::fromUTF8("Mutear/activar ") + DeckPlayer::stemName(i));
+        addAndMakeVisible(stemButtons[(size_t)i]);
+    }
+    refreshStemButtons();
 
     LanguageManager::getInstance().addListener(this);
     startTimerHz(60);
@@ -363,6 +525,7 @@ void DeckComponent::loadAudioFile(const juce::File& file, LoadOrigin origin)
 
 void DeckComponent::loadAudioFileNow(const juce::File& file, LoadOrigin origin)
 {
+    loadErrorVisible = false;
     if (deck.loadFile(file))
     {
         isVideoMode = false;
@@ -383,6 +546,16 @@ void DeckComponent::loadAudioFileNow(const juce::File& file, LoadOrigin origin)
 
         // Garantizar que CoreAudio este activo para el streaming del deck
         engine.ensureAudioDeviceRunning();
+
+        // P16: si esta pista tiene grid corregido y persistido, se aplica
+        // sincrónicamente (el publish del análisis lo respeta vía override).
+        // Va antes de los labels para que el BPM mostrado sea el corregido.
+        CachedTrackMetadata meta;
+        if (LibraryCacheManager::getInstance().getTrack(file, meta) && meta.gridBpm > 0.0)
+        {
+            deck.setGridBpm(meta.gridBpm);
+            deck.setFirstBeatOffset(meta.gridFirstBeatOffset);
+        }
 
         auto cleanTitle = deck.getTrackTitle().replaceCharacter('_', ' ');
         auto trackArtist = deck.getTrackArtist();
@@ -422,6 +595,12 @@ void DeckComponent::loadAudioFileNow(const juce::File& file, LoadOrigin origin)
         // AutoMix carga con LoadOrigin::Automix: su precarga se queda en pausa.
         if (origin == LoadOrigin::User && !isVideoMode && engine.isAutoplayOnLoadEnabled())
             deck.play();
+    }
+    else
+    {
+        loadErrorVisible = true;
+        extractionStatus = LanguageManager::trUtf8("No se pudo cargar la pista", "Could not load track");
+        repaint();
     }
 }
 
@@ -534,6 +713,7 @@ void DeckComponent::loadYouTubeVideo(const YouTubeSearchResult& result, LoadOrig
 
 void DeckComponent::loadYouTubeVideoNow(const YouTubeSearchResult& result, LoadOrigin origin)
 {
+    loadErrorVisible = false;
     const bool autoplay = YouTubeService::isVideoAutoplayEnabled();
     const bool audioMode = YouTubeService::isAudioPlaybackMode();
 
@@ -611,11 +791,8 @@ void DeckComponent::loadYouTubeVideoNow(const YouTubeSearchResult& result, LoadO
         displayTitle = splitTitle;
     }
 
-    titleLabel.setText(displayTitle, juce::dontSendNotification);
-    artistLabel.setText(displayArtist, juce::dontSendNotification);
+    // P26: título/artist solo cuando la carga se confirma (caché o descarga OK)
     timeRemainingLabel.setText(result.durationText.isNotEmpty() ? result.durationText : "--:--", juce::dontSendNotification);
-
-    // 1. Check if audio is already in local cache
     auto cachedFile = YouTubeAudioDownloader::getInstance().getCachedAudioFile(result.id);
     if (cachedFile.existsAsFile())
     {
@@ -720,6 +897,10 @@ void DeckComponent::loadYouTubeVideoNow(const YouTubeSearchResult& result, LoadO
             }
             else
             {
+                safe->loadErrorVisible = true;
+                safe->titleLabel.setText("--", juce::dontSendNotification);
+                safe->artistLabel.setText("--", juce::dontSendNotification);
+                safe->jogWheel.setTrackInfo("--", 0.0, safe->accent);
                 safe->extractionStatus = error.isNotEmpty() ? error : LanguageManager::trUtf8("Fallo al descargar audio", "Download failed");
             }
             safe->repaint();
@@ -966,6 +1147,177 @@ void DeckComponent::triggerCue()
     }
 }
 
+juce::String DeckComponent::jumpSizeLabel(int idx) const
+{
+    switch (idx)
+    {
+        case 0:  return juce::String::fromUTF8("½");
+        case 1:  return "1";
+        case 2:  return "2";
+        case 3:  return "4";
+        case 4:  return "8";
+        default: return "16";
+    }
+}
+
+juce::String DeckComponent::rollSizeLabel(int idx) const
+{
+    switch (idx)
+    {
+        case 0:  return "1/16";
+        case 1:  return "1/8";
+        case 2:  return "1/4";
+        case 3:  return "1/2";
+        case 4:  return "1";
+        default: return "2";
+    }
+}
+
+void DeckComponent::beatJump(int direction)
+{
+    if (isVideoMode || !deck.isLoaded())
+        return;
+    engine.ensureAudioDeviceRunning();
+    deck.jumpBeats(direction * jumpSizes[static_cast<size_t>(jumpSizeIdx)]);
+}
+
+void DeckComponent::startRoll()
+{
+    if (isVideoMode || !deck.isLoaded() || rollHeld)
+        return;
+    engine.ensureAudioDeviceRunning();
+    rollHeld = true;
+    deck.startLoopRoll(rollSizes[static_cast<size_t>(rollSizeIdx)]);
+}
+
+void DeckComponent::releaseRoll()
+{
+    if (!rollHeld)
+        return;
+    rollHeld = false;
+    deck.releaseLoopRoll();
+}
+
+void DeckComponent::toggleSlip()
+{
+    deck.setSlipEnabled(!deck.isSlipEnabled());
+    slipToggleButton.setToggleState(deck.isSlipEnabled(), juce::dontSendNotification);
+    refreshPerformanceButtons();
+}
+
+void DeckComponent::buttonStateChanged(juce::Button* b)
+{
+    if (b == &rollPadButton)
+    {
+        if (b->isDown())
+            startRoll();
+        else
+            releaseRoll();
+    }
+}
+
+void DeckComponent::refreshPerformanceButtons()
+{
+    const int rollState = deck.isLooping() ? 1 : 0;
+    if (rollState != rollPadShown)
+    {
+        rollPadShown = rollState;
+        if (rollState)
+            rollPadButton.setCustomColours(juce::Colour::fromRGB(37, 99, 235),
+                                           juce::Colours::white,
+                                           juce::Colours::white,
+                                           juce::Colour::fromRGB(59, 130, 246));
+        else
+            rollPadButton.setCustomColours(juce::Colour::fromRGB(20, 23, 30),
+                                           juce::Colour::fromRGB(142, 149, 165),
+                                           juce::Colour::fromRGB(142, 149, 165),
+                                           juce::Colour::fromRGB(38, 43, 56));
+    }
+
+    const int slipState = deck.isSlipEnabled() ? 1 : 0;
+    if (slipState != slipShown)
+    {
+        slipShown = slipState;
+        if (slipState)
+            slipToggleButton.setCustomColours(juce::Colour::fromRGB(8, 66, 76),
+                                              juce::Colour::fromRGB(34, 211, 238),
+                                              juce::Colour::fromRGB(34, 211, 238),
+                                              juce::Colour::fromRGB(34, 211, 238).withAlpha(0.5f));
+        else
+            slipToggleButton.setCustomColours(juce::Colour::fromRGB(20, 23, 30),
+                                              juce::Colour::fromRGB(142, 149, 165),
+                                              juce::Colour::fromRGB(142, 149, 165),
+                                              juce::Colour::fromRGB(38, 43, 56));
+    }
+}
+
+void DeckComponent::refreshStemButtons()
+{
+    // P25: en modo 2-stem (streaming o caché) la fila es VOC/INST; el 4-stem
+    // (P22) muestra VOC/DRM/BAS/OTH. El cambio de modo rotula y muestra/oculta.
+    const bool twoStem = deck.isStems2Engaged() && !deck.isStemsReady();
+    if (twoStem != stems2ModeShown)
+    {
+        stems2ModeShown = twoStem;
+        stemButtons[1].setText(twoStem ? "INST" : "DRM");
+        for (int i = 0; i < 4; ++i)
+            stemButtons[(size_t)i].setVisible(!twoStem || i < 2);
+    }
+
+    // Master: 0 = sin stems para esta pista (gris), 1 = listo (neutro), 2 = activo (azul)
+    int masterState = 0;
+    if (deck.isStemsMasterActive())
+        masterState = 2;
+    else if (deck.isStemsMasterAvailable())
+        masterState = 1;
+    if (masterState != stemsMasterShown)
+    {
+        stemsMasterShown = masterState;
+        switch (masterState)
+        {
+        case 2:
+            stemsMasterButton.setCustomColours(juce::Colour::fromRGB(37, 99, 235),
+                                               juce::Colours::white,
+                                               juce::Colours::white,
+                                               juce::Colour::fromRGB(59, 130, 246));
+            break;
+        case 1:
+            stemsMasterButton.setCustomColours(juce::Colour::fromRGB(30, 34, 44),
+                                               juce::Colour::fromRGB(200, 206, 218),
+                                               juce::Colour::fromRGB(200, 206, 218),
+                                               juce::Colour::fromRGB(48, 54, 70));
+            break;
+        default:
+            stemsMasterButton.setCustomColours(juce::Colour::fromRGB(20, 23, 30),
+                                               juce::Colour::fromRGB(90, 96, 110),
+                                               juce::Colour::fromRGB(90, 96, 110),
+                                               juce::Colour::fromRGB(32, 36, 46));
+            break;
+        }
+    }
+
+    // Por stem: encendido si la ganancia > 0.5 (muteo/activación binaria)
+    for (int i = 0; i < 4; ++i)
+    {
+        const bool lit = deck.getStemGain(i) > 0.5f;
+        const int state = lit ? 1 : 0;
+        if (state == stemButtonShown[static_cast<size_t>(i)])
+            continue;
+        stemButtonShown[static_cast<size_t>(i)] = state;
+        auto& b = stemButtons[static_cast<size_t>(i)];
+        if (lit)
+            b.setCustomColours(juce::Colour::fromRGB(30, 34, 44),
+                               juce::Colour::fromRGB(220, 224, 232),
+                               juce::Colour::fromRGB(220, 224, 232),
+                               juce::Colour::fromRGB(48, 54, 70));
+        else
+            b.setCustomColours(juce::Colour::fromRGB(18, 20, 26),
+                               juce::Colour::fromRGB(100, 106, 120),
+                               juce::Colour::fromRGB(100, 106, 120),
+                               juce::Colour::fromRGB(30, 34, 42));
+    }
+}
+
 void DeckComponent::refreshHotCueButtons()
 {
     // ponytail: pads are stateless triggers over DeckPlayer RAM store; no disk persist (YAGNI).
@@ -1030,6 +1382,68 @@ void DeckComponent::updateKeyLockButton()
                                    on ? juce::Colour::fromRGB(74, 222, 128) : juce::Colour::fromRGB(142, 149, 165),
                                    on ? juce::Colour::fromRGB(74, 222, 128) : juce::Colour::fromRGB(142, 149, 165),
                                    on ? juce::Colour::fromRGB(34, 197, 94).withAlpha(0.5f) : juce::Colour::fromRGB(38, 43, 56));
+}
+
+void DeckComponent::updateKeyShiftDisplay()
+{
+    const int st = deck.getKeyShiftSemitones();
+    const bool active = st != 0;
+    const auto txt = active ? ((st > 0 ? "+" : "") + juce::String(st)) : juce::String("0");
+
+    // Solo toca el label si cambió (evita repintar 60 veces por segundo)
+    if (keyShiftLabel.getText() != txt)
+    {
+        keyShiftLabel.setText(txt, juce::dontSendNotification);
+        keyShiftLabel.setColour(juce::Label::textColourId,
+                                active ? juce::Colour::fromRGB(245, 158, 11)
+                                       : juce::Colour::fromRGB(142, 149, 165));
+    }
+}
+
+void DeckComponent::mouseDown(const juce::MouseEvent& e)
+{
+    if (e.eventComponent == &keyShiftLabel)
+    {
+        deck.setKeyShiftSemitones(0);
+        updateKeyShiftDisplay();
+        return;
+    }
+
+    // P27: clic derecho sobre un pad de hotcue → menú de borrado
+    for (int i = 0; i < 4; ++i)
+    {
+        if (e.eventComponent == &hotCueButtons[static_cast<size_t>(i)] && e.mods.isPopupMenu())
+        {
+            if (isVideoMode || !deck.isLoaded() || !deck.hasHotCue(i))
+                return;
+
+            juce::PopupMenu menu;
+            menu.addItem(1, LanguageManager::trUtf8("Borrar Hot Cue ", "Delete Hot Cue ") + juce::String(i + 1));
+            menu.showMenuAsync(juce::PopupMenu::Options().withMousePosition(), [this, i](int result) {
+                if (result == 1)
+                {
+                    deck.clearHotCue(i);
+                    persistHotCues();
+                    refreshHotCueButtons();
+                }
+            });
+            return;
+        }
+    }
+}
+
+void DeckComponent::persistHotCues()
+{
+    auto file = deck.getCurrentFile();
+    if (!file.existsAsFile())
+        return;
+
+    std::array<double, 4> cues { 0.0, 0.0, 0.0, 0.0 };
+    for (int i = 0; i < 4; ++i)
+        if (deck.hasHotCue(i))
+            cues[static_cast<size_t>(i)] = deck.getHotCue(i);
+
+    LibraryCacheManager::getInstance().updateHotCues(file, cues);
 }
 
 void DeckComponent::updateLabels()
@@ -1145,6 +1559,9 @@ void DeckComponent::updateLabels()
         pitchSlider.setValue(currentPitchPercent, juce::dontSendNotification);
         pitchDeltaLabel.setText((currentPitchPercent >= 0.0f ? "+" : "") + juce::String(currentPitchPercent, 1) + "%", juce::dontSendNotification);
     }
+
+    // P20: Key Shift puede cambiar por MIDI; el motor es la única verdad
+    updateKeyShiftDisplay();
 }
 
 void DeckComponent::timerCallback()
@@ -1169,6 +1586,28 @@ void DeckComponent::timerCallback()
     updateLabels();
     overviewWaveform.updateWaveform();
     refreshHotCueButtons();
+    refreshPerformanceButtons();
+    refreshStemButtons();
+    // P23f: la separación puede terminar para la pista YA cargada — adjuntar
+    // los stems al vuelo (chequeo liviano, hasta 1 vez por segundo) en vez de
+    // exigir una re-carga manual de la pista.
+    if (!deck.isStemsReady() && deck.isLoaded())
+    {
+        if (++stemsPollTick >= 60)
+        {
+            stemsPollTick = 0;
+            deck.tryAttachStemsIfReady();
+        }
+    }
+    else
+    {
+        stemsPollTick = 0;
+    }
+    // La fila aparece con 4-stem listo (P22) o con 2-stem activo (P25:
+    // streaming/caché — visible desde la carga, antes de dar play).
+    const bool stemsRowVisible = deck.isStemsReady() || deck.isStems2Engaged();
+    if (stemsRowVisible != stemsRowShown)
+        resized();
 }
 
 void DeckComponent::paint(juce::Graphics& g)
@@ -1261,6 +1700,23 @@ void DeckComponent::paintOverChildren(juce::Graphics& g)
             g.fillRoundedRectangle(fillBar, 3.0f);
         }
     }
+
+    // P26: banner de error persistente (fallo de carga/descarga) hasta la próxima carga
+    if (loadErrorVisible)
+    {
+        auto bounds = getLocalBounds().toFloat();
+        juce::Rectangle<float> banner(bounds.getCentreX() - 145.0f, bounds.getCentreY() - 36.0f, 290.0f, 52.0f);
+        g.setColour(juce::Colour::fromRGB(12, 14, 18).withAlpha(0.95f));
+        g.fillRoundedRectangle(banner, 8.0f);
+        g.setColour(juce::Colour(0xFFE05252));
+        g.drawRoundedRectangle(banner, 8.0f, 1.5f);
+
+        g.setColour(juce::Colours::white);
+        g.setFont(juce::FontOptions(12.5f, juce::Font::bold));
+        g.drawText(extractionStatus.isNotEmpty() ? extractionStatus
+                                                 : LanguageManager::trUtf8("No se pudo cargar la pista", "Could not load track"),
+                   banner.reduced(12.0f), juce::Justification::centred, true);
+    }
 }
 
 void DeckComponent::resized()
@@ -1301,6 +1757,33 @@ void DeckComponent::resized()
             hotCueRow.removeFromLeft(6);
     }
     area.removeFromBottom(6);
+
+    // 2c-bis. Fila de stems (22px, solo si la pista tiene stems listos)
+    stemsRowShown = deck.isStemsReady() || deck.isStems2Engaged();
+    if (stemsRowShown)
+    {
+        auto stemsRow = area.removeFromBottom(22);
+        stemsMasterButton.setBounds(stemsRow.removeFromLeft(48).reduced(1, 0));
+        stemsRow.removeFromLeft(6);
+        int stemW = (stemsRow.getWidth() - 18) / 4;
+        for (int i = 0; i < 4; ++i)
+        {
+            stemButtons[static_cast<size_t>(i)].setBounds(stemsRow.removeFromLeft(stemW).reduced(2, 0));
+            if (i < 3)
+                stemsRow.removeFromLeft(6);
+        }
+        area.removeFromBottom(4);
+    }
+
+    // 2c. Performance row (24px): ‹ | size | › | ROLL | rollSize | SLIP
+    auto perfRow = area.removeFromBottom(24);
+    jumpBackButton.setBounds(perfRow.removeFromLeft(26).reduced(1, 0));
+    jumpSizeButton.setBounds(perfRow.removeFromLeft(32).reduced(1, 0));
+    jumpFwdButton.setBounds(perfRow.removeFromLeft(26).reduced(1, 0));
+    slipToggleButton.setBounds(perfRow.removeFromRight(42).reduced(1, 0));
+    rollSizeButton.setBounds(perfRow.removeFromRight(34).reduced(1, 0));
+    rollPadButton.setBounds(perfRow.reduced(1, 0));
+    area.removeFromBottom(6); // aire entre la fila de performance y PLAY/CUE/Loop
 
     // 3. Bottom Transport Controls Bar (36px)
     auto bottomBar = area.removeFromBottom(36);
@@ -1354,6 +1837,14 @@ void DeckComponent::resized()
     syncButton.setBounds(pitchArea.removeFromTop(22).reduced(4, 0));
     pitchArea.removeFromTop(4);
     keyLockButton.setBounds(pitchArea.removeFromTop(22).reduced(4, 0));
+    pitchArea.removeFromTop(4);
+    // P20: Key Shift — [▼][valor][▲] bajo el KEY
+    auto ksRow = pitchArea.removeFromTop(22);
+    keyShiftDownButton.setBounds(ksRow.removeFromLeft(20).reduced(2, 0));
+    keyShiftUpButton.setBounds(ksRow.removeFromRight(20).reduced(2, 0));
+    keyShiftLabel.setBounds(ksRow);
+    pitchArea.removeFromTop(4);
+    gridButton.setBounds(pitchArea.removeFromTop(22).reduced(4, 0));
     pitchArea.removeFromTop(4);
     pitchBpmLabel.setBounds(pitchArea.removeFromTop(16));
     pitchDeltaLabel.setBounds(pitchArea.removeFromTop(14));

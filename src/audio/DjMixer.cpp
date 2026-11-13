@@ -281,7 +281,14 @@ void DjMixer::process(juce::AudioBuffer<float>& deck1Buffer,
     ch1.process(deck1Buffer, cueOutBuffer, numSamples, currentSampleRate);
     ch2.process(deck2Buffer, cueOutBuffer, numSamples, currentSampleRate);
 
-    // Process Deck multi-FX chains before crossfader
+    // Process Deck multi-FX chains before crossfader (P21: publica la fase de beat en los slots)
+    const double phase1 = deck1BeatPhase.load();
+    const double phase2 = deck2BeatPhase.load();
+    for (int i = 0; i < DeckFxChain::numSlots; ++i)
+    {
+        fxChain1.getSlot(i).beatPhase.store(phase1);
+        fxChain2.getSlot(i).beatPhase.store(phase2);
+    }
     fxChain1.process(deck1Buffer, numSamples, deck1Bpm.load());
     fxChain2.process(deck2Buffer, numSamples, deck2Bpm.load());
 

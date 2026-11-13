@@ -20,6 +20,22 @@ juce::File YouTubeAudioDownloader::getCacheFolder() const
     return cacheDir;
 }
 
+namespace
+{
+// P26: un archivo m4a real arranca con el box "ftyp" en el offset 4. yt-dlp con
+// el fallback "ba" puede devolver webm/opus con nombre .m4a que el reader no
+// abre: mejor rechazarlo aquí que cachear un archivo roto para siempre.
+bool hasM4aHeader(const juce::File& f)
+{
+    juce::FileInputStream in(f);
+    if (!in.openedOk())
+        return false;
+    char head[8] = { 0, 0, 0, 0, 0, 0, 0, 0 };
+    const auto n = in.read(head, 8);
+    return n >= 8 && head[4] == 'f' && head[5] == 't' && head[6] == 'y' && head[7] == 'p';
+}
+} // namespace
+
 juce::File YouTubeAudioDownloader::getCachedAudioFile(const juce::String& videoId) const
 {
     if (videoId.isEmpty())
@@ -33,14 +49,14 @@ juce::File YouTubeAudioDownloader::getCachedAudioFile(const juce::String& videoI
         dlFolder.findChildFiles(dlFiles, juce::File::findFiles, false, "*" + videoId + "*.m4a");
         for (const auto& f : dlFiles)
         {
-            if (f.existsAsFile() && f.getSize() > 10000 && f.getFileName().contains(videoId))
+            if (f.existsAsFile() && f.getSize() > 10000 && hasM4aHeader(f))
                 return f;
         }
     }
 
     // 2. Verificar en la caché temporal
     auto file = getCacheFolder().getChildFile(videoId + ".m4a");
-    if (file.existsAsFile() && file.getSize() > 10000)
+    if (file.existsAsFile() && file.getSize() > 10000 && hasM4aHeader(file))
         return file;
 
     return {};
@@ -168,7 +184,32 @@ void YouTubeAudioDownloader::downloadAudioAsync(const juce::String& videoId,
         return;
     }
 
-    // 2. Launch background download
+    // 2. P26: dedup — si el mismo video ya está descargándose (otro deck,
+    // doble clic), el segundo pedido espera al primero y reusa el resultado.
+    if (isDownloading(videoId))
+    {
+        juce::Thread::launch([this, videoId, onProgress, onComplete]() {
+            if (onProgress)
+                juce::MessageManager::callAsync([onProgress]() {
+                    onProgress(0.0f, LanguageManager::trUtf8("Esperando descarga en curso...", "Waiting for ongoing download..."));
+                });
+            const auto deadlineMs = juce::Time::getMillisecondCounter() + 600000; // tope 10 min
+            while (juce::Time::getMillisecondCounter() < deadlineMs && isDownloading(videoId))
+                juce::Thread::sleep(200);
+
+            auto done = getCachedAudioFile(videoId);
+            if (onComplete)
+                juce::MessageManager::callAsync([onComplete, done]() {
+                    if (done.existsAsFile())
+                        onComplete(done, true, {});
+                    else
+                        onComplete({}, false, LanguageManager::trUtf8("La descarga anterior no terminó", "The previous download did not finish"));
+                });
+        });
+        return;
+    }
+
+    // 3. Launch background download
     auto cancelFlag = std::make_shared<std::atomic<bool>>(false);
     {
         const std::lock_guard<std::mutex> lock(mutex);
@@ -222,19 +263,24 @@ void YouTubeAudioDownloader::downloadAudioAsync(const juce::String& videoId,
 
         auto targetFolder = getCacheFolder();
         targetFolder.createDirectory();
+        // P26: salida temporal ÚNICA por proceso — dos yt-dlp nunca se pisan el
+        // .part; al validar, se renombra (atómico en el mismo volumen).
         auto outFile = targetFolder.getChildFile(videoId + ".m4a");
-        auto partFile = targetFolder.getChildFile(videoId + ".m4a.part");
-        partFile.deleteFile();
+        const auto tmpName = videoId + ".p" + juce::String((int)juce::Time::getMillisecondCounterHiRes()) + ".m4a";
+        auto tmpFile = targetFolder.getChildFile(tmpName);
+        tmpFile.deleteFile();
 
-        // Download command requesting best native AAC audio stream (m4a container)
+        // Download command requesting best native AAC audio stream (m4a container).
+        // P26: formato estricto — sin el fallback "ba" desnudo, que puede bajar
+        // webm/opus (48 kHz) guardándolo como .m4a.
         juce::StringArray args;
         args.add(binPath);
         args.add("-f");
-        args.add("ba[ext=m4a]/ba");
+        args.add("ba[ext=m4a]/ba[ext=mp4]");
         args.add("--no-playlist");
         args.add("--newline");
         args.add("-o");
-        args.add(outFile.getFullPathName());
+        args.add(tmpFile.getFullPathName());
         args.add("https://www.youtube.com/watch?v=" + videoId);
 
         juce::ChildProcess proc;
@@ -264,8 +310,7 @@ void YouTubeAudioDownloader::downloadAudioAsync(const juce::String& videoId,
             if (cancelFlag->load())
             {
                 proc.kill();
-                partFile.deleteFile();
-                outFile.deleteFile();
+                tmpFile.deleteFile();
                 {
                     const std::lock_guard<std::mutex> lock(mutex);
                     activeDownloads.erase(videoId.toStdString());
@@ -325,7 +370,26 @@ void YouTubeAudioDownloader::downloadAudioAsync(const juce::String& videoId,
         proc.waitForProcessToFinish(5000);
         juce::uint32 exitCode = proc.getExitCode();
 
-        bool success = (exitCode == 0 || outFile.existsAsFile()) && outFile.getSize() > 10000;
+        // P26: validación fuerte — exitCode 0 OBLIGATORIO, tamaño mínimo y
+        // contenedor m4a real (header "ftyp"). Un archivo basura nunca llega a
+        // la caché ni a los Downloads.
+        bool success = exitCode == 0 && tmpFile.existsAsFile()
+                       && tmpFile.getSize() > 10000 && hasM4aHeader(tmpFile);
+        if (success)
+        {
+            if (outFile.existsAsFile())
+                outFile.deleteFile();
+            if (!tmpFile.moveFileTo(outFile))
+            {
+                tmpFile.deleteFile();
+                success = false;
+            }
+        }
+        else
+        {
+            tmpFile.deleteFile();
+            outFile.deleteFile(); // caché previa rota/parcial: fuera
+        }
 
         juce::File finalResultFile = outFile;
         bool savedToDownloads = false;
@@ -346,9 +410,22 @@ void YouTubeAudioDownloader::downloadAudioAsync(const juce::String& videoId,
                 finalFileName = safeTitle + " [" + videoId + "].m4a";
 
             auto persistentFile = dlFolder.getChildFile(finalFileName);
-            if (!persistentFile.existsAsFile() || persistentFile.getSize() != outFile.getSize())
+            if (persistentFile.existsAsFile() && persistentFile.getSize() != outFile.getSize())
+                persistentFile.deleteFile();
+            if (!persistentFile.existsAsFile())
             {
-                outFile.copyFileTo(persistentFile);
+                // P26: copia atómica — el destino nunca es visible a medio copiar
+                // (getCachedAudioFile escanea esta carpeta).
+                auto tmpPersist = dlFolder.getChildFile(finalFileName + ".part");
+                tmpPersist.deleteFile();
+                if (outFile.copyFileTo(tmpPersist) && tmpPersist.getSize() == outFile.getSize()
+                    && tmpPersist.moveFileTo(persistentFile))
+                {
+                }
+                else
+                {
+                    tmpPersist.deleteFile();
+                }
             }
 
             if (persistentFile.existsAsFile() && persistentFile.getSize() > 10000)

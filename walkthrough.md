@@ -982,3 +982,933 @@ Completar la suite de transmisión sin video: emitir a YouTube/Facebook/Twitch/R
 ## Verificación
 - YAML validado (yaml.safe_load) y here-strings PowerShell confirmados a columna 0 tras el parseo del bloque.
 - Verificación real pendiente de ejecución en Actions (workflow_dispatch al pushear) y validación final del .msix en Partner Center al reservar la app (ahí se obtienen los Identity/Publisher exactos).
+
+---
+
+# Walkthrough — P13: Micrófono + talkover con auto-ducking (rama `axel-molina/superfeature`)
+
+## Objetivo
+Canal de micrófono integrado a la mezcla master con detección de voz y auto-ducking de la música (talkover): cuando el DJ habla, la música baja; al callar, vuelve. UI fija junto al mixer central.
+
+## Cambios
+- [NEW] `src/audio/MicChannel.h/.cpp`: canal de micrófono real-time safe (sin locks ni allocs en el callback; parámetros atómicos). Pipeline por muestra: high-pass RBJ de 2º orden a 100 Hz (Q Butterworth, conmutable) → gain (−60..+24 dB, default 0) → suma al masterBuffer (mono se duplica a L/R; estéreo pasa 1:1) — post-mezcla, antes de recorder/broadcast, así la voz hereda grabación y emisión. Detector de voz RMS por bloque contra umbral (default −30 dB) con hold de 0.3 s e histéresis de 1.5 dB. Ducking exponencial por bloque: attack 0.08 s, release 0.8 s, profundidad default −12 dB; gain publicado como atómico para que el callback aplique `applyGain` a la música antes de sumar la voz.
+- [MODIFY] `src/audio/AudioEngine.h/.cpp`: nuevo `openDefaultAudioDevice()` que abre con 2 entradas y cae a 0 entradas si el dispositivo no tiene inputs (micAvailable refleja la realidad); `initialise()` y `ensureAudioDeviceRunning()` lo usan. En `audioDeviceAboutToStart` se prepara el MicChannel. En el callback (paso 2c, tras el sampler y antes de recorder/broadcast): si hay entrada y el mic está activo, `masterBuffer.applyGain(duck)` y `micChannel.process(...)`. Setters (`setMicEnabled/DuckEnabled/GainDb/DuckDepthDb`) persisten en settings.json (`mic.enabled`, `mic.duckEnabled`, `mic.gainDb`, `mic.duckDepthDb`) y se restauran en el constructor.
+- [NEW] `src/ui/MicStripComponent.h/.cpp`: tira de 78 px con botón Mic (DjButton con icono Lucide nuevo, rojo cuando activo), knobs GAIN (−40..+12) y DUCK (−24..0, acento ámbar), toggle AUTO, VU y LED verde de voz activa (30 Hz timer leyendo atómicos). Cuando no hay entrada de audio muestra "Sin entrada de audio" atenuada.
+- [MODIFY] `src/ui/LucideIcons.h/.cpp`: icono `Mic` (cápsula + arco + pie).
+- [MODIFY] `src/ui/MixerComponent.h/.cpp`: la tira de mic se ubica a la derecha del ChannelStrip 2 (Ch1 izq 96 px, mic der 78 px, Ch2 der 96 px, centro el resto).
+- [MODIFY] `src/ui/MainComponent.cpp`: `mixerWidth` 430 → 508 px.
+- [MODIFY] `CMakeLists.txt`: fuentes nuevas registradas.
+
+## Verificación
+- `cmake --build build` → 0 errores; 0 warnings en los ficheros tocados (persisten 2 warnings previos en `AsyncFolderScanner.cpp` y `UsbLibraryView.cpp`, no relacionados).
+- **Banco de pruebas headless** (`/tmp/mic_bench`, proyecto CMake aparte que reutiliza el JUCE 8.0.8 ya descargado y compila `MicChannel.cpp` real) — 9/9 OK:
+  - Duck: silencio → gain 1.0; voz continua → converge a 0.2512 (−12 dB exactos); attack a −6 dB en 81 ms (<100 ms); release de vuelta >0.9 tras hold; voz liberada tras el hold.
+  - Low-cut: atenuación a 50 Hz = 12.32 dB (teórico 2º orden Butterworth: 12.3 dB); bypass = 0.00 dB.
+  - Estabilidad: 1000 bloques con parámetros atómicos cambiantes aleatoriamente → duckGain siempre en [0, 1].
+- Relanzamiento (regla AGENTS.md): `pkill` → `open .../Debug/DiscNativePro.app` → `pgrep` PID 81377.
+- Pendiente de prueba por el usuario: hablar con mic real y verificar el ducking audible, VU, LED de voz y persistencia de settings entre sesiones.
+
+---
+
+# Versión 1.3.3 (release publicada)
+
+## 1. Contenido (tag `v1.3.3` = commit `6d52bb9`)
+| Commit | Cambio |
+|---|---|
+| `7346ce6` | Plan P12: `shellQuote()` POSIX en el comando de ffmpeg (`ingestUrl` con stream key, ruta ffmpeg, ruta log), saneado CR/LF de `mount`/`stationName` en Icecast + rechazo de mount con espacio, defaults RTMPS para YouTube/Twitch. |
+| `6d52bb9` | Bump de versión 1.3.3 (`CMakeLists.txt`). |
+
+Base: `f2bf82d` (MSIX/Store de otra sesión) + guard de binario universal de CI-1 (`c882c17`).
+
+## 2. Verificación
+- Build local Release → 0 errores / 0 warnings propios; bundle **1.3.3**; app relanzada.
+- Repro end-to-end del escapado (ffmpeg falso): keys maliciosas (`'; touch`, backticks, `$(...)`) llegan como un único argumento literal y el centinela no se crea.
+- **CI del tag `v1.3.3`** (run 42736104396): Windows 4m3s ✓, Linux 2m58s ✓, **macOS Universal 1h34m ✓ con el guard `lipo` en verde**, Publish ✓.
+- **Artefacto publicado verificado**: `DiscNativePro-macOS-Universal.zip` descargado de la release → `lipo -archs` = **`x86_64 arm64`** (realmente universal; cierra el issue #1) y `Info.plist` = 1.3.3.
+
+## 3. Notas
+- El job de macOS tarda ~1h34 en CI (v1.3.2: 65 min arm64-only): el universal compila ~2x por TU.
+- Assets: `DiscNativePro-Windows-x64-Setup.exe`, `DiscNativePro-Windows-x64.msix`, `DiscNativePro-Linux-x64.tar.gz`, `DiscNativePro-macOS-Universal.zip`.
+- Pendiente de ojo: RTMPS real contra YouTube/Twitch y emisión Icecast contra servidor local.
+
+---
+
+# Walkthrough — P14: Limiter master brickwall + medidor LUFS (rama `axel-molina/superfeature`)
+
+## Objetivo
+Red de seguridad de nivel en el bus master: limiter brickwall look-ahead siempre activo (techo configurable) que garantiza salida, grabación WAV y emisión sin clipping, más medidor de loudness EBU R128 (LUFS Momentary/Short-term con K-weighting BS.1770) y gain reduction (GR) visibles en la columna central.
+
+## Cambios
+- [NEW] `src/audio/MasterLimiter.h/.cpp`: limiter in-place sobre el masterBuffer con retardo de señal de 5 ms, gain computer por muestra y **ventana deslizante de mínimo (deque monótono)** sobre el req de las últimas 221 muestras — el gain aplicado a la muestra que sale del retardo ya vio el pico que viene (look-ahead verdadero). Envolvente persistente (attack 0.5 ms / release 100 ms por muestra). Medidor LUFS BS.1770: K-weighting por canal (high-shelf +4 dB @ 1682 Hz + high-pass 38 Hz, coeficientes exactos del estándar), ring buffers preasignados de 3 s / 400 ms con sumas incrementales O(1), offset −0.691, suelo de silencio −70. GR publicada con decaimiento. Techo atómico `ceilingDb` (default −0.3 dBFS).
+- [MODIFY] `src/audio/AudioEngine.h/.cpp`: `MasterLimiter masterLimiter` + getter; `prepare` en `audioDeviceAboutToStart`; en el callback, paso **2d** entre el micrófono y recorder/broadcast → limita salida + grabación + emisión. `setMasterCeilingDb` (clamp −12..0) persiste en `master.ceilingDb`; restauración en el constructor.
+- [MODIFY] `src/ui/CenterColumnComponent.h/.cpp`: fila superior 46→62 px con knob **CEILING** (ámbar, −12..0 dB, doble clic = −0.3) entre MASTER/PHONES y el medidor; debajo, readout `LUFS-S · M · GR dB` (∞ por debajo de −60; GR en ámbar cuando limita), actualizado por el timer de 30 Hz que también sincroniza el knob.
+- [MODIFY] `CMakeLists.txt`: fuentes nuevas registradas.
+
+## Verificación
+- `cmake --build build` → 0 errores, 0 warnings.
+- **Banco headless** (`/tmp/master_bench`, compila `MasterLimiter.cpp` real) — 9/9 OK:
+  - T1 salida ≤ techo: −0.3000 dB exactos con entrada a 0 dBFS.
+  - T2 sin clipping con rampa 0→+6 dBFS y transitorios ±2.5, techo −1 dB.
+  - T3 GR = nivel − techo (6.30 exactos) y vuelve a ~0 tras silencio.
+  - T4 LUFS-M y LUFS-S de seno 997 Hz @ −6 dBFS = −6.26 (±1.5 de la referencia).
+  - T5 LUFS en silencio = suelo −70. T6 1000 bloques con techo/nivel aleatorios estable. T7 transparencia bit a bit (salida = entrada retardada 5 ms).
+  - Los fallos iniciales (T2/T3b) fueron del diseño, no del banco: se corrigió el look-ahead con la ventana deslizante de mínimo y el envolvente pasó a ser estado persistente.
+- Relanzamiento (regla AGENTS.md): `pkill` → `open .../Debug/DiscNativePro.app` → `pgrep` PID 64719.
+- Pendiente de prueba por el usuario: saturar los gains de ambos decks + sampler + mic → el VU master no clipea, GR visible en ámbar; LUFS-S de una pista comercial ≈ −14..−9.
+
+## Correccion de ruta de lanzamiento (post-P14)
+- El build de este proyecto es **Release** (`CMAKE_BUILD_TYPE=Release` en `build/CMakeCache.txt`): el artefacto real es `build/DiscNativePro_artefacts/Release/DiscNativePro.app`. El `.app` de `Debug/` es un residuo del 12 de octubre (sin MicChannel ni MasterLimiter) y **no debe usarse**.
+- Relanzamiento correctivo: `pkill` → `open build/DiscNativePro_artefacts/Release/DiscNativePro.app` → `pgrep` PID 77616. Las verificaciones de P13/P14 anteriores lanzaron por error el binario Debug viejo; el código siempre estuvo bien compilado.
+
+---
+
+# Walkthrough — P15: Beat jump, loop roll momentáneo y slip mode (rama `axel-molina/superfeature`)
+
+## Objetivo
+Controles de performance por deck: salto cuantizado a la rejilla de beats (tamaños ½–16 beats), loop roll momentáneo por hold (1/16–2 beats, al soltar retoma donde estaría) y slip mode (loops y scratch no pierden el hilo temporal de la pista).
+
+## Cambios
+- [MODIFY] `src/audio/DeckPlayer.h/.cpp`:
+  - **Beat jump**: `quantizedBeatPos()` (estática, pura) redondea a la rejilla desde `firstBeatOffset` y suma el delta en beats; `jumpBeats(beats)` usa el intervalo del BPM actual (fallback `originalBpm`, luego 120).
+  - **Loop roll**: `startLoopRoll(beats)` ancla el loop en la subdivisión anterior con `rollStartFor()` (floor sobre `length = beats·intervalo`) y activa `setLoop(..., true)`; `releaseLoopRoll()` desactiva el loop y, **sin slip**, hace seek al fin del loop (`userInitiated=false` para no desarmar el controlador de fase). Con slip activo, el hilo de audio retoma solo.
+  - **Slip mode**: `slipEnabled` atómico. En `getNextAudioBlock`, la posición virtual avanza con el **delta real del cursor de lectura** (respeta keylock y resample) durante loop, y a tempo nominal durante scratch; al desengancharse la condición (loop off / mano fuera), un seek centralizado retoma en la posición virtual. `prevReadPos` solo hilo de audio.
+- [MODIFY] `src/ui/DeckComponent.h/.cpp`: **fila de performance** de 24 px bajo los hot cues: `‹` (jump back) | size selector (½→1→2→4→8→16) | `›` (jump fwd) | **ROLL** (hold vía `Button::Listener::buttonStateChanged` + `isDown()`; azul mientras hay loop) | roll size (1/16→1/8→1/4→1/2→1→2) | **SLIP** (toggle cian). Acciones públicas compartidas UI/MIDI: `beatJump(±1)`, `startRoll()/releaseRoll()`, `toggleSlip()`, getters `getJumpBeats()/getRollBeats()`. Refresco a 60 Hz con caché de estado (sin repintado espurio).
+- [MODIFY] `src/midi/MidiMapping.h/.cpp`: `MidiBinding::matches` para NoteOn acepta también releases (note-off / note-on vel 0) — cada dispatch decide qué hacer con ellos (los handlers existentes ya filtran con `isNoteOn()`). 12 acciones nuevas en categoría Pads: `pad_jumpback/jumpfwd/roll/slip_d1` (CH 8, notas 4–7) y `_d2` (CH 9, notas 4–7); roll es hold (noteOn inicia, release suelta).
+- [MODIFY] `src/midi/MidiManager.h/.cpp`: callback `onPerformanceAction(deck, action)`; el dispatch (hilo MIDI) delega a `MessageManager::callAsync` porque toca componentes de UI.
+- [MODIFY] `src/ui/MainComponent.cpp`: el callback enruta a `deck1/deck2` (mismos size selectors que la pantalla).
+- [LIMPIEZA] `src/services/AsyncFolderScanner.cpp` (archivo preexistente, fuera del alcance P15 pero requerido por la regla 0/0): variable sin uso, init-capture con shadow y `DirectoryIterator` deprecado → `RangedDirectoryIterator` (`entry.getFile()`).
+
+## Verificación
+- `cmake --build build` → **0 errores, 0 warnings**.
+- **Banco headless** (`/tmp/perf_bench`, compila `DeckPlayer.cpp` + `StretchAdapter/BeatDetector/KeyDetector` reales) — **16/16 OK**: saltos ±1/±4/±16 en rejilla y fuera de rejilla (snap + avance), ½ beat con rejilla desplazada, 128 BPM exacto, anclas de roll en límites 1/16–2 beats, posición 0 y negativa (clamp es de `setPosition`/`startLoopRoll`). Los 5 fallos iniciales eran errores de expectativa del banco (redondeos), no del código.
+- Relanzamiento (regla AGENTS.md, ruta **Release** corregida): `pkill` → `open build/DiscNativePro_artefacts/Release/DiscNativePro.app` → `pgrep` PID 39336.
+- Pendiente de prueba por el usuario: ROLL en hold suena en loop corto y al soltar retoma sin hueco; con SLIP activo lo mismo pero la pista sigue avanzando por debajo; ‹/› saltan limpio en la rejilla; MIDI learn sobre las 12 acciones nuevas.
+- Ajuste visual (feedback del usuario): la fila de performance quedó pegada a la barra PLAY/CUE/Loop; se añadió un gap de 6 px entre ambas (`resized()`). Build 0/0; relanzamiento Release PID 61188.
+
+---
+
+# Walkthrough — P16: Editor de Beat Grid
+
+## Objetivo
+Corrección manual del beat grid por pista (offset del primer beat + BPM del grid), con modal de edición, canvas con líneas de beat y persistencia por pista en el caché de biblioteca. El override gana al publish asíncrono del análisis y sobrevive a recargas de la pista.
+
+## Cambios
+- [MODIFY] `src/audio/DeckPlayer.h/.cpp`:
+  - `setGridBpm(bpm)` (clamp 40..250, recalcula `originalBpm`/`currentBpm` con el pitch), `setFirstBeatOffset(sec)` (clamp [0, duración]), `resetGrid()` (vuelve a los valores detectados y limpia overrides), `hasGridOverride()`, getters `getDetectedBpm()/getDetectedOffset()`.
+  - Atómicos `gridBpmOverride` (0 = sin override) / `gridOffsetOverride` (<0 = sin override) / `detectedBpm` / `detectedOffsetSeconds`; `loadFile` los resetea (el grid corregido no se hereda entre pistas).
+  - El publish del análisis (step 3) guarda lo detectado en `detected*` y solo aplica los valores al grid si **no** hay override — la corrección manual nunca es pisada por el análisis asíncrono.
+- [MODIFY] `src/services/LibraryCacheManager.h/.cpp`: campos `gridBpm`/`gridFirstBeatOffset` en `CachedTrackMetadata` (gridBpm ≤ 0 = sin corrección), `updateGrid(file, bpm, offset)` con entrada mínima si la pista no existe y guardado throttled (3 s); lectura/escritura en el JSON (`gridBpm`/`gridOffset`).
+- [NEW] `src/ui/GridEditorComponent.h/.cpp`: modal `GridEditorComponent` (Timer a 30 Hz). Canvas con picos apilados de 3 bandas (low/mid/high con `WaveformTheme` por deck) y líneas de beat sobre `offset + k·intervalo` (cada 4 = downbeat con número de compás, negativos incluidos). Marker ámbar central; **drag horizontal** mueve el offset (60 px/s); nudge ±5/±20 ms; BPM ±0.05/±0.5 y ×½/×2 (offset invariante); **RESET** vuelve a lo detectado; **PLAY** audiciona desde 1 s antes del primer beat; **CERRAR**. Persistencia en destructor y en cada cambio (`updateGrid`).
+- [MODIFY] `src/ui/DeckComponent.h/.cpp`: botón **GRID** (22 px, columna de pitch bajo KEYLOCK) visible solo con pista cargada y no en modo video; callback `onEditGrid(deckIndex)`. Al cargar pista: si el caché tiene grid corregido, `setGridBpm`/`setFirstBeatOffset` se aplican **sincrónicamente** antes de los labels (gana la carrera contra el publish del análisis).
+- [MODIFY] `src/ui/VerticalWaveform.cpp`: las líneas de beat ahora se dibujan desde `player.getFirstBeatOffset()` (antes desde t=0; el grid editado no se reflejaba). `ScrollingWaveform` confirmado sin uso, no tocado.
+- [MODIFY] `src/ui/MainComponent.h/.cpp`: `gridWindow` (SafePointer), `openGridEditor(deckIndex)` con `DialogWindow::launchAsync` (no resizable, ESC cierra), single-instance (`toFront`). Cableado `deck1.onEditGrid = deck2.onEditGrid`.
+- [MODIFY] `CMakeLists.txt`: `GridEditorComponent.h/.cpp` agregados al target.
+- [LIMPIEZA] `src/ui/UsbLibraryView.cpp`: parámetro `totalFound` sin uso en lambda → `/*totalFound*/` (regla 0/0).
+
+## Verificación
+- `cmake --build build` → **0 errores, 0 warnings**.
+- **Banco headless** (`/tmp/grid_bench`, compila `DeckPlayer.cpp + BeatDetector/KeyDetector/StretchAdapter` reales, click track real de 30 s a 130 BPM — kicks de 250 ms a 60 Hz con decay: los clicks de pocos ms producen meseta plana en la energía de 100 ms y el detector exige máximo local estricto) — **19/19 OK**: análisis detecta 130.00 BPM (offset 0.0995 s); override BPM 140 + offset 0.5 **sobreviven al publish**; `currentBpm = override × pitch` (148.4 con pitch +6 %); clamps 300→250 / 10→40 / offset −5→0 / dur+10→dur; ×½ (128→64, offset invariante) y ×2 (→128); `resetGrid` restaura detectado y limpia override.
+- Relanzamiento (regla AGENTS.md, ruta **Release**): `pkill` → `open build/DiscNativePro_artefacts/Release/DiscNativePro.app` → `pgrep` PID 14996.
+
+## Prueba sugerida (usuario)
+1. Cargar una pista conkick y abrir **GRID** → arrastrar el marker al primer golpe (drag) y ajustar BPM con ±0.5.
+2. Verificar que las líneas de beat en la waveform vertical se alinean con los golpes reales.
+3. Recargar la misma pista → el grid corregido se aplica solo (persistido por pista).
+4. RESET vuelve al grid detectado; ×½/×2 para temas de tiempo doble/mitad.
+5. Con el grid corregido, beat jump ‹/› y ROLL deben cuantizar al grid corregido.
+
+---
+
+# Walkthrough — P17: Playlists
+
+## Objetivo
+Listas de reproducción persistentes: crear, renombrar, borrar, añadir/quitar pistas y reordenación por drag & drop, integradas al árbol de carpetas y a la tabla de la biblioteca.
+
+## Cambios
+- [NEW] `src/services/PlaylistStore.h/.cpp`: singleton JSON (`~/Library/Application Support/DiscNativePro/playlists.json`). `Playlist { id (Uuid), name, paths (rutas canónicas ordenadas) }`. CRUD completo: `createPlaylist` (rechaza duplicados case-insensitive y nombres vacíos), `renamePlaylist`, `deletePlaylist`, `addTrack` (sin duplicados), `removeTrack`, `reorderTrack` (semántica por rutas: mueve `path` antes de `beforePath`, robusta ante pistas faltantes en disco), `playlistPaths`, `playlistContains`. Persistencia con `TemporaryFile` atómico en cada mutación.
+  - **Bug de deadlock corregido antes del primer commit funcional**: las mutaciones llamaban `save()` (que toma el mutex) desde contextos que ya lo sostenían → cuelgue. `save()` pasó a `saveUnlocked()` (mutex ya tomado); el destructor lo envuelve con lock.
+- [MODIFY] `src/ui/FolderTreeComponent.h/.cpp`: sección **Playlists** al final del árbol (header "Playlists" colapsable con botón "+" para crear; filas con icono `ListMusic` y contador). `fullPath = "playlist:<id>"` para sobrevivir renombres. Clic derecho sobre playlist → menú Renombrar/Eliminar. `navigateFolders` salta el header (no seleccionable). Callbacks `onCreatePlaylist/onRenamePlaylist/onDeletePlaylist`.
+- [MODIFY] `src/ui/LucideIcons.h/.cpp`: icono nuevo `ListMusic` (Lucide "list-music").
+- [MODIFY] `src/ui/LibraryComponent.h/.cpp`:
+  - `filterTracks`: rama playlist — las pistas coinciden por ruta canónica en el store y se muestran **en el orden manual** (se omite `applySorting` en vista de playlist). Título de tabla = nombre de la playlist.
+  - Menú contextual (clic derecho en pista): "Añadir a playlist" (submenu con las existentes + "Nueva playlist…") y, en vista de playlist, "Quitar de esta playlist". Multi-selección soportada.
+  - Diálogos con `AlertWindow` modal (crear/renombrar con `TextEditor`; eliminar con confirmación; patrón `SafePointer` + `enterModalState`).
+  - **Reordenación drag & drop**: el drag mantiene la descripción de rutas (compatible con Automix y decks); al soltar sobre la tabla en vista de playlist se calcula el punto de inserción (`getRowContainingPosition` + mitad superior/inferior de la fila) y se llama `reorderTrack(path, beforePath)`. Línea de inserción cian en `paintRowBackground` durante el drag (`playlistDropRow`).
+  - `refreshPlaylists()` sincroniza el árbol con el store; el wiring de callbacks vive en el constructor (MainComponent sin cambios).
+- [MODIFY] `CMakeLists.txt`: `PlaylistStore.h/.cpp` agregados al target.
+
+## Verificación
+- `cmake --build build` → **0 errores, 0 warnings**.
+- **Banco headless** (`/tmp/playlist_bench`, compila `PlaylistStore.cpp` real, dos fases entre procesos para probar persistencia) — **29/29 OK**: create/duplicado case-insensitive/nombre blanco, rename/delete con duplicados e inexistentes, addTrack sin duplicados/rutas vacías/ids falsos, reorder (orden c,a,b verificado; ruta inexistente; path==beforePath), remove del medio (c,b), contains, persistencia real en disco entre procesos (orden c,b sobrevive al reinicio), limpieza final del store real.
+- Relanzamiento (regla AGENTS.md, ruta **Release**): `pkill` → `open build/DiscNativePro_artefacts/Release/DiscNativePro.app` → `pgrep` PID 41069.
+
+## Prueba sugerida (usuario)
+1. En Mis Archivos, sección **Playlists**: "+" crea una playlist; clic derecho → renombrar/eliminar (con confirmación).
+2. Clic derecho en una pista → "Añadir a playlist" (multi-selección con Cmd/Shift).
+3. Clic en la playlist → la tabla muestra solo sus pistas con el título de la playlist.
+4. Arrastrar pistas dentro de la vista de playlist para reordenar (línea cian de inserción; el orden persiste al reiniciar la app).
+5. Verificar que arrastrar hacia el panel Automix sigue funcionando igual que antes desde una playlist.
+
+## Corrección P17 (feedback del usuario): drag & drop hacia el árbol
+- Faltaba soltar pistas sobre las filas de playlist del árbol: `TreeViewInternal` ahora implementa `juce::DragAndDropTarget` (`itemDragMove` detecta fila de playlist con resaltado cian, `itemDropped` entrega rutas al callback `onTracksDroppedIntoPlaylist`). El wiring en `LibraryComponent` llama `addTrack` por cada ruta + `refreshPlaylists` + refiltro si la playlist está visible. Funciona desde "Todas las Pistas", "Descargas" o cualquier carpeta. Build 0/0; relanzamiento Release PID 48672.
+
+---
+
+# Walkthrough — P18: MIC compacto en la fila superior del centro
+
+## Objetivo
+Corregir la desproporción/asimetría del mic strip (columna extra de 78 px a la derecha de CH2). El mixer queda `[CH1][Centro][CH2]` simétrico y el mic vive como bloque compacto horizontal en la fila superior de la columna central.
+
+## Cambios
+- [MODIFY] `src/ui/MicStripComponent.h/.cpp`: `setCompactLayout(bool)`. En modo compacto: layout horizontal de 46 px `[MIC 34×34][GAIN 44][DUCK 44][AUTO (15px) + VU meter horizontal en flex]`; sin franja de título propia; el punto verde de voz activa se dibuja sobre la esquina del botón MIC; aviso "Sin entrada de audio" en la zona derecha. El modo vertical original se conserva.
+- [MODIFY] `src/ui/CenterColumnComponent.h/.cpp`: miembro `micStrip` (compacto) en la fila superior de 46 px entre el VU master y CEILING/PHONES (`removeFromRight(180)`). Readout LUFS y demás sin cambios.
+- [MODIFY] `src/ui/MixerComponent.h/.cpp`: eliminado `micStrip` de la columna derecha; layout `[CH1 96][Centro][CH2 96]`.
+
+## Verificación
+- `cmake --build build` → **0 errores, 0 warnings** (corregido `-Wreorder-ctor` alineando el orden de inicialización con la declaración).
+- Relanzamiento Release: `pkill` → `open .../Release/DiscNativePro.app` → `pgrep` PID 66924.
+
+## Prueba sugerida (usuario)
+1. Verificar simetría: los tres bloques del mixer tienen igual ancho de canales y el mic ya no ocupa columna propia.
+2. En la fila superior del centro: MIC on/off, GAIN, DUCK, AUTO y VU funcionan igual; el punto verde aparece al hablar con el mic activo.
+
+## Corrección P18b (feedback del usuario): mic esencial + DUCK/AUTO en settings
+- El bloque compacto de 180 px quedaba comprimido y el VU invisible. En compacto solo quedan `[MIC 34][GAIN 44][VU flex]` (DUCK/AUTO ocultos) y el ancho baja a 150 px — el VU ahora tiene proporción real.
+- [MODIFY] `src/ui/SettingsModalComponent.h/.cpp`: nueva sección "Micrófono (Talkover)" en la pestaña Sonido (tras Limitador Master): slider de profundidad de duck (−24..0 dB → `setMicDuckDepthDb`) y toggle de duck automático (→ `setMicDuckEnabled`), inicializados desde `MicChannel`.
+- Build 0/0; relanzamiento Release PID 76434.
+
+## Corrección P18c (feedback del usuario): eje simétrico 3-3
+- La fila superior quedó 3-3 alrededor del meter master: izquierda `[MIC][GAIN][VU mic]` (entradas), centro `masterMeter` (flex), derecha `[CEILING][MASTER][PHONES]` (sección master/salidas). Cambio único en `resized()` de `CenterColumnComponent.cpp`. Build 0/0; relanzamiento Release PID 1958.
+
+## Corrección P18d (feedback del usuario): mic completo en Configuración
+- Decisión: nada de mic en la fila superior. `CenterColumn` vuelve a `[MASTER][meter][CEILING][PHONES]` (2-2 simétrico); se elimina el miembro `micStrip`.
+- [DELETE] `src/ui/MicStripComponent.h/.cpp` (sin usos) + fuera de `CMakeLists.txt`.
+- [MODIFY] `src/ui/SettingsModalComponent.h/.cpp`: la sección "Micrófono (Talkover)" ahora tiene el control completo: toggle **Habilitar micrófono** (→ `setMicEnabled`), slider **GAIN** (−40..+12 dB → `setMicGainDb`), más el slider DUCK y el toggle AUTO existentes.
+- Build 0/0; relanzamiento Release PID 7315.
+
+---
+
+## P19 — Knob CEILING movido a la Top Bar
+
+**Objetivo:** despejar la fila superior de la columna central y colocar el techo del limitador junto a los botones REC / FX / SMP.
+
+### Cambios
+- `src/ui/TopBarComponent.h/.cpp` [MODIFY]: el constructor ahora recibe `AudioEngine&`. Nuevo knob `CEILING` (ámbar) tras `SMP`: rango −12..0 dBFS, step 0.1, doble clic = −0.3 dB, `onValueChange` → `setMasterCeilingDb()`. Sincronizado en el Timer de 1 Hz (respetando arrastre del mouse). Tooltip bilingüe vía `refreshLanguage()`.
+- `src/ui/MainComponent.h` [MODIFY]: `topBar { audioEngine }` (orden de declaración ya garantiza validez de la referencia).
+- `src/ui/CenterColumnComponent.h/.cpp` [MODIFY]: se elimina `ceilingKnob`. Fila superior final: `[MASTER][meter][PHONES]` (1-1). El readout LUFS-S/M/GR se mantiene.
+
+### Verificación
+- `cmake --build build`: **0 errores, 0 warnings**.
+- Relanzamiento Release + `pgrep`: proceso activo (PID 58790).
+
+### P19b — CEILING también en Configuración
+- `src/ui/SettingsModalComponent.h/.cpp` [MODIFY]: nueva fila "Techo del Limitador (CEILING):" en Sonido → sección "Margen Dinámico y Limitador Master" (label 220 px + slider −12..0 dBFS step 0.1 con TextBoxRight, doble clic = −0.3 dB, bilingüe vía `refreshLanguage()`).
+- Build 0 errores / 0 warnings; Release relanzada (PID 69108).
+
+### Fix — Beat Grid Editor nacía sin tamaño
+- `src/ui/MainComponent.cpp` [MODIFY]: `openGridEditor()` ahora hace `modal->setSize(720, 420)` antes de lanzar el `DialogWindow`. Antes el contenido media 0x0 y la ventana nativa colapsaba (solo se veía el label de BPM y CERRAR).
+- Build 0/0; Release relanzada (PID 73691).
+
+### Fix — Espaciado de botones del Grid Editor
+- `src/ui/GridEditorComponent.cpp` [MODIFY]: `resized()` — separación entre grupos de botones 8→12 px y padding interno por botón 2→3 px en las tres filas (offset, BPM, RESET/PLAY/CERRAR).
+- Build 0/0; Release relanzada (PID 76428).
+
+### Fix — Separación vertical entre filas del Grid Editor
+- `src/ui/GridEditorComponent.cpp` [MODIFY]: 8 px de gap vertical entre las tres filas de controles (offset / BPM / RESET-PLAY-CERRAR); bloque de controles 96→106 px.
+- Build 0/0; Release relanzada (PID 79297).
+
+### Fix — Superposición canvas/controles en Grid Editor
+- `src/ui/GridEditorComponent.cpp` [MODIFY]: `canvasRect()` restaba 96 px (constante vieja) mientras los controles ahora ocupan 106 px → la onda quedaba debajo de los botones. Unificado a 106.
+- `src/ui/MainComponent.cpp` [MODIFY]: ventana del editor 420→440 px de alto.
+- Build 0/0; Release relanzada (PID 82986).
+
+---
+
+## P20 — Key Shift (transposición ±6 semitonos, mezcla armónica)
+
+**Objetivo:** transponer la pista en semitonos sin cambiar el tempo (Key Lock ya existía; faltaba el shift armónico).
+
+### Cambios
+- `src/audio/StretchAdapter.h/.cpp` [MODIFY]: `setTransposeSemitones()` thread-safe (atómico) aplicado sobre signalsmith-stretch solo cuando cambia (nada de recalculos por bloque en el hilo de audio). Se amplió la supresión de warnings del third-party (-Wfloat-equal).
+- `src/audio/DeckPlayer.h/.cpp` [MODIFY]: `setKeyShiftSemitones()` / `getKeyShiftSemitones()` con clamp ±6. Con Key Lock ON el stretcher transpone sin tocar el tempo; con OFF va por resample (pitch clásico, cambia tempo y tono).
+- `src/ui/DeckComponent.h/.cpp` [MODIFY]: fila `[▼][valor][▲]` bajo el botón KEY en la columna de pitch; el label muestra los semitonos (ámbar si activo) y **clic = reset a 0**; tooltips bilingües; sync en el timer (el motor es la única verdad, p/ MIDI).
+- `src/midi/MidiMapping.cpp` / `MidiManager.cpp` [MODIFY]: acciones `deckN_keyshift_up/down/reset` (binds por defecto: notas 97/98/99 en los canales 1 y 2).
+
+### Verificación
+- `cmake --build build`: **0 errores, 0 warnings**.
+- Banco headless `/tmp/keyshift_bench` (DeckPlayer real + seno 440 Hz, frecuencia por cruces por cero): **9/9 PASS** — clamp ±6, BPM inalterado, 0 st → 440.2 Hz, +1 → 466.2, −1 → 414.6, +2 → 493.3, keylock OFF +1 → 466.2 Hz por resample. (Nota: el banco necesita pacing de 1 ms/bloque; sin él el BufferingAudioSource se queda sin buffer y mide silencio.)
+- Release relanzada (PID 6371).
+
+### P19c — CEILING: solo en Configuración
+- Decisión del usuario: el knob en la TopBar se veía demasiado chico (ventana de 40 px). Se revierte la parte de TopBar del P19: `TopBarComponent` vuelve al constructor sin argumentos, sin knob ni referencia al motor; `MainComponent.h` vuelve a `TopBarComponent topBar;`.
+- El techo del limitador se controla únicamente desde **Configuración → Sonido → Margen Dinámico y Limitador Master** (slider CEILING del P19b, con doble clic = −0.3 dB).
+- Build 0/0; Release relanzada (PID 11287).
+
+### Fix — Flechas del Key Shift no se renderizaban
+- Causa: los glifos Unicode ▲/▼ no existen en el font que usa `DjButton` (mostraba "a").
+- `src/ui/LucideIcons.h/.cpp` [MODIFY]: nuevo icono vectorial `ChevronUp` (espejo del `ChevronDown` existente).
+- `src/ui/DeckComponent.cpp` [MODIFY]: los botones Key Shift usan `setIcon(ChevronUp/ChevronDown, 12)` en lugar de texto.
+- Build 0/0; Release relanzada (PID 16115).
+
+---
+
+## P21 — FX sincronizados al beat (Echo/Gate rítmicos con fase real del deck)
+
+**Objetivo:** que Echo y Gate usen divisiones musicales explícitas (1/4 a 2/1) y que el Gate quede anclado a la fase de beat real del deck (antes era un pulso libre que ignoraba el downbeat).
+
+### Cambios
+- `src/audio/DeckFxChain.h/.cpp` [MODIFY]: `FxSlot` gana `std::atomic<int> beatDivision { 2 }` (0=1/4, 1=1/2, 2=3/4, 3=1/1, 4=2/1) y `std::atomic<double> beatPhase { -1.0 }`. **Echo**: el retardo sale de la tabla de 5 divisiones × beat (antes: rangos ocultos del knob `parameter`; BPM ≤ 30 cae a 120 BPM). **Gate**: período = división × beat; si hay fase publicada (0..1) el ciclo arranca anclado al downbeat (`gatePhase = fase/división`); sin fase mantiene el pulso libre. Se eliminó el estado `gateEnv` obsoleto.
+- `src/audio/DjMixer.h/.cpp` [MODIFY]: `setDeckBeatPhase(deckIndex, fase)` + atomics `deck1/2BeatPhase`; en `process()` publica la fase en los 6 slots antes de procesar las cadenas.
+- `src/audio/AudioEngine.cpp` [MODIFY]: por bloque, además del BPM, alimenta `djMixer.setDeckBeatPhase(0/1, deck.getBeatPhase())`.
+- `src/ui/FxSlotComponent.cpp` [MODIFY]: en Echo/Gate el botón PARAM cicla la división (escribe `beatDivision`) y muestra el valor activo ("1/4", "1/2", "3/4", "1/1", "2/1"); los demás FX siguen usando `parameter`.
+
+### Verificación
+- `cmake --build build`: **0 errores, 0 warnings** (recompilación dirigida de los 4 archivos tocados confirmada).
+- Banco headless `/tmp/fxsync_bench` (FxSlot real): **5/5 PASS** — Echo 1/2 beat @120 BPM con ecos exactos en 11025/22050/33075 muestras (amp 1.00/0.48/0.23); Echo 3/4 beat eco en 16537; Gate anclado 1/1 abierto en [0, 0.25)s del ciclo; Gate anclado con offset 1/4 de beat y división 1/2 respeta el corrimiento; Gate sin fase publicada sigue oscilando.
+- Release relanzada (PID 26487).
+
+### Fix — Cerrar el editor de grid pausaba la pista en reproducción
+- Causa: el destructor de `GridEditorComponent` hacía `deck.pause()` si `playAudition` estaba activo, sin distinguir si la audición la inició el editor o si el deck ya venía reproduciendo.
+- `src/ui/GridEditorComponent.h/.cpp` [MODIFY]: nuevo `wasPlayingOnOpen` capturado en el constructor; el cierre solo pausa si el editor inició la audición. Además, el botón PLAY ya no reposiciona al primer beat si el deck está sonando (continúa desde la posición actual).
+- Build 0/0; Release relanzada (PID 60312).
+
+## P22 — Stems reales por ML (Demucs, 4 stems, separación offline con caché)
+
+**Objetivo:** reemplazar los "stems" falsos (EQ) por separación de fuentes real. Decisiones del usuario: pre-cálculo offline (patrón rekordbox), 4 stems (vocals/drums/bass/other), y separación **solo al cargar al deck** (nunca en masa al importar 1000 pistas de un USB).
+
+### Motor de separación
+- `src/services/StemSeparationService.h/.cpp` [NEW]: cola FIFO en un `juce::Thread` de baja prioridad. `maybeEnqueue(file)` deduplica (ready/queued/processing/failed no se re-encolan; sin binario demucs no encola). Ejecuta `demucs -n htdemucs -o <tmp> <file>` vía `ChildProcess` (App Support bin → bundle Resources → `which demucs` → `python3 -m demucs`), mueve los 4 WAVs a `~/Library/Application Support/DiscNativePro/stems/<firma>/` + `stems.json`, y persiste estado en `LibraryCacheManager`. Disponibilidad del binario cacheada por sesión. Firma de invalidez = hash de path + modTime + size (misma que el caché de biblioteca).
+- `src/services/LibraryCacheManager.h/.cpp` [MODIFY]: `stemsStatus` ("none"/"processing"/"ready") + `stemsDir` en `CachedTrackMetadata`, con `updateStemsStatus()` (crea entrada mínima si falta) y `getStemsStatus()` para el badge. Persistido en el JSON.
+
+### Playback de stems (DeckPlayer)
+- `src/audio/DeckPlayer.h/.cpp` [MODIFY]: al cargar una pista con stems listos (`stemsDirFor` + duración ≤ 900 s), un job del pool de análisis (con guard de generación) lee los 4 WAVs a RAM (~170 MB/deck máx.) y publica `stemBuffers` + `stemsInRam` en el hilo de mensajes. En `getNextAudioBlock`, con stems activos la salida es la **suma de stems con sus ganancias** (original muteado); la posición de cada stem se deriva del delta del cursor del master por bloque (`rpAfter − rpBefore`), de modo que hereda tempo, keylock, loops y seeks sin pipeline propio. Compensación de latencia del stretcher con keylock ON; delta inválido (seek/reversa/wrap de loop) → silencio limpio. Los flags de stems se resetean bajo el mismo lock que el hilo de audio (sin ventana de carrera). API pública: `isStemsReady/isStemsActive/isStemsLoaded/setStemsActive/getStemGain/setStemGain/stemName`.
+
+### UI
+- `src/ui/DeckComponent.h/.cpp` [MODIFY]: fila de stems de 22 px (solo visible si la pista tiene stems listos; aparece en caliente vía chequeo en el timer): botón master STEMS (gris sin stems / neutro listo / azul activo) + 4 botones VOC/DRM/BAS/OTH (encendido = ganancia > 0.5). Patrón de colores cacheados para no repintar a 60 Hz.
+- `src/ui/LibraryComponent.cpp` [MODIFY]: badge por fila — STEMS verde (ready) / SEP ámbar (processing), oculto si no hay estado.
+- `src/ui/SettingsModalComponent.h/.cpp` [MODIFY]: sección "Stems (Separación de Pistas)" en General con estado del binario demucs y hint de instalación (`pip3 install demucs`).
+
+### MIDI
+- `src/midi/MidiMapping.cpp` [MODIFY]: 10 acciones nuevas — `deckN_stems_active` (ON/OFF) y `deckN_stem_vocals/drums/bass/other` (toggle de ganancia), pads canal 8/9 notas 100–104.
+- `src/midi/MidiManager.cpp` [MODIFY]: dispatch de las acciones (toggle binario > 0.5).
+
+### Verificación
+- `cmake --build build`: **0 errores, 0 warnings**.
+- Banco headless `/tmp/stems_bench` (DeckPlayer real + WAVs sintéticos con frecuencias distinguibles: master 1760 Hz, vocals 440, drums 220, bass 110, other 880): **7/7 PASS** — detección de stems por firma; buffers en RAM en ~100 ms (publicación vía MessageManager, el bench bombea el CFRunLoop porque JUCE 8 no tiene modal loops); master solo 1760 Hz con stems OFF; solo vocals 440 Hz / solo drums 220 Hz con original muteado; silencio total con las 4 ganancias en 0; seek a 3.0 s mantiene los stems sincronizados (440 Hz); stems OFF restaura el master. Nota: el bench consume a ritmo realtime (sleep 11 ms por bloque de 512) — sin pacing el BufferingAudioSource entra en hambruna y las mediciones pierden validez.
+- Release relanzada (PID 78437).
+
+## P23 — Stems con motor ML embebido (ONNX Runtime, sin dependencias del usuario)
+
+**Objetivo:** eliminar el requisito `pip3 install demucs` de P22: el runtime y el modelo viajan dentro de la app; el usuario nunca instala nada. Decisión confirmada: ONNX Runtime embebido (AskUserQuestion), compatible con los 3 SO.
+
+### Gate 1 — Exportación del modelo (`tools/export_stems_model.py`)
+- htdemucs (cac=True) exportado a **ONNX fp32 single-file** (163 MB, opset 20, grafo 100 % real — sin ops complejas): (a) STFT manual (framing + hann + rfft × 1/64, replica exacta de `torch.stft(normalized=True)`); (b) `_mask` con pares re/im (cac garantizado, raise si no); (c) `_ispec` con pads reales en dims F/T y ISTFT manual (extensión hermitiana + ifft ortho + OLA con `unfold_backward`, replica de `torch._refs.istft`, err 1e-6); (d) fixup ScatterND/GatherElements (índices int32→int64) con propagación de dtypes propia (el `infer_shapes` de ONNX no soporta este grafo).
+- Validación: modelo parcheado vs demucs eager (eq ≤ 1e-4, forzado en el script) y ORT vs eager **cos = 1.000000**. Quantización descartada con datos: int8 dinámico (60 MB) es más lento (17.3 s vs 6.4 s) y degrada (cos 0.913); fp16 (87 MB) no tiene kernels CPU (0.57× rt). **Se distribuye fp32.**
+- Modelo en `assets/models/htdemucs_fp32.onnx` (gitignored); CMake lo copia a `Contents/Resources/models/` si existe.
+
+### Runtime vendida (`third_party/onnxruntime/{macos,windows,linux}`)
+- macOS: **1.22.0 universal2** (última con prebuilt universal; 1.31.1 ya no la publica) — un solo dylib para ambas arquitecturas; Windows/Linux: **1.31.1 x64**. Headers C API + licencia MIT. `.gitignore` con negaciones para sortear el ignore global `*.dylib`.
+- CMake: dylib → `Contents/Frameworks` (RPATH `@executable_path/../Frameworks`); DLL junto al exe (Windows); .so con RPATH `$ORIGIN` (Linux). Sin `#ifdef` de plataforma en el engine.
+
+### `src/services/OnnxStemEngine.h/.cpp` [NEW]
+- Wrapper C API de ORT: sesión lazy con `SetIntraOpNumThreads(hw−2)` (2 cores reservados al hilo de audio), `inter_op=1` y **`session.deterministic_compute=1`** (corridas bit a bit reproducibles; costo medido ~14 %).
+- Chunking (parámetros StemKit): chunks de 343980 muestras (segmento nativo de 7.8 s), solape 50 %, ventana raised-cosine con plateau (fade = 1/10 del chunk), padding reflect en bordes de pista, división por suma de ventanas. Decodificación JUCE → estéreo → resample Lagrange a 44.1 kHz si hace falta. Salida: 4 WAVs PCM16 44.1 kHz (drums/bass/other/vocals) escritos en bloques de 2^20.
+- `shouldCancel` consultado entre chunks (mata la corrida sin archivos parciales); todo `Release*` de ORT en su lugar (teardown limpio, exit 0).
+
+### `src/services/StemSeparationService.h/.cpp` [MODIFY]
+- Camino CLI eliminado por completo (ChildProcess, locator demucs, `which`, `python3 -m`). `isDemucsAvailable()` → `isModelAvailable()` (cacheada, CAS). `separateOne()` = `engine->separate(file, stemsRoot/firma, cancel=threadShouldExit)` + verificación de los 4 WAVs + `stems.json` + cache "ready". Cola FIFO, firma, estados y política "solo al cargar al deck" intactos (DeckPlayer sin cambios).
+
+### `src/ui/SettingsModalComponent.cpp` [MODIFY]
+- Sección Stems: "Motor de separación: embebido (htdemucs ONNX)" / "modelo no incluido en esta build" — sin hints de instalación.
+
+### Verificación
+- `cmake --build build`: **0 errores, 0 warnings** (en código propio; las únicas warnings del log son preexistentes de third-party de JUCE).
+- Banco headless `/tmp/onnx_bench` (OnnxStemEngine real, patrón master_bench, JUCE reutilizado del build): **7/7 PASS** — modelo disponible; sesión ORT inicializada; entrada sintética de 12 s → 4 WAVs de 529200 frames @44.1 kHz; no silenciosos (> −80 dBFS); **energía stems/entrada = 0.976**; determinismo bit a bit entre corridas (±1 LSB PCM16 tras `deterministic_compute`; sin él, ORT multihilo divergía hasta 4.4e-2); cancelación inmediata → false y cero WAVs. Ruteo por stem no se exige aquí (el sintético no es música): la calidad del modelo quedó validada en Gate 1 (cos 1.000000 vs demucs eager). Latencia: 24 s por 12 s de audio (~0.5× rt en la Mac de Axel, background thread, baja prioridad).
+- Bundle Release verificado: `Contents/Frameworks/libonnxruntime.1.22.0.dylib` + `Contents/Resources/models/htdemucs_fp32.onnx` presentes.
+- Release relanzada (PID 9300).
+- **Pendiente de confirmación visual del usuario**: cargar una pista real en un deck → badge SEP ámbar → STEMS verde → fila de stems activa (muteo de voz con VOC apagado).
+
+### Corrección P23b (bug del usuario): la app se colgaba al cargar un audio nuevo en un deck
+- **Diagnóstico con `sample` del proceso vivo**: el hilo de mensajes estaba bloqueado para siempre en `maybeEnqueue → std::mutex::lock()`. Causa raíz (heredada de P22): `StemSeparationService::run()` dormía en `wait(-1)` **reteniendo `stateMutex`**, y `maybeEnqueue` (que corre en el hilo de mensajes durante `DeckPlayer::loadFile`) intenta tomar ese mismo mutex **antes** de llegar a su `notify()` → deadlock mutuo, app congelada en el drop.
+- **Fix** (`src/services/StemSeparationService.cpp`): `run()` ahora saca el trabajo (o decide esperar) **dentro del lock** y duerme **fuera** de él. Bonus: tope de duración de 900 s en `maybeEnqueue` (misma política que el gate de RAM de DeckPlayer; sin él, una mezcla de 1 h intentaría asignar ~8 GB en el engine).
+- **Segundo bug del mismo reporte (crash al cerrar, exit 134)**: el singleton `StemSeparationService` (y su `OnnxStemEngine`) se destruye durante el teardown estático de `exit()` y `ReleaseEnv` de ORT 1.22 hace `abort()` dentro de `Environment::~Environment` (crash report: `ReleaseEnv → Environment::~Environment → abort`). Fix (`OnnxStemEngine.cpp`): el `~Impl` ya no libera los objetos ORT — viven toda la vida del proceso (destruirlos con el engine en scope local sí sale limpio; el problema es exclusivamente el orden de destrucción estática).
+- **Verificación**: banco a nivel de servicio `/tmp/service_bench` (StemSeparationService real: `maybeEnqueue` desde el hilo principal + `run()` en el thread de la clase): **5/5 OK** — modelo disponible; pista de 920 s no se encola (tope 900 s); `maybeEnqueue` sin deadlock (127 ms); separación completa (Ready) en 106 s para el MP3 real de 72 s del usuario (~0.54× rt; ruteo correcto: voiceover → vocals); cache-hit = Ready inmediato en segunda corrida; **salida limpia exit 0** (sin crash de teardown).
+- Hallazgo adicional (sin impacto): ORT no garantiza bit-exactitud entre corridas de este grafo incluso con `session.deterministic_compute` (con audio real diverge hasta ~1e-1; irrelevante porque cada pista se separa una vez por firma y queda cacheada). El banco `onnx_bench` verifica ahora equivalencia perceptual (RMS por stem dentro de 2 %).
+- Release relanzada (PID 38372).
+
+### Corrección P23c (bug del usuario): el badge SEP/STEMS nunca aparece en la biblioteca
+- **Diagnóstico con evidencia de disco**: el caché SÍ funciona (`~/Library/DiscNativePro/library_cache.json` — ahí resuelve JUCE `userApplicationDataDirectory` en esta máquina, con 4214 pistas) y tenía la pista en curso como `processing`. La separación también corría (dir de firma + ~70 % CPU). El badge se pinta en el `paint()` de cada fila leyendo `getStemsStatus()`, pero **nadie repinta la tabla cuando el estado cambia**: el timer de `LibraryComponent` solo repintaba si otro evento marcaba `tableNeedsRepaint` y luego se apagaba.
+- **Fix**: `LibraryCacheManager::hasStemsJobInProgress()` (scan del caché por "processing") + timer permanente de 1 s en `LibraryComponent` que repinta mientras haya separaciones en curso, con latch para una pasada final al completarse la última.
+- Nota de flujo (por diseño P22): los stems se adjuntan al deck **al cargar**; si la pista aún no estaba lista, hay que volver a cargarla (badge ya verde) para que aparezca la fila de stems.
+
+### Corrección P23d (preventiva): crash potencial al cerrar la app después de separar
+- Los bancos mostraron que `exit()` con la sesión ORT **usada** y sin liberar aborta en el teardown estático (`__cxa_finalize → std::terminate`; con sesión creada pero nunca usada, sale limpio). La app real (que ejecuta Run) crashearía al cerrar con Cmd+Q tras separar.
+- **Fix**: `OnnxStemEngine::shutdown()` (Release Session/Options/Env en contexto vivo, idempotente) + `StemSeparationService::shutdown()` (stopThread 5 s → engine->shutdown()) llamado primero en `DiscNativeProApplication::shutdown()` (`src/Main.cpp`). El humo C ya había probado que liberar en contexto vivo tras un Run sale limpio (exit 0).
+- El caso de regresión del banco quedó pendiente de re-correr sin contención de CPU (falló por correr simultáneamente con la app separando; el fallo fue de tiempo, no del fix).
+
+## P23e — Badge SEP/STEMS en la tabla principal (faltaba por completo)
+
+**Síntoma**: el usuario no veía ningún badge en la library al cargar/separar una pista.
+
+**Causa real**: el badge SEP/STEMS (P22) se había implementado solo dentro de
+`AutomixQueueView::RowItem::paint` (la cola de Automix del panel derecho). El
+`paintCell` de la tabla principal (`LibraryComponent::paintCell`) no lo dibujaba
+en ninguna columna — por eso la library nunca lo mostraba.
+
+**Fix** ([src/ui/LibraryComponent.cpp](src/ui/LibraryComponent.cpp), `paintCell` case 3 "Título"):
+- Se dibuja la pill SEP/STEMS (ámbar/verde, mismo estilo que la cola de Automix)
+  reservando 46 px a la derecha de la celda de título, para no pisar el texto.
+- Se lee `LibraryCacheManager::getStemsStatus(track.file)` en cada paint; el
+  polling de 1 s de P23c (con `hasStemsJobInProgress` + latch) se encarga de
+  repintar la tabla mientras una separación está en curso.
+
+**Validación visual**: captura `--snapshot` de la app → fila de Queen
+("Don't Stop Me Now", caché `ready`) muestra la pill STEMS verde en la columna
+TÍTULO; las demás filas sin stems no la muestran.
+
+**Nota incidental**: al relanzar la app desde terminal, `AIService::migrateLegacySecrets()`
+(`SecItemCopyMatching`) puede bloquear el arranque esperando el diálogo de
+Keychain de macOS — aceptar el diálogo ("Permitir") destraba el startup. No es
+una regresión de P23.
+
+## P23f — Stems se adoptan al vuelo si la separación termina después de la carga
+
+**Síntoma**: el usuario carga una pista a una bandeja mientras se está separando;
+la separación termina (badge STEMS verde en la library), pero la bandeja nunca
+muestra la fila de stems hasta re-cargar la pista manualmente.
+
+**Causa**: diseño de P22 — los stems se adjuntan al DeckPlayer solo en el
+momento de `loadFile`. Si `stemsDirFor()` daba vacío en ese instante (aún no
+había WAVs), la pista quedaba sin stems para toda la sesión de carga.
+
+**Fix**:
+- [src/audio/DeckPlayer.h](src/audio/DeckPlayer.h) / [src/audio/DeckPlayer.cpp](src/audio/DeckPlayer.cpp):
+  nuevo `tryAttachStemsIfReady()` — si la pista está cargada, no tiene stems,
+  dura ≤ 900 s y los 4 WAVs ya existen en disco, setea `stemsReady` y lanza
+  `startStemsLoad()` (mismo camino que la carga).
+- [src/ui/DeckComponent.cpp](src/ui/DeckComponent.cpp): el timer (60 Hz) lo
+  invoca con throttle de 1 s solo mientras la pista cargada no tenga stems.
+  La fila aparece sola vía el chequeo existente `isStemsReady() != stemsRowShown`.
+
+**Verificación**: banco headless `/tmp/deck_bench` con el DeckPlayer real + el
+archivo de Queen → `loadFile=1 ready=1 inRam=1` (el camino de carga adjunta y
+carga los buffers a RAM correctamente). Build 0/0 y app relanzada.
+
+## P24 — CoreML EP para acelerar la separación de stems
+
+**Objetivo**: acortar el tiempo de separación htdemucs (CPU ~1x realtime)
+usando el Execution Provider de CoreML (ANE) ya compilado en la dylib
+vendorizada de ONNX Runtime 1.22.
+
+**Diagnóstico (banco A/B `/tmp/coreml_ab` + probe de 1 chunk `/tmp/coreml_probe`)**:
+1. El append del EP fallaba en silencio: `MLComputeUnits: "MLComputeUnitsAll"`
+   es un valor inválido (los válidos son case-sensitive: `ALL`, `CPUOnly`,
+   `CPUAndGPU`, `CPUAndNeuralEngine`); un valor inválido invalida TODO el
+   append y la sesión queda en CPU puro → A/B inicial daba 1.01x.
+2. Con la conversión default (NeuralNetwork) CoreML produce **NaN** con
+   htdemucs → separación en silencio.
+3. Con `ModelFormat=MLProgram` + `RequireStaticInputShapes=1` la salida es
+   **bit-idéntica a CPU** (rel=0.0000 en los 4 stems), pero `MLComputeUnits=ALL`
+   (con GPU) es **2x más lento** que CPU puro (~7 s/chunk vs ~3.5 s/chunk):
+   las 449 nodos que quedan en CPU + copias entre particiones se comen la
+   ganancia de la GPU.
+4. Config ganadora: `MLComputeUnits=CPUAndNeuralEngine` → 2.66 s/chunk vs
+   3.57 s/chunk CPU (1.34x estable en 5 chunks).
+
+**Cambios**:
+- [MODIFY] [src/services/OnnxStemEngine.h](src/services/OnnxStemEngine.h):
+  `init(error, preferCoreML=true)` — `false` fuerza CPU puro (banco A/B).
+- [MODIFY] [src/services/OnnxStemEngine.cpp](src/services/OnnxStemEngine.cpp):
+  append del EP CoreML por API v2 con `{ MLComputeUnits: "CPUAndNeuralEngine",
+  ModelFormat: "MLProgram", RequireStaticInputShapes: "1", ModelCacheDirectory:
+  .../coreml_cache/htdemucs_fp32-<size>-cane }`; si el append falla, fallback
+  silencioso a CPU. Caché persistente de la conversión (~40 s y ~600 MB la
+  primera vez; el sufijo `-cane` distingue la config para no reutilizar
+  conversiones de otra MLComputeUnits).
+
+**Verificación (A/B, extracto de 72 s, tiempo de pared)**:
+- CoreML: init=40 s (conversión única) separate=57 s; CPU: init=1 s separate=69 s
+  → **speedup 1.22x**; RMS de los 4 stems rel=0.0000 (AB OK).
+- Con caché caliente el init baja (la conversión no se repite entre launches).
+- Build 0/0 y app relanzada (Release, PID verificado).
+
+## P25 Fase B — TwoStemEngine (STFT/ISTFT streaming + CoreML)
+
+**Objetivo**: motor de separación 2-stem (vocals/instrumental) en streaming,
+numéricamente equivalente al pipeline offline del Gate 0 y a ≥3x realtime.
+
+**Resultados (banco `/tmp/p25_bench`, mix180.wav 180 s vs referencia de
+`/tmp/p25_gate0`, excluyendo 8192 muestras de borde por la normalización OLA
+en los extremos y el clipping int16 de la referencia)**:
+- Vocals: **err rel 0.0012, corr 1.0000**. Instrumental: **err rel 0.0004,
+  corr 1.0000** — equivalencia numérica con el pipeline offline lograda.
+- Velocidad: **18.35x realtime** (9.8 s de pared para 180 s de audio) con
+  CoreML/ANE — supera el criterio GO de ≥3x por 6x.
+- Latencia de streaming: 136192 muestras (~3.1 s a 44.1 kHz).
+
+**Cambios**:
+- [MODIFY] [src/services/TwoStemEngine.cpp](src/services/TwoStemEngine.cpp):
+  guard `flushDone` en `flush()` (evita re-procesar en llamadas repetidas;
+  reset() lo limpia); cache de CoreML movido a
+  `~/Library/Caches/DiscNativePro/coreml_cache/…` — el EP de CoreML se rompe
+  con espacios en el path (Application Support los tiene: conversión rota y
+  ejecución basura); hilos intra/inter-op re-activados (sin efecto negativo
+  en CoreML).
+- [MODIFY] [src/services/OnnxStemEngine.cpp](src/services/OnnxStemEngine.cpp):
+  mismo fix de cache sin espacios para el EP CoreML de htdemucs.
+- [MODIFY] [CMakeLists.txt](CMakeLists.txt): el bundle ahora empaqueta
+  `libonnxruntime-wheel-1.27.0.dylib` (la 1.22 no soporta bien CoreML con
+  este modelo y la 1.27 C oficial tiene un bug de ejecución; la del wheel de
+  Python 1.27.0 es la que funciona). Headers 1.27 vendorizados en
+  `third_party/onnxruntime/macos/include` (reemplazan los 1.22).
+
+**Diagnóstico clave de la sesión**: el presunto "output en cero con CoreML"
+era un artefacto de prueba — los primeros 12 s del track de referencia son un
+intro instrumental (vocals rms 0.0003); comparando la pista completa de 180 s
+el motor coincide con la referencia (ver arriba). Además se descubrió que la
+dylib oficial C 1.27.0 falla al ejecutar el modelo MDX ("Feature
+Conv_177_cast_to_output…") mientras la dylib del wheel de Python 1.27.0
+funciona perfectamente (21x en Python, 18.35x en C++).
+
+**Verificación**:
+- Banco streaming 180 s: calidad + velocidad arriba. Con hilos activados los
+  números son idénticos.
+- Smoke de regresión htdemucs (`/tmp/p25_bench/tests/htd_smoke.cpp`) con la
+  dylib wheel 1.27 + cache sin espacios: 4 stems OK (vocals rms 0.041 en
+  extracto con voces), 21 s de pared para 12 s de audio con caché CoreML
+  caliente.
+- Build 0/0 y app relanzada (Release, PID verificado), con la dylib 1.27 en
+  `Contents/Frameworks`.
+
+## P25 Fase C — Streaming 2-stem en DeckPlayer
+
+**Objetivo**: el modelo corre durante la reproducción, adelantado al cursor;
+los stems aparecen progresivamente y el usuario puede mutar la voz en los
+primeros segundos de la pista (el dolor original: "en canciones de 3 minutos
+ya se termina la canción y todavía siguen cargando").
+
+**Arquitectura** ([src/audio/DeckPlayer.cpp](src/audio/DeckPlayer.cpp),
+[src/audio/DeckPlayer.h](src/audio/DeckPlayer.h)):
+- Worker dedicado por deck (`juce::ThreadPool{1}` + `TwoStemEngine`
+  persistente, declarado ANTES del pool para que la destrucción inversa
+  termine el job antes de destruir el engine). Alimenta el modelo con el
+  archivo completo (reader propio; el archivo no es thread-safe) manteniendo
+  ~8 s de adelanto sobre el cursor.
+- Anillo lock-free preasignado (2 buffers voc/inst, 20 s a 44.1 kHz, ~7 MB por
+  deck). Origen/extremo de escritura publicados con atómicos DESPUÉS de
+  escribir (`s2Origin44`/`s2WriteEnd44`); el callback solo lee tramos
+  publicados.
+- El callback (misma matemática de cursor que P22: delta del bufferingSource,
+  latencia del stretcher, avance por muestra) mezcla VOC/INST desde el anillo
+  con `stemGain[0]/[1]` y mutea el original cuando el bloque está cubierto;
+  si no, la mezcla original sigue sonando sin cortes (degradación elegante).
+- Seek fuera de cobertura: `setPosition` publica `s2SeekGen/s2SeekTarget44`;
+  el worker re-siembra (`engine.reset()`, origin=destino). El flush del final
+  de pista se drena siempre aunque supere la ventana de adelanto.
+- Sin `alloc` ni locks nuevos en el callback de audio; `juce::Thread::sleep`
+  solo en el worker.
+- Exclusión mutua con P22: si el dir de 4-stem está listo, el modo RAM de
+  P22 gana; el streaming solo se activa si no hay 4-stem.
+
+**Banco** (`/tmp/p25_fasec`, DeckPlayer real + mix180.wav a pacing realtime,
+eventos anclados a `deck.getPosition()`): **PASS en todos los criterios**:
+- Primera cobertura: **0.59 s** de pared (con init CoreML caliente).
+- Re-cobertura tras seek a 100 s: **0.46 s** tras el seek.
+- Huecos silenciosos: 1/170 (el propio inicio silencioso del tema).
+- Cobertura 100 % en todas las fases: arranque, post-seek, tempo +6 %, A/B
+  de gains y cola.
+- Routing verificado contra las referencias del Gate 0: INST-only rms 0.09832
+  (ref ~0.098), VOC-only rms 0.00038 (ref ~0.0005 en ese tramo).
+
+**Lección del banco**: la primera versión medía con un contador de bloques
+propio en vez de la posición del deck — tras el seek todas las ventanas
+medían posiciones desplazadas y el contador sobrepasaba el final del tema
+(19 "huecos" falsos). Regla: en benches de transporte, anclar métricas y
+eventos a la posición real del deck.
+
+---
+
+## P25 Fase D — Caché en disco 2-stem, selector de modo, UI y MIDI
+
+**Objetivo**: que la segunda reproducción de un tema en modo rápido sea
+instantánea y sin modelo (la separación en vivo ya corrió una vez); además
+exponer el modo de stems ("Rápido"/"Completo") en Ajustes, reflejarlo en la
+UI del deck y remapear MIDI.
+
+**Caché en disco** ([src/audio/DeckPlayer.cpp](src/audio/DeckPlayer.cpp),
+[src/services/StemSeparationService.h](src/services/StemSeparationService.h)):
+- `StemSeparationService::stems2DirFor(file)` →
+  `~/Library/Application Support/DiscNativePro/stems2/<firma>/` con
+  `vocals.wav` + `instrumental.wav` (16-bit PCM 44.1 kHz). Firma idéntica a
+  la del caché 4-stem (path canónico + modTime + size), por lo que editar o
+  reemplazar el archivo invalida la caché.
+- El worker del deck, cuando el origen es 0 y no hubo re-seek, va anexando
+  lo emitido a `*.part.wav` (writers secuenciales creados al armar). Al
+  `allDone` resetea los writers, mueve los `.part` a los finales y publica
+  `stems2CacheDone`. Un seek (re-siembra) o el abandono del track mata los
+  temporales: la caché solo se escribe de corrido y completa.
+- **Carrera origen/play corregida**: el worker leía la posición del cursor
+  como origen y, si `play()` arrancaba antes, el armado salía con origin≠0 y
+  la caché nunca se escribía. Ahora `loadFile` pasa `startOrigin44` explícito
+  (0 en carga fresca); el worker nunca consulta `playbackPosSamples`.
+- Adopción: al cargar un tema, si existe el dir final,
+  `loadStems2Cache` carga ambos WAV a buffers RAM (`stems2CacheBuf`, requiere
+  44.1 kHz) y marca `stems2Engaged` **sin worker ni modelo**; el callback lee
+  por interpolación y cubre toda la pista (no hay re-seeks en modo caché).
+
+**Selector de modo** ([src/ui/SettingsModalComponent.cpp](src/ui/SettingsModalComponent.cpp)):
+- Combo nuevo en Ajustes: "Rápido — 2 stems en vivo (voz/instrumental)"
+  (default) / "Completo — 4 stems precalculados". Persistido como clave
+  `stemsMode` del JSON de settings; `DeckPlayer::loadStemsModeDefault` lo lee
+  al construir y `saveStemsModeDefault` lo escribe (recreando el stream para
+  truncar, FileOutputStream no trunca).
+
+**UI** ([src/ui/DeckComponent.cpp](src/ui/DeckComponent.cpp)): el maestro de
+stems usa `toggleStemsMaster` (4-stem si está listo, si no 2-stem); en modo
+2-stem la fila muestra VOC/INST y oculta DRM/BAS. La fila aparece también en
+modo streaming (`isStems2Engaged`).
+
+**MIDI** ([src/midi/MidiManager.cpp](src/midi/MidiManager.cpp)): `pad_stem`
+remapeado — maestro dispara `toggleStemsMaster`; en 2-stem, pads 0/1 togglean
+VOC/INST y pads 2/3 se ignoran.
+
+**Banco de caché** (`/tmp/p25_fasec cache`, dos pasadas sobre el mismo
+tema): **PASS** — pasada 1 reproduce ~180 s en tiempo real hasta que aparecen
+los finales (writers armados con origin=0 tras el fix); pasada 2 recarga el
+tema, adopta la caché sin modelo (`isStems2Cached && isStems2Engaged`),
+reproduce 40 s con cobertura faltante = 0 s, rms INST-only 0.054 (ref ~0.09
+en ese tramo de gains) y VOC-only 0.0009 (casi silencio). Diagnósticos
+temporales `STEMS2_DBG` retirados del código final.
+
+**Build**: `cmake --build build` 0 errores / 0 warnings; relanzamiento
+Release verificado (`pgrep` activo).
+
+---
+
+## P26 — Precálculo 4-stem de carpetas completas
+
+**Objetivo**: precalcular los 4 stems (htdemucs) de una carpeta entera o de
+toda la biblioteca, sin cargar cada pista al deck. La separación sigue siendo
+una pista por vez sobre la cola existente de `StemSeparationService`; solo
+cambia quién encola.
+
+**Cola en lote** ([src/services/StemSeparationService.cpp](src/services/StemSeparationService.cpp)):
+- `maybeEnqueue` ahora devuelve `bool` (true si encoló en esta llamada) y se
+  agregó `getQueueCount()` (tamaño de cola + pista en proceso) para la UI.
+- `enqueueBatchAsync(files, onDone)`: encola el lote en un hilo efímero
+  (`juce::Thread::launch`) porque cada `maybeEnqueue` lee la cabecera del
+  archivo para el límite de 900 s — en bibliotecas grandes bloquearía el
+  message thread. El total encolado vuelve por
+  `MessageManager::callAsync`. La dedupe (ready/queued/processing/failed) y
+  la política viven en `maybeEnqueue` como siempre.
+- Nota de diseño: la ruta del árbol lateral es **lógica**
+  ("Raíz / Subcarpeta"), no de filesystem — por eso el lote se arma desde
+  `allTracks`/caché y no escaneando carpetas (no hay `enqueueFolder`).
+
+**Gatillo 1 — menú contextual del árbol**
+([src/ui/FolderTreeComponent.cpp](src/ui/FolderTreeComponent.cpp),
+[src/ui/LibraryComponent.cpp](src/ui/LibraryComponent.cpp)):
+ítem "Separar 4 stems (carpeta)" junto a "Desincronizar"; callback
+`onPrecalcFolder` que mapea el subtree lógico (`t.folder == path` /
+`startsWith(path + " / ")` / `rootFolderPath == path`, mismas condiciones que
+`unsyncFolder`) y encola con `enqueueBatchAsync`. AlertWindow no bloqueante
+con "Encoladas para separar 4 stems: N" (o el porqué de 0).
+
+**Gatillo 2 — botón en Ajustes**
+([src/ui/SettingsModalComponent.cpp](src/ui/SettingsModalComponent.cpp)):
+"Precalcular biblioteca (4 stems)" debajo del combo de modo (sección Stems,
+pestaña General). Itera `LibraryCacheManager::getCachedTracks()` (nuevo
+accessor que expone toda la biblioteca indexada) y encola el lote. Mientras
+hay cola activa el botón se deshabilita con contador ("En cola: N pistas")
+y se reactiva al terminar el lote.
+
+**Build**: `cmake --build build` 0 errores / 0 warnings; relanzamiento
+Release verificado (`pgrep` activo).
+
+**Post-ship fixes P26** (mismo día): (1) el menú contextual del árbol estaba
+condicionado a `!row.isSystem` — con solo carpetas del sistema en el árbol
+("Todas las Pistas", "Descargas") el clic derecho no mostraba nada; ahora
+esas dos filas muestran "Separar 4 stems (carpeta)" (sin desincronizar), y
+"Todas las Pistas" encola la biblioteca entera. (2) Los menús contextuales
+usaban `withTargetComponent(this)` sin posición → JUCE anclaba el menú al
+bounds del componente (aparecía lejos del cursor); agregado
+`.withMousePosition()` en los 4 menús de contexto (árbol x3 + tabla de
+pistas). Lección: en JUCE, menú contextual = siempre `withMousePosition()`;
+`withTargetComponent` solo sirve para menús anclados a un botón concreto.
+
+## P26b — Lote de feedback de usuarios (target macOS, sample rate, YouTube, presets Mixxx)
+
+**Objetivo**: atender los 4 ítems de máxima prioridad del triage de feedback
+(18 reportes): binario "requires macOS 26.0", pitch/BPM errado con archivos
+44.1 kHz en dispositivo 48 kHz (y viceversa), fallos silenciosos de carga
+YouTube, y compatibilidad con controladoras vía presets de la comunidad Mixxx.
+
+### 1. Deployment target macOS (P26.1)
+- [CMakeLists.txt](CMakeLists.txt): `CMAKE_OSX_DEPLOYMENT_TARGET` fijo antes de
+  `project()`. Sin él, el target heredaba el macOS de la máquina que compila
+  (CI `macos-latest`) y el binario pedía macOS 26.0 (reportes de usuarios en
+  12.7.6 y 15.8.3). Cuidado con el cache: hay que reconfigurar con
+  `cmake -U CMAKE_OSX_DEPLOYMENT_TARGET build` una vez tras editar.
+- **Corrección sobre el plan**: el piso quedó en **14.0**, no 13.3, porque el
+  symlink actual `libonnxruntime.1.dylib` apunta al wheel 1.27.0 (minos 14.0,
+  cambio del mismo día de otro agente). Con 1.22.0 (minos 13.3) podría bajar a
+  13.3. Verificado con `vtool -show-build` → `minos 14.0`. macOS 12.7.6 sigue
+  sin soporte (el dylib de ONNX es el límite duro).
+
+### 2. Conversión fileRate→deviceRate (P26.2)
+El pipeline usaba el sample rate del dispositivo para toda la matemática
+(posición, scratch, M del stretcher, ratio del resampler), pero
+`BufferingAudioSource` lee en espacio de muestras del **archivo**. Con archivo
+44.1 kHz en dispositivo 48 kHz la pista corría ~8.8 % rápido (pitch y BPM
+errados, el reporte #6).
+- [DeckPlayer.h](src/audio/DeckPlayer.h) / [DeckPlayer.cpp](src/audio/DeckPlayer.cpp):
+  `rateFactor = origFileSampleRate / currentSampleRate` (atómico, actualizado
+  en `loadFile` y `prepareToPlay`) aplicado en: M de entrada del stretcher
+  (vía `StretchAdapter::setInputRateFactor`), ratio del resampler (keylock
+  off), cálculo de posición (`getPosition`, `applyPendingSeek`, slip, scratch
+  con `fileSr` para conversión posición↔muestras), y `startSec` de stems.
+- [StretchAdapter.h](src/audio/StretchAdapter.h) / [.cpp](src/audio/StretchAdapter.cpp):
+  `inputRateFactor` atómico multiplicado en `render()`.
+- Scratch: el anillo/ring y el slip siguen en samples de dispositivo; las
+  conversiones a posición de archivo usan `fileSr`. El rate del resampler se
+  clampa a [0.02, 4].
+
+### 3. Carga YouTube confiable (P26.3)
+- [YouTubeAudioDownloader.cpp](src/services/YouTubeAudioDownloader.cpp):
+  validación estricta de m4a (cabecera `ftyp` en byte 4) en caché y descarga;
+  dedupe — si el mismo video ya está descargándose se espera su resultado
+  (≤10 min) en vez de lanzar un segundo yt-dlp sobre el mismo `.part`;
+  archivo temporal único `<id>.p<ms>.m4a` + rename atómico; formato estricto
+  `ba[ext=m4a]/ba[ext=mp4]`; copia a Descargas también atómica (`.part`).
+- [DeckComponent.h](src/ui/DeckComponent.h) / [.cpp](src/ui/DeckComponent.cpp):
+  banner de error **persistente** (`loadErrorVisible`) — antes se escribía el
+  error después de apagar el banner de progreso y nadie lo veía; título/artist
+  solo se setean cuando la carga se confirma (adiós "título fantasma"); si
+  `loadFile` falla o la descarga falla: banner rojo + labels a "--" + jogWheel
+  neutro, limpiado al próximo intento de carga.
+
+### 4. Importador de presets Mixxx (P26.4) — GPL-safe
+Nada de Mixxx se vendoriza ni commitea: solo nombres de archivo + URLs
+(factual). El preset se descarga en runtime al app-data del usuario y se
+parsea con parser propio (el formato XML está documentado en la wiki de Mixxx).
+- [NEW] [MixxxPresetCatalog.h](src/services/MixxxPresetCatalog.h) /
+  [.cpp](src/services/MixxxPresetCatalog.cpp): manifiesto de ~70 presets
+  verificados contra `mixxxdj/mixxx@main` (`res/controllers/*.midi.xml`,
+  nombres reales, URL con escaping `%20`); matching tolerante por nombre
+  normalizado (sin espacios/guiones/case, gana el alias más largo — evita que
+  "DDJ-SB3" matchee el preset de "DDJ-SB"); descarga con `juce::URL`
+  (timeout 10 s, validación por contenido, archivo `.tmp` + rename).
+- [NEW] [MixxxMappingImporter.h](src/services/MixxxMappingImporter.h) /
+  [.cpp](src/services/MixxxMappingImporter.cpp): parse con `juce::XmlDocument`;
+  `status 0x91` → NoteOn canal 1 (etc.), `<script-binding/>` omitido y
+  contabilizado; crosswalk key+group → actionId (play/play_indicator/
+  play_stutter, cue_default/cue_gotoandplay, sync_enabled/beatsync, keylock,
+  rate, volume, pfl, gain, filterHigh/Mid/Low/filter, hotcue_1..4 activate/
+  enabled, beatjump_forward/backward, slip_mode, [Master] volume/crossfader/
+  headVolume). El deck sale del grupo `[ChannelN]` (no del canal MIDI);
+  presets de 4 decks se remapean a decks 1..2. Keys sin equivalente (loops,
+  flanger, script keys) quedan en el reporte sin importar.
+- [MidiMapping.h](src/midi/MidiMapping.h) / [.cpp](src/midi/MidiMapping.cpp):
+  `applyImportedBindings()` en lote con una sola persistencia JSON y un solo
+  `onMappingChanged`.
+- [MidiModalComponent.h](src/ui/MidiModalComponent.h) /
+  [.cpp](src/ui/MidiModalComponent.cpp): botón "Importar Mixxx" junto a
+  "Escanear". Detecta la controladora conectada (gana el match más largo del
+  catálogo), descarga en thread de fondo con `SafePointer`, y muestra el
+  reporte con crédito "Autor … (comunidad Mixxx)". Sin match o sin
+  controladora: FileChooser manual de cualquier `.midi.xml`.
+
+**Verificación**:
+- `cmake --build build`: 0 errores; 0 warnings en código propio (los warnings
+  restantes en rebuild completo son de fuentes vendorizadas de JUCE en
+  `_deps` — preexistentes en CI). kissfft (vendorizado, del lote stems) se
+  silencia por archivo con `set_source_files_properties(... COMPILE_OPTIONS "-w")`.
+- `vtool -show-build` → `minos 14.0`; warning de link ONNX 13.3/14.0 eliminado.
+- Presets reales descargados y verificados: Starlight es mayormente
+  script-binding (se omite con reporte — esperado); DDJ-200 mayormente
+  script; Mixtrack 2 / Hercules Mk4 son mapeos planos y ejercen el crosswalk.
+- Prueba end-to-end con controladora física conectada **pendiente de
+  validación por el usuario** (importar desde el modal MIDI, comprobar con el
+  monitor de actividad y reiniciar para verificar persistencia).
+- Relanzamiento Release verificado (`pgrep` activo tras `pkill`).
+
+**Fuera de alcance (pospuesto)**: script-bindings JS (shifts, jog-scratch,
+encoders, LEDs), backend HID, Traktor TSI, VDJ, hotcues borrado/persistencia,
+`.mp4` en whitelists, `.deb`, manual, hotplug MIDI.
+
+## P27 — Lote de feedback II (hotcues, DPI Windows, .deb Linux, feedback LED)
+
+**Objetivo**: 4 ítems de la lista de feedback (segundo lote aprobado por el
+usuario el 2026-11-12; soporte `.mp4` excluido por decisión explícita del
+usuario).
+
+### 1. Borrado y persistencia de hotcues (P27.1)
+- [LibraryCacheManager.h](src/services/LibraryCacheManager.h) /
+  [.cpp](src/services/LibraryCacheManager.cpp): `hotCues` (4 doubles, 0 =
+  vacío) en `CachedTrackMetadata`; `updateHotCues()` replica el patrón
+  updateGrid (lock + entrada mínima + dirty + autosave throttled 3 s); lectura
+  y escritura en el JSON de caché.
+- [DeckPlayer.cpp](src/audio/DeckPlayer.cpp): `loadFile` reaplica los hotcues
+  persistidos de la pista (si existen y caen dentro de la duración).
+- [DeckComponent.cpp](src/ui/DeckComponent.cpp): clic derecho sobre un pad →
+  menú "Borrar Hot Cue N"; todo cambio de hotcue persiste en la caché.
+- [NEW] [docs/manual_usuario.md](docs/manual_usuario.md): manual de usuario
+  completo en español; enlazado desde [README.md](README.md).
+
+### 2. Clamp de tamaño inicial de ventana (P27.2, DPI Windows)
+En Windows con scaling 125/150 %, el tamaño natural 1360×860 excede el área
+de trabajo lógica y la ventana abría recortada o sin barra accesible. JUCE 8
+ya es per-monitor DPI aware; el problema era solo el tamaño inicial.
+- [Main.cpp](src/Main.cpp): antes de `centreWithSize`, se acota al 92 % del
+  `userArea` del display primario (piso 900×600). Sin cambios de backend ni
+  escalado de fuentes — YAGNI.
+
+### 3. Paquete .deb para Linux (P27.3)
+- [CMakeLists.txt](CMakeLists.txt): bloque Linux-only — install del binario +
+  `libonnxruntime.so.1` en `/usr/lib/DiscNativePro` (RPATH `$ORIGIN:...`),
+  icono a hicolor 256×256 y desktop entry a share/applications; CPack DEB con
+  `CPACK_DEBIAN_PACKAGE_DEPENDS` (gtk3, webkit, alsa, jack, curl, X11...).
+- [NEW] [install/linux/discnativepro.desktop](install/linux/discnativepro.desktop).
+- [build-linux.yml](.github/workflows/build-linux.yml): `cpack -G DEB` + artifact;
+  [release.yml](.github/workflows/release.yml): publica el `.deb`. También se
+  corrigió el tar.gz para incluir `libonnxruntime.so*` (antes quedaba afuera
+  de `dist/`).
+- Nota preexistente: `third_party/onnxruntime` sigue sin trackearse en git; el
+  job de CI que linkea el dylib/so requiere que se suba (decisión del repo,
+  fuera de alcance de este lote).
+
+### 4. Feedback LED de controladoras (P27.4)
+Follower centralizado: toda la iluminación de la controladora sale de un solo
+lugar (timer 40 Hz de MidiManager) con envío por **diff** — solo transiciones
+de estado, nunca spam.
+- [MixxxMappingImporter.h](src/services/MixxxMappingImporter.h) /
+  [.cpp](src/services/MixxxMappingImporter.cpp): parse del contenedor
+  `<outputs>` de los presets Mixxx (mismo status/midino + crosswalk) →
+  `outputBindings` / `outputsImported` en el reporte.
+- [MidiMapping.h](src/midi/MidiMapping.h) / [.cpp](src/midi/MidiMapping.cpp):
+  `applyImportedOutputBindings()`, `findOutputBinding()` y persistencia del
+  array `"outputs"` en `midi_mapping.json`.
+- [MidiModalComponent.cpp](src/ui/MidiModalComponent.cpp): la importación
+  aplica también las salidas y las cuenta en el reporte ("N salidas (LED)
+  importadas").
+- [MidiManager.h](src/midi/MidiManager.h) / [.cpp](src/midi/MidiManager.cpp):
+  `setLedStateProvider()` + `updateLeds()` en `timerCallback`; `ledsDirty` se
+  setea al (re)abrir la salida MIDI para reenviar el estado completo. Si hay
+  binding de `<outputs>` se usa ese mensaje; si no, el binding de entrada de
+  la acción (learn/manual/default). Acciones LED: play, cue (PFL), keylock,
+  slip, hotcues 1-4 y stems master de ambos decks.
+- [MainComponent.cpp](src/ui/MainComponent.cpp): proveedor de estado consulta
+  `audioEngine` (isPlaying/isCue/isKeylock/isSlipEnabled/hasHotCue/
+  isStemsMasterActive). Se **eliminaron** los envíos ad-hoc de LED que estaban
+  dispersos (onPlayPause/onCue en MainComponent; mixer_cue y note==84 en
+  MidiManager) — el follower es el único dueño de los LED.
+
+**Verificación**:
+- `cmake --build build`: **0 errores, 0 warnings** (se corrigieron 3 warnings
+  introducidos por este lote: int→float en Main.cpp, sign-conversion en
+  LibraryCacheManager.cpp y DeckComponent.cpp).
+- Relanzamiento Release verificado (`pgrep` activo tras `pkill`).
+- Prueba con controladora física (LED de play/cue/hotcues al importar preset
+  Mixxx con `<outputs>`) **pendiente de validación por el usuario**.
+
+## P28 — Hotplug MIDI + cuantizar hotcues al beatgrid
+
+**Objetivo**: cerrar los dos ítems de feedback de MIDI (elección del usuario
+2026-11-13): conectar/desconectar controladoras en caliente y hotcues
+alineados al grid corregido.
+
+### 1. Cuantizar hotcues (P28.1) + fix de interval file-time
+- [DeckPlayer.cpp](src/audio/DeckPlayer.cpp) `setHotCue()`: si la pista tiene
+  BPM real (`originalBpm > 0`), la posición se ajusta al beat más cercano del
+  grid del archivo con el `quantizedBeatPos()` existente, clamped a la
+  duración. Sin BPM → posición cruda (comportamiento anterior). Cubre pad de
+  UI y MIDI por igual; el borrado no cambia.
+- **Bug preexistente corregido (misma causa)**: tras el re-anclaje file-time
+  de P26b, `beatInterval()` seguía devolviendo `60 / currentBpm` (BPM
+  ajustado por pitch) contra posiciones en tiempo de archivo. Con pitch ≠ 0,
+  beat jump y loop roll derivaban (4 beats a +8 % saltaban menos de 4 beats
+  reales del archivo). Ahora el intervalo del grid es `60 / originalBpm`
+  (file-time). Lo usan `jumpBeats()` y `startLoopRoll()`.
+- `getBeatPhase()` (ancla de los FX sincronizados al beat de P21) tenía la
+  misma inconsistencia (fase normalizada con interval con pitch sobre
+  posición file-time) — corregida a `originalBpm` también. Sin pitch activo
+  el comportamiento es idéntico (currentBpm == originalBpm).
+
+### 2. Hotplug MIDI (P28.2)
+- Causa raíz de que no hubiera hotplug: `rescanDevices()` llamaba a
+  `shutdown()`, que hace `stopTimer()` — el re-scan desde el propio timer
+  habría matado el MIDI.
+- [MidiManager.h](src/midi/MidiManager.h) / [.cpp](src/midi/MidiManager.cpp):
+  se extrae `disconnectAll()` (quita callbacks por identifier **registrado**
+  — antes se re-iteraba `getAvailableDevices()`, que ya no incluye los
+  dispositivos desconectados y dejaba callbacks colgantes — y cierra la
+  salida). `shutdown()` = `stopTimer() + disconnectAll()`.
+- Sondeo de diff cada 2 s en el timer 40 Hz existente (80 ticks):
+  `getAvailableDevices()` de entrada y salida contra el baseline
+  (`lastInputIds`/`lastOutputIds`, actualizado en cada rescan). Si cambió →
+  `rescanDevices()`, que reabre la salida y setea `ledsDirty` → el follower
+  LED de P27 reenvía el estado completo automáticamente al reconectar.
+- Sin notificación nativa por plataforma (YAGNI): el polling de 2 s cumple.
+
+**Verificación**:
+- `cmake --build build`: **0 errores, 0 warnings**.
+- Relanzamiento Release verificado (`pgrep` activo tras `pkill`).
+- Pendiente de validación del usuario: hotcue entre dos beats queda en el
+  beat más cercano; beat jump/roll estable con pitch ≠ 0; desconectar y
+  reconectar la controladora USB con la app abierta sin reiniciar (LED
+  reenvían su estado al reconectar).
+
+## P29 — Importador de mappings VirtualDJ
+
+**Objetivo**: importar mappings de VirtualDJ (decisión del usuario 2026-11-13:
+**solo VDJ**; Traktor TSI queda en backlog por ser un formato binario base64
+con spec no oficial incompleta). Entrada por FileChooser manual (VDJ no tiene
+presets en URL estable).
+
+### Hallazgo previo importante
+`MidiModalComponent` **no se instancia en ninguna parte** (Settings tiene su
+propia pestaña MIDI): el botón "Importar Mixxx" de P26b era inalcanzable. Los
+botones de importación viven ahora en **Settings → MIDI** (fila de la lista
+de dispositivos): "Importar Mixxx" (portado con catálogo + descarga bg) y
+"Importar VDJ" (nuevo). `MidiModalComponent` se deja intacto (componente
+muerto histórico, sin tocarlo para no romper nada del agente concurrente).
+
+### 1. VdjMappingImporter (P29.1)
+- [NEW] [VdjMappingImporter.h](src/services/VdjMappingImporter.h) /
+  [.cpp](src/services/VdjMappingImporter.cpp): `importFiles(definition,
+  mapper)`. El definition (VDJPedia ControllerDefinitionMIDI) traduce nombres
+  abstractos a MIDI: `button/toggle` note→NoteOn (o cc→CC), `slider/jog/
+  encoder` cc/note/pitch, `led/color` → salidas (LED). Canales VDJ 0-based →
+  +1. El mapper (`<mapper device><map value action>`) cruza nombre → acción
+  VDJ → actionId: play_button/play_pause/play_stutter, cue_stop/cue_button/
+  cue/cup, sync/beatmatch, keylock/master_tempo, pitch, level/volume,
+  crossfader, EQ low/mid/high, filter, gain, pfl, load_song, loop_roll,
+  hotcue 1-4, goto/beatjump con signo. Deck: prefijo `deck N|left|right` del
+  mapper, si no el atributo deck del definition; clamp 1-2. Lo desconocido se
+  lista en el reporte (`unknownActions`); los nombres sin definition se
+  contabilizan (`controlsWithoutDefinition`).
+- [CMakeLists.txt](CMakeLists.txt): fuentes nuevas agregadas.
+
+### 2. Settings → MIDI (P29.2)
+- [SettingsModalComponent.h](src/ui/SettingsModalComponent.h) /
+  [.cpp](src/ui/SettingsModalComponent.cpp): `midiImportMixxxBtn` +
+  `midiImportVdjBtn` en la fila de dispositivos (layout ajustado, header
+  220px); `importMixxxPreset()` portado desde el componente muerto (detección
+  de controladora → catálogo → descarga bg con SafePointer → reporte;
+  fallback FileChooser) y `importVdjMapping()` nuevo (FileChooser del mapper
+  → FileChooser del definition → importación → reporte). Helper compartido
+  `showMappingImportResult` (éxito/error, contadores, lista de omitidos).
+- Textos con `refreshLanguage`, visibilidad en `updateTabVisibility`.
+
+**Verificación**:
+- `cmake --build build`: **0 errores, 0 warnings**.
+- Harness standalone (flags de juceaide, juce_core + juce_audio_basics) contra
+  definition/mapper de prueba con la estructura exacta de VDJPedia — **PASS**:
+  `imported=6, outputsImported=1, controlsWithoutDefinition=1, unknownActions=1`.
+  Validado en el reporte: `deck right play`→`deck2_play` (NoteOn ch2 n19),
+  `deck 1 EQ LOW`→`eq_low_d1` (CC 0x28), canal VDJ 8→ch 9 (pad hotcue),
+  `LED_PLAY1`→salida `deck1_play` (note 0x42); `browser_folder` quedó en
+  unknownActions y el control sin definition en controlsWithoutDefinition.
+- Pendiente de validación del usuario: importar un mapper+definition real de
+  VirtualDJ desde Documents/VirtualDJ (Mappers/Devices) y probar los mapeos
+  con la controladora.

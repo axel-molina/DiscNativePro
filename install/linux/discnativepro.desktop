@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=DiscNativePro
+GenericName=DJ Software
+Comment=Consola DJ nativa con stems, FX sincronizados y controladoras MIDI
+Exec=DiscNativePro
+Icon=discnativepro
+Terminal=false
+Categories=AudioVideo;Audio;Mixer;Music;
+Keywords=dj;music;audio;midi;mixer;
+StartupWMClass=DiscNativePro

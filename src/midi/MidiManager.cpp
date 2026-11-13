@@ -19,17 +19,22 @@ void MidiManager::initialise()
 void MidiManager::shutdown()
 {
     stopTimer();
-    auto devices = juce::MidiInput::getAvailableDevices();
-    for (const auto& dev : devices)
-    {
-        engine.getDeviceManager().removeMidiInputDeviceCallback(dev.identifier, this);
-    }
+    disconnectAll();
+}
+
+// P28: desconexión sin stopTimer — rescanDevices() la usa desde el timer
+// (hotplug); antes shutdown() mataba el timer y el MIDI quedaba muerto.
+void MidiManager::disconnectAll()
+{
+    for (const auto& id : registeredInputIds)
+        engine.getDeviceManager().removeMidiInputDeviceCallback(id, this);
+    registeredInputIds.clear();
     midiOutput.reset();
 }
 
 void MidiManager::rescanDevices()
 {
-    shutdown();
+    disconnectAll();
 
     auto devices = juce::MidiInput::getAvailableDevices();
     connectedDevices.clear();
@@ -38,6 +43,7 @@ void MidiManager::rescanDevices()
     {
         engine.getDeviceManager().setMidiInputDeviceEnabled(dev.identifier, true);
         engine.getDeviceManager().addMidiInputDeviceCallback(dev.identifier, this);
+        registeredInputIds.add(dev.identifier);
         connectedDevices.add(dev.name);
     }
 
@@ -56,7 +62,18 @@ void MidiManager::rescanDevices()
         midiOutput = juce::MidiOutput::openDevice(outDevices[0].identifier);
     }
 
+    // P27: al (re)abrir una salida, reenviar el estado completo de los LEDs.
+    ledsDirty = true;
+
     deviceConnected = !connectedDevices.isEmpty();
+
+    // P28: baseline del diff de hotplug.
+    lastInputIds.clear();
+    for (const auto& dev : devices)
+        lastInputIds.add(dev.identifier);
+    lastOutputIds.clear();
+    for (const auto& outDev : outDevices)
+        lastOutputIds.add(outDev.identifier);
 
     if (onDevicesChanged)
         onDevicesChanged();
@@ -111,6 +128,91 @@ void MidiManager::timerCallback()
             }
         }
     }
+
+    updateLeds(); // P27: feedback LED por diff (25 Hz efectivos con los envíos reales)
+
+    // P28: hotplug — sondeo del diff de dispositivos cada ~2 s (40 Hz × 80).
+    if (++hotplugPollCount >= 80)
+    {
+        hotplugPollCount = 0;
+
+        bool changed = false;
+        const auto inDevices = juce::MidiInput::getAvailableDevices();
+        if (inDevices.size() != lastInputIds.size())
+        {
+            changed = true;
+        }
+        else
+        {
+            for (int i = 0; i < inDevices.size(); ++i)
+                if (inDevices[i].identifier != lastInputIds[i]) { changed = true; break; }
+        }
+
+        const auto outDevices = juce::MidiOutput::getAvailableDevices();
+        if (!changed)
+        {
+            if (outDevices.size() != lastOutputIds.size())
+                changed = true;
+            else
+                for (int i = 0; i < outDevices.size(); ++i)
+                    if (outDevices[i].identifier != lastOutputIds[i]) { changed = true; break; }
+        }
+
+        if (changed)
+            rescanDevices(); // no detiene el timer (usa disconnectAll)
+    }
+}
+
+// P27: follower de LED. Para cada acción con estado binario consulta el
+// proveedor (MainComponent → decks/mezclador) y envía NoteOn vel 127 / 0
+// únicamente cuando el estado cambia. El mensaje de salida sale del binding
+// de <outputs> importado (Mixxx) si existe; si no, del binding de entrada
+// de la acción (learn/manual/default).
+void MidiManager::updateLeds()
+{
+    if (midiOutput == nullptr || !ledStateProvider)
+        return;
+
+    static constexpr const char* kLedActions[] = {
+        "deck1_play", "deck2_play",
+        "mixer_cue_d1", "mixer_cue_d2",
+        "deck1_range", "deck2_range",
+        "pad_slip_d1", "pad_slip_d2",
+        "pad_hotcue1_d1", "pad_hotcue2_d1", "pad_hotcue3_d1", "pad_hotcue4_d1",
+        "pad_hotcue1_d2", "pad_hotcue2_d2", "pad_hotcue3_d2", "pad_hotcue4_d2",
+        "pad_stems_active_d1", "pad_stems_active_d2"
+    };
+
+    for (const auto* id : kLedActions)
+    {
+        const juce::String actionId(id);
+        const bool state = ledStateProvider(actionId);
+
+        auto it = ledLastState.find(actionId);
+        if (!ledsDirty && it != ledLastState.end() && it->second == state)
+            continue;
+
+        const MidiBinding* outBinding = mappingManager.findOutputBinding(actionId);
+        if (outBinding == nullptr)
+        {
+            if (const auto* def = mappingManager.findAction(actionId))
+                outBinding = &def->binding;
+        }
+
+        if (outBinding != nullptr && outBinding->type == MidiMessageType::NoteOn && outBinding->channel > 0)
+        {
+            const int ch = outBinding->channel;
+            const int note = outBinding->number;
+            if (state)
+                sendMidiMessage(juce::MidiMessage::noteOn(ch, note, (juce::uint8)127));
+            else
+                sendMidiMessage(juce::MidiMessage::noteOff(ch, note));
+        }
+
+        ledLastState[actionId] = state;
+    }
+
+    ledsDirty = false;
 }
 
 void MidiManager::handleJogWheel(int deckIndex, int cc, int val)
@@ -222,6 +324,17 @@ bool MidiManager::dispatchMappedAction(const MidiActionDefinition& def, const ju
             return true;
         }
     }
+    else if (id == "deck1_keyshift_up" || id == "deck1_keyshift_down" || id == "deck1_keyshift_reset")
+    {
+        if (message.isNoteOn())
+        {
+            auto& d1 = engine.getDeck(0);
+            if (id.endsWith("up"))          d1.setKeyShiftSemitones(d1.getKeyShiftSemitones() + 1);
+            else if (id.endsWith("down"))   d1.setKeyShiftSemitones(d1.getKeyShiftSemitones() - 1);
+            else                            d1.setKeyShiftSemitones(0);
+            return true;
+        }
+    }
     else if (id == "deck1_tempo")
     {
         auto& d1 = engine.getDeck(0);
@@ -290,6 +403,17 @@ bool MidiManager::dispatchMappedAction(const MidiActionDefinition& def, const ju
             return true;
         }
     }
+    else if (id == "deck2_keyshift_up" || id == "deck2_keyshift_down" || id == "deck2_keyshift_reset")
+    {
+        if (message.isNoteOn())
+        {
+            auto& d2 = engine.getDeck(1);
+            if (id.endsWith("up"))          d2.setKeyShiftSemitones(d2.getKeyShiftSemitones() + 1);
+            else if (id.endsWith("down"))   d2.setKeyShiftSemitones(d2.getKeyShiftSemitones() - 1);
+            else                            d2.setKeyShiftSemitones(0);
+            return true;
+        }
+    }
     else if (id == "deck2_tempo")
     {
         auto& d2 = engine.getDeck(1);
@@ -348,8 +472,7 @@ bool MidiManager::dispatchMappedAction(const MidiActionDefinition& def, const ju
         {
             bool s = !engine.getMixer().getChannel(0).isCue();
             engine.getMixer().getChannel(0).setCue(s);
-            sendMidiMessage(juce::MidiMessage::noteOn(message.getChannel(), message.getNoteNumber(), (juce::uint8)(s ? 127 : 0)));
-            return true;
+            return true; // P27: el LED lo envía el follower
         }
     }
     else if (id == "mixer_cue_d2")
@@ -358,8 +481,7 @@ bool MidiManager::dispatchMappedAction(const MidiActionDefinition& def, const ju
         {
             bool s = !engine.getMixer().getChannel(1).isCue();
             engine.getMixer().getChannel(1).setCue(s);
-            sendMidiMessage(juce::MidiMessage::noteOn(message.getChannel(), message.getNoteNumber(), (juce::uint8)(s ? 127 : 0)));
-            return true;
+            return true; // P27: el LED lo envía el follower
         }
     }
 
@@ -420,6 +542,64 @@ bool MidiManager::dispatchMappedAction(const MidiActionDefinition& def, const ju
             auto& d = engine.getDeck(deck);
             if (d.hasHotCue(padIdx)) d.jumpToHotCue(padIdx);
             else d.setHotCue(padIdx, d.getPosition());
+            return true;
+        }
+    }
+
+    // P15: Performance (beat jump / loop roll / slip). Tocan componentes de UI
+    // (size selector, SLIP), así que la acción se ejecuta en el hilo de mensajes.
+    else if (id.startsWith("pad_jumpback") || id.startsWith("pad_jumpfwd")
+          || id.startsWith("pad_roll") || id.startsWith("pad_slip"))
+    {
+        const int deckIdx = id.endsWith("_d1") ? 0 : 1;
+        juce::String action;
+        if (id.contains("jumpback"))      action = "jump_back";
+        else if (id.contains("jumpfwd"))  action = "jump_fwd";
+        else if (id.contains("roll"))     action = "roll";
+        else                              action = "slip";
+
+        // Release: note-off explícito o note-on con velocidad 0 (pads comunes).
+        const bool pressed  = message.isNoteOn();
+        const bool released = message.isNoteOff(true) && !pressed;
+
+        if (action == "roll")
+        {
+            if (pressed && onPerformanceAction)
+                juce::MessageManager::callAsync([this, deckIdx]() { if (onPerformanceAction) onPerformanceAction(deckIdx, "roll_start"); });
+            else if (released && onPerformanceAction)
+                juce::MessageManager::callAsync([this, deckIdx]() { if (onPerformanceAction) onPerformanceAction(deckIdx, "roll_release"); });
+            return true;
+        }
+
+        if (pressed && onPerformanceAction)
+            juce::MessageManager::callAsync([this, deckIdx, action]() { if (onPerformanceAction) onPerformanceAction(deckIdx, action); });
+        return true;
+    }
+
+    // P22: Stems (toggle binario de ganancia por stem + master on/off)
+    else if (id.startsWith("pad_stem"))
+    {
+        if (message.isNoteOn())
+        {
+            const int deckIdx = id.endsWith("_d1") ? 0 : 1;
+            auto& d = engine.getDeck(deckIdx);
+            if (id.contains("stems_active"))
+            {
+                d.toggleStemsMaster();
+            }
+            else
+            {
+                const int stem = id.contains("vocals") ? 0
+                               : id.contains("drums") ? 1
+                               : id.contains("bass") ? 2 : 3;
+                // P25: en modo 2-stem (VOC/INST) drums mapea a INST y
+                // bass/other no tienen target (el 4-stem no está cargado).
+                const bool twoStem = d.isStems2Engaged() && !d.isStemsReady();
+                if (twoStem && stem >= 2)
+                    return true;
+                const float g = d.getStemGain(stem);
+                d.setStemGain(stem, g > 0.5f ? 0.0f : 1.0f);
+            }
             return true;
         }
     }
@@ -837,8 +1017,7 @@ void MidiManager::handleIncomingMidiMessage(juce::MidiInput* /*source*/, const j
             {
                 bool newState = !engine.getMixer().getChannel(0).isCue();
                 engine.getMixer().getChannel(0).setCue(newState);
-                sendMidiMessage(juce::MidiMessage::noteOn(1, 84, (juce::uint8)(newState ? 127 : 0)));
-                return;
+                return; // P27: el LED lo envía el follower
             }
             if (note == 88) // Sync Deck 1
             {
@@ -899,8 +1078,7 @@ void MidiManager::handleIncomingMidiMessage(juce::MidiInput* /*source*/, const j
             {
                 bool newState = !engine.getMixer().getChannel(1).isCue();
                 engine.getMixer().getChannel(1).setCue(newState);
-                sendMidiMessage(juce::MidiMessage::noteOn(2, 84, (juce::uint8)(newState ? 127 : 0)));
-                return;
+                return; // P27: el LED lo envía el follower
             }
             if (note == 88) // Sync Deck 2
             {

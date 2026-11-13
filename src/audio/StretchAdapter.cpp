@@ -78,9 +78,20 @@ void StretchAdapter::render(juce::AudioSource* src, int srcChannels,
     if (src == nullptr || dst == nullptr || numSamples <= 0 || !prepared)
         return;
 
-    double rate = tempoRate.load();
+    // P26: el input llega en file-rate; para cubrir numSamples de salida a
+    // tempoRate de reproducción hay que consumir numSamples*tempoRate*factor.
+    double rate = tempoRate.load() * inputRateFactor.load();
     if (rate < 0.02) rate = 0.02;
     if (rate > 4.0)  rate = 4.0;
+
+    // Key Shift: solo toca el stretch cuando cambia (setTransposeFactor
+    // recalcula matrices; no es barato ni realtime-safe repetirlo por bloque).
+    const double st = transposeSemitones.load();
+    if (std::abs(st - appliedSemitones) > 1e-9)
+    {
+        stretch.setTransposeSemitones((float) st);
+        appliedSemitones = st;
+    }
 
     // P3: la entrada se consume con acumulador fraccionario. Con redondeo por
     // bloque, un pitchBend pequeno (< 1/(2*numSamples), ~0.1 % con 512 samples)

@@ -169,7 +169,7 @@ UsbLibraryView::UsbLibraryView(juce::AudioFormatManager& fm)
         updateSyncStatusLabel(totalFound, true, currentFolderName);
     };
 
-    asyncScanner->onScanFinished = [this](int totalFound, uint64_t /*scanId*/) {
+    asyncScanner->onScanFinished = [this](int /*totalFound*/, uint64_t /*scanId*/) {
         isSyncing = false;
         filterTracks(searchBox.getText());
         updateSyncStatusLabel((int)filteredUsbTracks.size(), false);

@@ -21,7 +21,6 @@ void FxSlot::prepare(double sampleRate, int blockSize)
     crushHoldCount = 0;
     crushHeldL = 0.0f;
     crushHeldR = 0.0f;
-    gateEnv = 0.0f;
 }
 
 void FxSlot::reset()
@@ -37,7 +36,6 @@ void FxSlot::reset()
     crushHoldCount = 0;
     crushHeldL = 0.0f;
     crushHeldR = 0.0f;
-    gateEnv = 0.0f;
 }
 
 void FxSlot::process(juce::AudioBuffer<float>& buffer,
@@ -69,23 +67,10 @@ void FxSlot::process(juce::AudioBuffer<float>& buffer,
     {
         case FxType::Echo:
         {
-            float delaySec = 0.25f;
-            if (currentBpm > 30.0)
-            {
-                float beatSec = static_cast<float>(60.0 / currentBpm);
-                if (param < 0.25f)
-                    delaySec = beatSec * 0.25f;       // 1/4 beat
-                else if (param < 0.50f)
-                    delaySec = beatSec * 0.50f;       // 1/2 beat
-                else if (param < 0.75f)
-                    delaySec = beatSec * 0.75f;       // 3/4 beat
-                else
-                    delaySec = beatSec * 1.0f;        // 1/1 beat
-            }
-            else
-            {
-                delaySec = 0.125f + param * 0.625f;
-            }
+            // P21: retardo = división de beat seleccionada (tabla de 5 divisiones)
+            static constexpr float divTable[] = { 0.25f, 0.5f, 0.75f, 1.0f, 2.0f };
+            float beatSec = (currentBpm > 30.0) ? static_cast<float>(60.0 / currentBpm) : 0.5f;
+            float delaySec = beatSec * divTable[juce::jlimit(0, 4, beatDivision.load())];
 
             int delaySamples = juce::jlimit(1, maxDelaySamples - 1, static_cast<int>(delaySec * sampleRate));
             float feedback = 0.48f;
@@ -188,22 +173,29 @@ void FxSlot::process(juce::AudioBuffer<float>& buffer,
 
         case FxType::Gate:
         {
-            // Rhythmic pattern gate synced to BPM or rate
-            double rateHz = (currentBpm > 30.0) ? (currentBpm / 60.0) * (param < 0.5f ? 2.0 : 4.0)
-                                                : (2.0 + param * 6.0);
-            double phaseStep = (rateHz * juce::MathConstants<double>::twoPi) / sampleRate;
+            // P21: pulso rítmico con período = división de beat; si hay fase de
+            // beat publicada por el deck, el ciclo queda anclado al downbeat.
+            static constexpr float divTable[] = { 0.25f, 0.5f, 0.75f, 1.0f, 2.0f };
+            const float div = divTable[juce::jlimit(0, 4, beatDivision.load())];
+            float beatSec = (currentBpm > 30.0) ? static_cast<float>(60.0 / currentBpm) : 0.5f;
+            double periodSec = static_cast<double>(beatSec) * div;
+            double phaseStep = 1.0 / (periodSec * sampleRate);
+
+            double phase = beatPhase.load();
+            bool anchored = (phase >= 0.0 && phase < 1.0);
+            double gatePhase = anchored ? phase / div : 0.0;
 
             auto* l = buffer.getWritePointer(0);
             auto* r = numChannels > 1 ? buffer.getWritePointer(1) : l;
 
             for (int i = 0; i < numSamples; ++i)
             {
-                gateEnv += static_cast<float>(phaseStep);
-                if (gateEnv >= juce::MathConstants<float>::twoPi)
-                    gateEnv -= juce::MathConstants<float>::twoPi;
+                gatePhase += phaseStep;
+                if (gatePhase >= 1.0)
+                    gatePhase -= std::floor(gatePhase);
 
                 // Square pulse with soft cosine transitions to eliminate clicks
-                float rawPulse = std::sin(gateEnv) > 0.0f ? 1.0f : 0.0f;
+                float rawPulse = std::sin(gatePhase * juce::MathConstants<double>::twoPi) > 0.0 ? 1.0f : 0.0f;
                 float mod = rawPulse * 0.95f + 0.05f;
 
                 l[i] *= mod;

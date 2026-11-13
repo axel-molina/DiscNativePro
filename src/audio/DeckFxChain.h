@@ -35,7 +35,12 @@ struct FxSlot
     std::atomic<int> type { static_cast<int>(FxType::Echo) };
     std::atomic<bool> enabled { false };
     std::atomic<float> wetDry { 0.5f };      // 0.0 to 1.0
-    std::atomic<float> parameter { 0.5f };   // Parameter (rhythmic div, rate, room size, etc.)
+    std::atomic<float> parameter { 0.5f };   // Parameter (rate, room size, etc.)
+
+    // P21: división rítmica para Echo/Gate (0=1/4, 1=1/2, 2=3/4, 3=1/1, 4=2/1)
+    std::atomic<int> beatDivision { 2 };
+    // Fase de beat del deck (0..1); -1.0 = sin anclaje (el mixer la publica por bloque)
+    std::atomic<double> beatPhase { -1.0 };
 
     // Circular delay buffer for Echo (pre-allocated up to 96000 samples)
     static constexpr int maxDelaySamples = 96000;
@@ -48,11 +53,10 @@ struct FxSlot
     juce::dsp::Chorus<float> chorus;
     juce::dsp::Phaser<float> phaser;
 
-    // BitCrusher & Gate states
+    // BitCrusher state
     int crushHoldCount { 0 };
     float crushHeldL { 0.0f };
     float crushHeldR { 0.0f };
-    float gateEnv { 0.0f };
 
     void prepare(double sampleRate, int blockSize);
     void reset();

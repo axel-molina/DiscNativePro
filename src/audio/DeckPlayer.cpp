@@ -2,8 +2,14 @@
 #include "BeatDetector.h"
 #include "KeyDetector.h"
 #include "StretchAdapter.h"
+#include "AudioEngine.h" // getSettingsFile (persistencia del modo de stems)
+#include "../services/LibraryCacheManager.h"
+#include "../services/StemSeparationService.h"
+#include "../services/TwoStemEngine.h"
 #include <juce_events/juce_events.h>
 #include <cmath>
+#include <cstdio>
+#include <cstdlib>
 #include <cstring>
 #include <vector>
 
@@ -40,6 +46,8 @@ DeckPlayer::DeckPlayer(juce::AudioFormatManager& fm, juce::TimeSliceThread& thre
         hotCues[i].store(0.0);
         hotCuesActive[i].store(false);
     }
+    for (auto& g : stemGain)
+        g.store(1.0f);
     scratchRing.setSize(2, scratchRingSize);
     scratchRing.clear();
     scratchTail.setSize(2, scratchTailSize);
@@ -48,6 +56,7 @@ DeckPlayer::DeckPlayer(juce::AudioFormatManager& fm, juce::TimeSliceThread& thre
     seekPending.store(false);
     seekTargetSec.store(0.0);
     firstBeatOffsetSeconds.store(0.0);
+    stemsPrecompute4.store(loadStemsModeDefault());
 }
 DeckPlayer::~DeckPlayer()
 {
@@ -56,6 +65,10 @@ DeckPlayer::~DeckPlayer()
     // publicaciones diferidas, así que la bandera basta como barrera.
     if (analysis != nullptr)
         analysis->alive.store(false);
+
+    // El job del pool chequea esta bandera cada pasada (≤ 25 ms + una llamada
+    // al motor ~0.35 s); el destructor del pool espera su salida.
+    stems2Quit.store(true);
 
     releaseResources();
 }
@@ -99,6 +112,8 @@ bool DeckPlayer::loadFile(const juce::File& audioFile)
         double duration = (double)reader->lengthInSamples / reader->sampleRate;
         trackDurationSeconds.store(duration);
         cuePositionSeconds.store(0.0);
+        origFileSampleRate = reader->sampleRate > 0.0 ? (double)reader->sampleRate : 44100.0;
+        updateRateFactor();
 
         // P3 sobre P5: la pista nueva no hereda seek pendiente, fase ni
         // posicion de la anterior (el analisis llega despues y repone el offset).
@@ -106,6 +121,13 @@ bool DeckPlayer::loadFile(const juce::File& audioFile)
         seekTargetSec.store(0.0);
         playbackPosSamples.store(0);
         firstBeatOffsetSeconds.store(0.0);
+
+        // P16: el grid corregido de la pista anterior no se hereda (si la
+        // pista tenía corrección persistida, el llamante la reaplica después).
+        gridBpmOverride.store(0.0);
+        gridOffsetOverride.store(-1.0);
+        detectedBpm.store(0.0);
+        detectedOffsetSeconds.store(0.0);
 
         // Fase rápida: sin analizadores ni waveform. BPM/peaks quedan vacíos
         // hasta que el worker publique (la UI muestra "--" y el waveform se
@@ -121,6 +143,19 @@ bool DeckPlayer::loadFile(const juce::File& audioFile)
         {
             hotCues[i].store(0.0);
             hotCuesActive[i].store(false);
+        }
+        // P27: reaplicar hotcues persistidos por pista (0 = vacío).
+        CachedTrackMetadata meta;
+        if (LibraryCacheManager::getInstance().getTrack(audioFile, meta))
+        {
+            for (size_t i = 0; i < hotCues.size(); ++i)
+            {
+                if (meta.hotCues[i] > 0.0 && meta.hotCues[i] < duration)
+                {
+                    hotCues[i].store(meta.hotCues[i]);
+                    hotCuesActive[i].store(true);
+                }
+            }
         }
         loopActive.store(false);
 
@@ -153,7 +188,69 @@ bool DeckPlayer::loadFile(const juce::File& audioFile)
         stretcher->reset();
         updatePlaybackSpeed();
 
+        // P22: nueva pista = stems de la anterior fuera. Bajo el mismo lock
+        // que getNextAudioBlock: sin ventana de carrera con el hilo de audio.
+        stemsActive.store(false);
+        stemsInRam.store(false);
+        stemsReady.store(false);
+        for (auto& b : stemBuffers)
+            b.setSize(2, 0, false, false, true);
+
+        // P25: el streaming 2-stem de la pista anterior también fuera.
+        stems2Active.store(false);
+        stems2Engaged.store(false);
+        stems2Covered.store(false);
+        stems2Cached.store(false);
+        stems2CacheDone.store(false); // nueva pista: el worker puede armar caché otra vez
+        stems2CacheLen44 = 0;
+        for (auto& b : stems2CacheBuf)
+            b.setSize(2, 0, false, false, true);
+
         loaded.store(true);
+    }
+
+    // P22: stems. Solo pistas de duración razonable (mezclas largas no caben
+    // en RAM). Si ya están separados se cargan a buffers; si no, se encola la
+    // separación (queda lista para la próxima carga).
+    const auto stemDir = StemSeparationService::stemsDirFor(audioFile);
+    const double durSec = trackDurationSeconds.load();
+    if (stemDir.isNotEmpty() && durSec > 0.0 && durSec <= 900.0)
+    {
+        stemsReady.store(true);
+        startStemsLoad(stemDir, generation);
+    }
+    // P25 Fase D: caché 2-stem — la segunda carga de la pista es instantánea.
+    else if (loadStems2Cache(StemSeparationService::stems2DirFor(audioFile)))
+    {
+        // Caché 2-stem en RAM: sin worker, sin modelo. El callback cubre toda
+        // la pista desde stems2CacheBuf.
+        stems2Engaged.store(true);
+    }
+    else if (!stemsPrecompute4.load() && TwoStemEngine::isModelAvailable() && durSec > 0.0)
+    {
+        // P25: modo Rápido (default) — sin 4-stem precalculado el 2-stem corre
+        // en streaming durante la reproducción y htdemucs no se encola.
+        auto sepReader = std::shared_ptr<juce::AudioFormatReader>(formatManager.createReaderFor(audioFile));
+        if (sepReader != nullptr)
+        {
+            for (auto& ring : stems2Ring)
+            {
+                ring.setSize(2, stems2RingSamples, false, false, true);
+                ring.clear();
+            }
+            s2Origin44.store(0);
+            s2WriteEnd44.store(0);
+            stems2Engaged.store(true);
+            startStems2Stream(std::move(sepReader), audioFile, 0, generation);
+        }
+        else
+        {
+            StemSeparationService::getInstance().maybeEnqueue(audioFile);
+        }
+    }
+    else
+    {
+        StemSeparationService::getInstance().maybeEnqueue(audioFile);
     }
 
     // Fase de análisis: worker propio, resultados publicados en el hilo de mensajes.
@@ -211,9 +308,22 @@ void DeckPlayer::startAnalysis(std::shared_ptr<juce::AudioFormatReader> analysis
             return;
         publishIfCurrent(shared, generation, [this, bpm = beatRes.bpm, offset = beatRes.offset]()
         {
-            originalBpm.store(bpm);
-            currentBpm.store(bpm * (1.0 + (double)pitchPercent.load() / 100.0));
-            firstBeatOffsetSeconds.store(offset);
+            detectedBpm.store(bpm);
+            detectedOffsetSeconds.store(offset);
+            // P16: si hay grid corregido a mano, el análisis no lo pisa.
+            const double gBpm = gridBpmOverride.load();
+            if (gBpm > 0.0)
+            {
+                originalBpm.store(gBpm);
+                currentBpm.store(gBpm * (1.0 + (double)pitchPercent.load() / 100.0));
+            }
+            else
+            {
+                originalBpm.store(bpm);
+                currentBpm.store(bpm * (1.0 + (double)pitchPercent.load() / 100.0));
+            }
+            const double gOff = gridOffsetOverride.load();
+            firstBeatOffsetSeconds.store(gOff >= 0.0 ? gOff : offset);
         });
 
         // 4) Tonalidad (Camelot + musical).
@@ -253,6 +363,8 @@ void DeckPlayer::prepareToPlay(int samplesPerBlockExpected, double sampleRate)
     expectedSamplesPerBlock = samplesPerBlockExpected;
 
     const juce::ScopedLock sl(lock);
+
+    updateRateFactor();
 
     if (bufferingSource != nullptr)
         bufferingSource->prepareToPlay(samplesPerBlockExpected, sampleRate);
@@ -310,9 +422,26 @@ void DeckPlayer::getNextAudioBlock(const juce::AudioSourceChannelInfo& bufferToF
     if (scratchTouch.load())
     {
         double sr = currentSampleRate > 0.0 ? currentSampleRate : 44100.0;
+        // P26: el cursor de BufferingAudioSource vive en muestras de ARCHIVO;
+        // las conversiones cursor<->segundos del scratch usan fileSr. El anillo
+        // de historial y el avance slip siguen en muestras de dispositivo (sr).
+        const double fileSr = origFileSampleRate > 0.0 ? origFileSampleRate : 44100.0;
         double dur = trackDurationSeconds.load();
         int N = bufferToFill.numSamples;
         double rate = (double)scratchVelRevPerSec.load() * 1.8; // audio-sec por sec, con signo
+
+        // Slip (P15): bajo la mano el track sigue a tempo nominal en una
+        // posicion virtual; al soltar, retoma donde habria estado.
+        if (slipEnabled.load())
+        {
+            if (!slipActive)
+            {
+                slipActive = true;
+                slipVirtualSec.store(getPosition());
+            }
+            const double tempoRate = juce::jlimit(0.25, 4.0, 1.0 + (double) pitchPercent.load());
+            slipVirtualSec.store(slipVirtualSec.load() + (double) N / sr / tempoRate);
+        }
 
         // P3: la aguja y el tiempo siguen a la mano tambien durante el scratch.
         // getPosition() descuenta la latencia del stretcher, asi que se repone
@@ -320,12 +449,12 @@ void DeckPlayer::getNextAudioBlock(const juce::AudioSourceChannelInfo& bufferToF
         auto publishScratchPos = [&]()
         {
             const double latency = keylock.load() ? stretcher->getLatencySeconds() : 0.0;
-            playbackPosSamples.store((juce::int64)((scratchAnchorSec + latency) * sr));
+            playbackPosSamples.store((juce::int64)((scratchAnchorSec + latency) * fileSr));
         };
 
         if (!scratchAnchorInit)
         {
-            scratchAnchorSec = (double)bufferingSource->getNextReadPosition() / sr;
+            scratchAnchorSec = (double)bufferingSource->getNextReadPosition() / fileSr;
             scratchDir = 0;
             scratchAnchorInit = true;
             scratchTail.clear();
@@ -335,7 +464,7 @@ void DeckPlayer::getNextAudioBlock(const juce::AudioSourceChannelInfo& bufferToF
         if (dir != scratchDir)
         {
             if (dir >= 0)
-                bufferingSource->setNextReadPosition((juce::int64)(scratchAnchorSec * sr));
+                bufferingSource->setNextReadPosition((juce::int64)(scratchAnchorSec * fileSr));
             else
                 revHead = (double)ringWritePos; // reversa: cabeza = lo último escuchado
             scratchTail.clear();
@@ -363,14 +492,17 @@ void DeckPlayer::getNextAudioBlock(const juce::AudioSourceChannelInfo& bufferToF
             }
             else
             {
-                resamplingSource->setResamplingRatio(juce::jlimit(0.02, 4.0, rate));
+                // P26: el ratio es muestras-de-entrada/salida; con rateFactor el
+                // scratch avanza fileRate/deviceRate muestras por muestra.
+                resamplingSource->setResamplingRatio(juce::jlimit(0.02, 4.0, rate * rateFactor.load()));
                 resamplingSource->getNextAudioBlock(bufferToFill);
             }
             writeScratchRing(bufferToFill); // lo escuchado queda en historial
-            scratchAnchorSec = (double)bufferingSource->getNextReadPosition() / sr;
+            scratchAnchorSec = (double)bufferingSource->getNextReadPosition() / fileSr;
             if (dur > 0.0 && scratchAnchorSec > dur)
                 scratchAnchorSec = dur; // tope sin auto-stop
             publishScratchPos();
+            prevReadPos = (juce::int64)(scratchAnchorSec * fileSr);
             return;
         }
 
@@ -418,8 +550,9 @@ void DeckPlayer::getNextAudioBlock(const juce::AudioSourceChannelInfo& bufferToF
         scratchAnchorSec -= step / sr; // aguja UI sigue a la mano
         if (scratchAnchorSec < 0.0)
             scratchAnchorSec = 0.0;
-        bufferingSource->setNextReadPosition((juce::int64)(scratchAnchorSec * sr)); // cursor = aguja
+        bufferingSource->setNextReadPosition((juce::int64)(scratchAnchorSec * fileSr)); // cursor = aguja
         publishScratchPos();
+        prevReadPos = (juce::int64)(scratchAnchorSec * fileSr);
         return; // sin loop-wrap ni auto-stop durante el toque
     }
 
@@ -428,6 +561,7 @@ void DeckPlayer::getNextAudioBlock(const juce::AudioSourceChannelInfo& bufferToF
 
     // Process audio block from streaming reader.
     // Key Lock ON: tempo por stretch (pitch intacto). OFF: resample clásico.
+    const juce::int64 rpBefore = bufferingSource->getNextReadPosition();
     if (keylock.load())
     {
         float* dstPtrs[2] = { nullptr, nullptr };
@@ -442,6 +576,134 @@ void DeckPlayer::getNextAudioBlock(const juce::AudioSourceChannelInfo& bufferToF
     {
         resamplingSource->getNextAudioBlock(bufferToFill);
     }
+
+    // P22: modo stems — la salida audible es la suma de stems con sus gains
+    // (original muteado). La posición de cada stem se deriva del cursor del
+    // master: hereda tempo, keylock, loops y seeks sin pipeline propio.
+    if (stemsActive.load() && stemsInRam.load())
+    {
+        auto* outBuf = bufferToFill.buffer;
+        const int outCh = juce::jmin(outBuf->getNumChannels(), 2);
+        const int N = bufferToFill.numSamples;
+        const juce::int64 rpAfter = bufferingSource->getNextReadPosition();
+        const double delta = (double)(rpAfter - rpBefore);
+
+        bool canFollow = delta > 0.0 && delta < origFileSampleRate * 8.0 && N > 0;
+        if (canFollow)
+        {
+            const double latencySec = keylock.load() ? stretcher->getLatencySeconds() : 0.0;
+            const double startSec = ((double)rpBefore - latencySec * origFileSampleRate) / origFileSampleRate;
+            const double stepSec = (delta / origFileSampleRate) / (double)N;
+
+            for (int ch = 0; ch < outCh; ++ch)
+            {
+                auto* out = outBuf->getWritePointer(ch, bufferToFill.startSample);
+                for (int i = 0; i < N; ++i)
+                    out[i] = 0.0f; // original fuera
+            }
+
+            for (int s = 0; s < 4; ++s)
+            {
+                const float g = stemGain[(size_t)s].load();
+                if (g <= 0.001f)
+                    continue;
+                const auto& buf = stemBuffers[(size_t)s];
+                if (buf.getNumSamples() <= 0)
+                    continue;
+                const double stemSr = stemSampleRate[(size_t)s] > 0.0 ? stemSampleRate[(size_t)s] : origFileSampleRate;
+                const int stemCh = juce::jmin(buf.getNumChannels(), 2);
+
+                for (int ch = 0; ch < outCh; ++ch)
+                {
+                    auto* out = outBuf->getWritePointer(ch, bufferToFill.startSample);
+                    const float* data = buf.getReadPointer(ch % stemCh);
+                    const int len = buf.getNumSamples();
+                    for (int i = 0; i < N; ++i)
+                        out[i] += g * readStemInterp(data, len, (startSec + stepSec * (double)i) * stemSr);
+                }
+            }
+        }
+        else
+        {
+            // Seek/reversa/loop wrap: silencio limpio hasta que el cursor
+            // vuelva a avanzar de forma continua.
+            for (int ch = 0; ch < outCh; ++ch)
+                outBuf->clear(ch, bufferToFill.startSample, N);
+        }
+    }
+    // P25: modo 2-stem en streaming. Misma matemática de cursor que P22; si el
+    // tramo del bloque está dentro de la zona separada, la salida es VOC/INST
+    // del anillo (original muteado); si no, la mezcla original sigue sonando
+    // sin cortes hasta que el worker la cubra (degradación elegante).
+    else if (stems2Engaged.load() && stems2Active.load())
+    {
+        auto* outBuf = bufferToFill.buffer;
+        const int outCh = juce::jmin(outBuf->getNumChannels(), 2);
+        const int N = bufferToFill.numSamples;
+        const juce::int64 rpAfter = bufferingSource->getNextReadPosition();
+        const double delta = (double)(rpAfter - rpBefore);
+
+        const bool canFollow = delta > 0.0 && delta < origFileSampleRate * 8.0 && N > 0;
+        if (canFollow)
+        {
+            const double latencySec = keylock.load() ? stretcher->getLatencySeconds() : 0.0;
+            const double startSec = ((double)rpBefore - latencySec * origFileSampleRate) / origFileSampleRate;
+            const double stepSec = (delta / origFileSampleRate) / (double)N;
+
+            const double begin44 = startSec * 44100.0;
+            const double end44 = (startSec + stepSec * (double)(N - 1)) * 44100.0;
+            const bool cached = stems2Cached.load();
+            const juce::int64 origin = s2Origin44.load();
+            const juce::int64 wEnd = s2WriteEnd44.load();
+            const juce::int64 cStart = juce::jmax(origin, wEnd - (juce::int64)stems2RingSamples);
+            const bool covered = cached
+                ? (end44 <= (double)stems2CacheLen44 - 2.0)
+                : (begin44 >= (double)(cStart + 1) && end44 <= (double)(wEnd - 2));
+            stems2Covered.store(covered);
+
+            if (covered)
+            {
+                const float gV = stemGain[0].load();
+                const float gI = stemGain[1].load();
+                if (cached)
+                {
+                    // Caché completa en RAM: lectura directa a 44.1 kHz.
+                    const int cLen = (int)stems2CacheLen44;
+                    for (int ch = 0; ch < outCh; ++ch)
+                    {
+                        auto* out = outBuf->getWritePointer(ch, bufferToFill.startSample);
+                        const auto cIdx = (size_t)juce::jmin(ch, 1);
+                        const auto* vD = stems2CacheBuf[0].getReadPointer((int)cIdx);
+                        const auto* iD = stems2CacheBuf[1].getReadPointer((int)cIdx);
+                        for (int i = 0; i < N; ++i)
+                        {
+                            const double p44 = (startSec + stepSec * (double)i) * 44100.0;
+                            out[i] = gV * readStemInterp(vD, cLen, p44)
+                                   + gI * readStemInterp(iD, cLen, p44);
+                        }
+                    }
+                }
+                else
+                {
+                    for (int ch = 0; ch < outCh; ++ch)
+                    {
+                        auto* out = outBuf->getWritePointer(ch, bufferToFill.startSample);
+                        for (int i = 0; i < N; ++i)
+                        {
+                            const double p44 = (startSec + stepSec * (double)i) * 44100.0;
+                            out[i] = gV * readStems2Ring(stems2Ring[0], ch, p44, origin)
+                                   + gI * readStems2Ring(stems2Ring[1], ch, p44, origin);
+                        }
+                    }
+                }
+            }
+        }
+        else
+        {
+            stems2Covered.store(false);
+        }
+    }
+
     writeScratchRing(bufferToFill); // historial para la reversa del scratch
 
     // Actualizar posición atómica sin lock para getPosition
@@ -449,6 +711,43 @@ void DeckPlayer::getNextAudioBlock(const juce::AudioSourceChannelInfo& bufferToF
     {
         auto rp = bufferingSource->getNextReadPosition();
         playbackPosSamples.store(rp);
+
+        // Slip (P15): durante loop, la posicion virtual avanza con el delta
+        // real del cursor (respeta keylock y resample). Al terminar el loop o
+        // el scratch (condicion falsa), retoma en la posicion virtual.
+        const bool loopOn = loopActive.load();
+        if (!slipEnabled.load())
+        {
+            slipActive = false; // slip apagado en caliente: descarta la virtual
+        }
+        else
+        {
+            if (!slipActive && loopOn)
+            {
+                slipActive = true;
+                slipVirtualSec.store(getPosition());
+                prevReadPos = rp;
+            }
+            if (slipActive)
+            {
+                const juce::int64 delta = rp - prevReadPos;
+                // P26: el delta es en muestras de archivo; el avance virtual es
+                // en segundos de pista.
+                if (delta > 0 && delta < (juce::int64) origFileSampleRate)
+                    slipVirtualSec.store(slipVirtualSec.load()
+                                         + (double) delta / origFileSampleRate);
+                prevReadPos = rp;
+
+                if (!loopOn)
+                {
+                    // el loop/scratch termino: retomar donde habria estado
+                    slipActive = false;
+                    seekPending.store(true);
+                    seekTargetSec.store(juce::jlimit(0.0, trackDurationSeconds.load(),
+                                                     slipVirtualSec.load()));
+                }
+            }
+        }
     }
 
     // Handle Active Loop
@@ -577,13 +876,31 @@ void DeckPlayer::setPosition(double seconds, bool userInitiated)
         userSeekSerial.fetch_add(1);
     seekTargetSec.store(target);
     seekPending.store(true);
+
+    // P25: un salto fuera de la zona ya separada reinicia el motor ahí (el
+    // worker se entera por el par seekGen/target). Dentro de la zona cubierta
+    // el anillo ya tiene el audio: no hace falta.
+    // Con caché 2-stem en RAM toda la pista está cubierta: sin re-sembrado.
+    if (stems2Engaged.load() && !stems2Cached.load())
+    {
+        const juce::int64 target44 = (juce::int64)(target * 44100.0);
+        const juce::int64 wEnd = s2WriteEnd44.load();
+        const juce::int64 cStart = juce::jmax(s2Origin44.load(),
+                                              wEnd - (juce::int64)stems2RingSamples);
+        if (target44 >= wEnd - 2 || target44 < cStart)
+        {
+            s2SeekTarget44.store(target44);
+            s2SeekGen.fetch_add(1);
+        }
+    }
 }
 
 void DeckPlayer::applyPendingSeek(double targetSec)
 {
     if (bufferingSource == nullptr || currentSampleRate <= 0.0 || stretcher == nullptr)
         return;
-    double sr = currentSampleRate;
+    // P26: el cursor vive en muestras de archivo — la conversión usa file-rate.
+    double sr = origFileSampleRate > 0.0 ? origFileSampleRate : currentSampleRate;
     double dur = trackDurationSeconds.load();
     double target = targetSec;
     if (dur > 0.0)
@@ -605,7 +922,10 @@ void DeckPlayer::applyPendingSeek(double targetSec)
 
     double rate = 1.0;
     if (keylock.load())
+    {
         rate = juce::jlimit(0.02, 4.0, (double)1.0f + ((double)pitchPercent.load() / 100.0) + (double)pitchBend.load());
+        rate *= rateFactor.load(); // P26: seek() pide el ratio entrada/salida efectivo
+    }
     if (stretcher->reanchorWithPreRoll(bufferingSource.get(), targetSample, rate))
     {
     }
@@ -619,7 +939,10 @@ double DeckPlayer::getPosition() const
 {
     if (currentSampleRate <= 0.0)
         return 0.0;
-    double pos = (double)playbackPosSamples.load() / currentSampleRate;
+    // P26: playbackPosSamples son muestras de archivo; el tiempo es sobre el
+    // sample rate del archivo (trackDurationSeconds usa el mismo espacio).
+    const double fileSr = origFileSampleRate > 0.0 ? origFileSampleRate : currentSampleRate;
+    double pos = (double)playbackPosSamples.load() / fileSr;
     if (keylock.load() && stretcher != nullptr)
         pos -= stretcher->getLatencySeconds();
     if (pos < 0.0) pos = 0.0;
@@ -628,7 +951,10 @@ double DeckPlayer::getPosition() const
 
 double DeckPlayer::getBeatPhase() const
 {
-    double bpm = getBpm();
+    // P28: fase sobre el grid del archivo (file-time), igual que beatInterval.
+    double bpm = originalBpm.load();
+    if (bpm <= 0.0)
+        bpm = getBpm();
     if (bpm <= 0.0) bpm = 120.0;
     double interval = 60.0 / bpm;
     if (interval <= 0.0) interval = 0.5;
@@ -672,23 +998,433 @@ void DeckPlayer::updatePlaybackSpeed()
     // 0% pitch = ratio 1.0; +8% pitch = ratio 1.08; -8% pitch = ratio 0.92
     float totalSpeed = 1.0f + (pitchPercent.load() / 100.0f) + pitchBend.load();
     totalSpeed = juce::jlimit(0.2f, 2.0f, totalSpeed);
+
+    // P20: Key Shift — factor de transposición (±6 semitonos máx.)
+    const int st = keyShiftSemitones.load();
+    const double shift = std::pow(2.0, (double)st / 12.0);
+
     if (keylock.load())
     {
         // Key Lock: el tempo lo maneja el stretch, el resampler queda neutro.
+        // La transposición la aplica el stretcher (no altera el tempo).
         stretcher->setTempoRate((double)totalSpeed);
+        stretcher->setInputRateFactor(rateFactor.load()); // P26
+        stretcher->setTransposeSemitones((double)st);
         if (resamplingSource != nullptr)
             resamplingSource->setResamplingRatio(1.0);
     }
     else if (resamplingSource != nullptr)
     {
-        resamplingSource->setResamplingRatio((double)totalSpeed);
+        // Sin Key Lock la transposición va por resample: cambia pitch y tempo
+        // a la vez (comportamiento clásico de giradiscos). P26: el factor
+        // file→device corrige el tempo si el archivo no está al rate del device.
+        resamplingSource->setResamplingRatio((double)totalSpeed * shift * rateFactor.load());
     }
+}
+
+void DeckPlayer::updateRateFactor()
+{
+    const double dev = currentSampleRate > 0.0 ? currentSampleRate : 44100.0;
+    const double file = origFileSampleRate > 0.0 ? origFileSampleRate : 44100.0;
+    rateFactor.store(juce::jlimit(0.25, 4.0, file / dev));
+}
+
+// ---------------- P22: stems ----------------
+
+void DeckPlayer::startStemsLoad(const juce::String& dir, int generation)
+{
+    auto shared = analysis;
+    analysisPool().addJob([this, shared, dir, generation]()
+    {
+        auto isCurrent = [&shared, generation]()
+        {
+            return shared->alive.load() && shared->generation.load() == generation;
+        };
+
+        static const char* names[] = { "vocals.wav", "drums.wav", "bass.wav", "other.wav" };
+        std::array<juce::AudioBuffer<float>, 4> bufs;
+        std::array<double, 4> srs { 0.0, 0.0, 0.0, 0.0 };
+
+        for (int s = 0; s < 4; ++s)
+        {
+            if (!isCurrent())
+                return;
+            auto stemFile = juce::File(dir).getChildFile(names[s]);
+            std::unique_ptr<juce::AudioFormatReader> r(formatManager.createReaderFor(stemFile));
+            if (r == nullptr || r->lengthInSamples <= 0)
+                return;
+            srs[(size_t)s] = r->sampleRate;
+            bufs[(size_t)s].setSize(2, (int)r->lengthInSamples, false, false, true);
+            r->read(&bufs[(size_t)s], 0, (int)r->lengthInSamples, 0, true, true);
+        }
+
+        if (!isCurrent())
+            return;
+
+        publishIfCurrent(shared, generation, [this, local = std::move(bufs), srs]() mutable
+        {
+            for (int s = 0; s < 4; ++s)
+            {
+                stemBuffers[s] = std::move(local[(size_t)s]);
+                stemSampleRate[s] = srs[(size_t)s];
+            }
+            stemsInRam.store(true);
+        });
+    });
+}
+
+bool DeckPlayer::tryAttachStemsIfReady()
+{
+    if (!loaded.load() || stemsReady.load())
+        return false;
+    const double durSec = trackDurationSeconds.load();
+    if (durSec <= 0.0 || durSec > 900.0)
+        return false;
+    const auto stemDir = StemSeparationService::stemsDirFor(currentFile);
+    if (stemDir.isEmpty())
+        return false;
+    stemsReady.store(true);
+    startStemsLoad(stemDir, analysis->generation.load());
+    return true;
+}
+
+float DeckPlayer::readStemInterp(const float* data, int length, double pos)
+{
+    if (pos < 0.0 || pos >= (double)(length - 1))
+        return 0.0f;
+    const int i0 = (int)pos;
+    const float f = (float)(pos - (double)i0);
+    return data[i0] * (1.0f - f) + data[i0 + 1] * f;
+}
+
+// ---------------- P25: stems 2-stem en streaming ----------------
+
+float DeckPlayer::readStems2Ring(const juce::AudioBuffer<float>& ring, int ch, double pos44,
+                                 juce::int64 origin44)
+{
+    const double n = (double)stems2RingSamples;
+    double q = std::fmod(pos44 - (double)origin44, n);
+    if (q < 0.0)
+        q += n;
+    const int i0 = (int)q;
+    const int i1 = (i0 + 1 < stems2RingSamples) ? i0 + 1 : 0;
+    const float f = (float)(q - (double)i0);
+    const float* d = ring.getReadPointer(ch % ring.getNumChannels());
+    return d[i0] * (1.0f - f) + d[i1] * f;
+}
+
+bool DeckPlayer::loadStems2Cache(const juce::File& cacheDir)
+{
+    if (cacheDir.getFullPathName().isEmpty())
+        return false;
+    const char* names[2] = { "vocals.wav", "instrumental.wav" };
+    juce::AudioBuffer<float> bufs[2];
+    for (int i = 0; i < 2; ++i)
+    {
+        auto reader = std::unique_ptr<juce::AudioFormatReader>(
+            formatManager.createReaderFor(cacheDir.getChildFile(names[i])));
+        // El engine emite a 44.1 kHz: la caché escrita por nosotros siempre
+        // está a esa tasa. Cualquier desvío invalida la caché.
+        if (reader == nullptr || std::abs(reader->sampleRate - 44100.0) > 0.5
+            || reader->lengthInSamples < 2 || reader->numChannels < 1)
+            return false;
+        const auto len = (int)reader->lengthInSamples;
+        bufs[i].setSize(2, len, false, false, true);
+        bufs[i].clear();
+        reader->read(&bufs[i], 0, len, 0, true, true);
+        if (reader->numChannels < 2)
+            bufs[i].copyFrom(1, 0, bufs[i], 0, 0, len);
+    }
+    stems2CacheBuf[0] = std::move(bufs[0]);
+    stems2CacheBuf[1] = std::move(bufs[1]);
+    stems2CacheLen44 = stems2CacheBuf[0].getNumSamples();
+    stems2Cached.store(true); // publicado al final: el callback ve buffers completos
+    return true;
+}
+
+bool DeckPlayer::loadStemsModeDefault()
+{
+    auto file = AudioEngine::getSettingsFile();
+    if (file.existsAsFile())
+    {
+        auto json = juce::JSON::parse(file);
+        if (json.isObject() && json.hasProperty("stemsMode"))
+            return json["stemsMode"].toString().trim().equalsIgnoreCase("full");
+    }
+    return false; // Rápido (2-stem en streaming) es el default
+}
+
+void DeckPlayer::saveStemsModeDefault(bool precompute4)
+{
+    auto file = AudioEngine::getSettingsFile();
+    juce::var json;
+    if (file.existsAsFile())
+        json = juce::JSON::parse(file);
+    if (!json.isObject())
+        json = juce::var(new juce::DynamicObject());
+    if (auto* obj = json.getDynamicObject())
+        obj->setProperty("stemsMode", precompute4 ? juce::String("full") : juce::String("fast"));
+    auto parent = file.getParentDirectory();
+    if (!parent.exists())
+        parent.createDirectory();
+    juce::FileOutputStream out(file);
+    if (out.openedOk())
+    {
+        out.setPosition(0);
+        out.truncate();
+        out.writeString(juce::JSON::toString(json));
+        out.flush();
+    }
+}
+
+void DeckPlayer::startStems2Stream(std::shared_ptr<juce::AudioFormatReader> reader,
+                                   const juce::File& audioFile, juce::int64 startOrigin44,
+                                   int generation)
+{
+    auto shared = analysis;
+    stems2Pool.addJob([this, shared, reader, audioFile, startOrigin44, generation]() mutable
+    {
+        auto isCurrent = [&shared, generation]()
+        {
+            return shared->alive.load() && shared->generation.load() == generation;
+        };
+        if (!isCurrent())
+            return;
+
+        // Motor persistente por deck (init ~0.1 s con la conversión CoreML ya
+        // cacheada) y tocado solo por este worker: el pool de 1 hilo serializa.
+        if (stems2Engine == nullptr)
+            stems2Engine = std::make_unique<TwoStemEngine>();
+        juce::String err;
+        if (!stems2Engine->isInitialised() && !stems2Engine->init(&err))
+        {
+            stems2Engaged.store(false);
+            return;
+        }
+        stems2Engine->reset();
+
+        const double origRate = origFileSampleRate > 0.0 ? origFileSampleRate : 44100.0;
+        const juce::int64 totalSrc = reader->lengthInSamples;
+        constexpr int kFeed = 16384;                // muestras 44.1k por pasada
+        constexpr juce::int64 kAhead44 = 44100 * 8; // ventana de adelanto
+        constexpr int kOutCap = kFeed + TwoStemEngine::latencySamples + 4096;
+
+        std::vector<float> inL((size_t)kFeed), inR((size_t)kFeed);
+        std::vector<float> oVL((size_t)kOutCap), oVR((size_t)kOutCap),
+            oIL((size_t)kOutCap), oIR((size_t)kOutCap);
+        juce::AudioBuffer<float> srcBuf(2, kFeed + 8);
+
+        // Lectura del archivo (rate original) con resample lineal a 44.1 kHz
+        // solo si hace falta. rd = posición fraccional próxima, en muestras.
+        const bool resample = std::abs(origRate - 44100.0) > 0.5;
+        const double ratio = 44100.0 / origRate;
+        double rd = 0.0;
+        juce::int64 winStart = -1;
+        juce::int64 winLen = 0;
+
+        auto cursor44 = [&]() -> juce::int64
+        {
+            return (juce::int64)(((double)playbackPosSamples.load() / origRate) * 44100.0);
+        };
+
+        juce::int64 lastSeekGen = s2SeekGen.load();
+        // El origen lo fija la carga (0), no playbackPosSamples: leerlo aquí
+        // corre una carrera con play() inmediato y siembra en un punto adelantado.
+        juce::int64 origin44 = startOrigin44;
+        juce::int64 writeEnd44 = origin44;
+        rd = (double)origin44 * (origRate / 44100.0);
+        s2Origin44.store(origin44);
+        s2WriteEnd44.store(writeEnd44);
+
+        // P25 Fase D: escritura de la caché 2-stem. Solo si el stream arranca
+        // en 0 y no hay seek: los writers son secuenciales, una re-siembra los
+        // invalida. Al cubrir la pista completa se renombra a la caché final.
+        const auto cacheDir = StemSeparationService::stems2CacheDirFor(audioFile);
+        auto tmpV = cacheDir.getChildFile("vocals.part.wav");
+        auto tmpI = cacheDir.getChildFile("instrumental.part.wav");
+        juce::WavAudioFormat wavFmt;
+        std::unique_ptr<juce::AudioFormatWriter> wV, wI;
+        bool cacheDone = stems2CacheDone.load();
+        auto killCache = [&]()
+        {
+            if (!cacheDone)
+            {
+                wV.reset();
+                wI.reset();
+                tmpV.deleteFile();
+                tmpI.deleteFile();
+            }
+        };
+        if (origin44 == 0 && !cacheDone && cacheDir.createDirectory().wasOk())
+        {
+            tmpV.deleteFile();
+            tmpI.deleteFile();
+            wV.reset(wavFmt.createWriterFor(new juce::FileOutputStream(tmpV), 44100.0, 2, 16, {}, 0));
+            wI.reset(wavFmt.createWriterFor(new juce::FileOutputStream(tmpI), 44100.0, 2, 16, {}, 0));
+            if (wV == nullptr || wI == nullptr)
+            {
+                wV.reset();
+                wI.reset();
+            }
+        }
+
+        auto fillFeed = [&]() -> int
+        {
+            if (rd >= (double)(totalSrc - 1))
+                return 0;
+            if (!resample)
+            {
+                const auto toRead = juce::jmin<juce::int64>(kFeed, totalSrc - (juce::int64)rd);
+                if (toRead <= 0)
+                    return 0;
+                if (winStart != (juce::int64)rd || winLen < toRead)
+                {
+                    winStart = (juce::int64)rd;
+                    winLen = toRead;
+                    srcBuf.setSize(2, (int)toRead, false, false, false);
+                    reader->read(&srcBuf, 0, (int)toRead, winStart, true, true);
+                }
+                std::memcpy(inL.data(), srcBuf.getReadPointer(0), sizeof(float) * (size_t)toRead);
+                std::memcpy(inR.data(), srcBuf.getReadPointer(1), sizeof(float) * (size_t)toRead);
+                rd += (double)toRead;
+                return (int)toRead;
+            }
+            int n = 0;
+            while (n < kFeed && rd < (double)(totalSrc - 1))
+            {
+                const juce::int64 i0 = (juce::int64)rd;
+                if (i0 < winStart || i0 + 1 >= winStart + winLen)
+                {
+                    winStart = i0;
+                    winLen = juce::jmin<juce::int64>(65536, totalSrc - i0);
+                    srcBuf.setSize(2, (int)winLen, false, false, false);
+                    reader->read(&srcBuf, 0, (int)winLen, winStart, true, true);
+                }
+                const float p = (float)(rd - (double)winStart);
+                const int j0 = (int)p;
+                const float f = p - (float)j0;
+                const float* sl = srcBuf.getReadPointer(0);
+                const float* srr = srcBuf.getReadPointer(1);
+                inL[(size_t)n] = sl[j0] * (1.0f - f) + sl[j0 + 1] * f;
+                inR[(size_t)n] = srr[j0] * (1.0f - f) + srr[j0 + 1] * f;
+                rd += ratio;
+                ++n;
+            }
+            return n;
+        };
+
+        bool flushed = false;
+        while (!stems2Quit.load() && isCurrent())
+        {
+            // Seek fuera de cobertura: reinicia el motor en el destino.
+            if (s2SeekGen.load() != lastSeekGen)
+            {
+                lastSeekGen = s2SeekGen.load();
+                killCache(); // writers secuenciales: una re-siembra invalida la caché
+                stems2Engine->reset();
+                flushed = false;
+                winStart = -1;
+                winLen = 0;
+                origin44 = s2SeekTarget44.load();
+                writeEnd44 = origin44;
+                rd = (double)origin44 * (origRate / 44100.0);
+                s2Origin44.store(origin44);
+                s2WriteEnd44.store(writeEnd44);
+            }
+
+            const bool allDone = flushed
+                && writeEnd44 >= (juce::int64)(((double)totalSrc / origRate) * 44100.0);
+            // Caché completa: los writers cubren [0, fin) → renombrar.
+            if (allDone && (wV != nullptr || wI != nullptr))
+            {
+                wV.reset();
+                wI.reset();
+                tmpV.moveFileTo(cacheDir.getChildFile("vocals.wav"));
+                tmpI.moveFileTo(cacheDir.getChildFile("instrumental.wav"));
+                cacheDone = true;
+                stems2CacheDone.store(true);
+            }
+            // El flush se drena siempre (el final de pista puede quedar sin
+            // cubrir si el adelanto supera la ventana); el feed respeta la
+            // ventana de adelanto.
+            if (allDone || (!flushed && writeEnd44 - cursor44() >= kAhead44))
+            {
+                juce::Thread::sleep(25);
+                continue;
+            }
+
+            int n = 0;
+            if (!flushed)
+            {
+                n = fillFeed();
+                if (n <= 0)
+                    flushed = true;
+            }
+
+            int emitted = 0;
+            if (n > 0)
+                emitted = stems2Engine->process(inL.data(), inR.data(), n,
+                                                oVL.data(), oVR.data(), oIL.data(), oIR.data(), kOutCap);
+            else if (flushed)
+                emitted = stems2Engine->flush(oVL.data(), oVR.data(), oIL.data(), oIR.data(), kOutCap);
+
+            if (emitted > 0)
+            {
+                const int ringN = stems2RingSamples;
+                const int idx = (int)(((writeEnd44 - origin44) % ringN + ringN) % ringN);
+                const int first = juce::jmin(emitted, ringN - idx);
+                auto* vL = stems2Ring[0].getWritePointer(0);
+                auto* vR = stems2Ring[0].getWritePointer(1);
+                auto* iL = stems2Ring[1].getWritePointer(0);
+                auto* iR = stems2Ring[1].getWritePointer(1);
+                std::memcpy(vL + idx, oVL.data(), sizeof(float) * (size_t)first);
+                std::memcpy(vR + idx, oVR.data(), sizeof(float) * (size_t)first);
+                std::memcpy(iL + idx, oIL.data(), sizeof(float) * (size_t)first);
+                std::memcpy(iR + idx, oIR.data(), sizeof(float) * (size_t)first);
+                if (first < emitted)
+                {
+                    const int rest = emitted - first;
+                    std::memcpy(vL, oVL.data() + first, sizeof(float) * (size_t)rest);
+                    std::memcpy(vR, oVR.data() + first, sizeof(float) * (size_t)rest);
+                    std::memcpy(iL, oIL.data() + first, sizeof(float) * (size_t)rest);
+                    std::memcpy(iR, oIR.data() + first, sizeof(float) * (size_t)rest);
+                }
+                if (wV != nullptr)
+                {
+                    const float* vc[2] = { oVL.data(), oVR.data() };
+                    wV->writeFromFloatArrays(vc, 2, emitted);
+                }
+                if (wI != nullptr)
+                {
+                    const float* ic[2] = { oIL.data(), oIR.data() };
+                    wI->writeFromFloatArrays(ic, 2, emitted);
+                }
+                if (!isCurrent())
+                {
+                    killCache();
+                    return;
+                }
+                writeEnd44 += emitted;
+                s2WriteEnd44.store(writeEnd44); // publicar DESPUÉS de escribir
+            }
+        }
+        killCache();
+    });
 }
 
 void DeckPlayer::setHotCue(int index, double positionSeconds)
 {
     if (index >= 0 && index < 4)
     {
+        // P28: cuantizar al beat más cercano del grid del archivo si hay BPM.
+        // Si no hay BPM (currentBpm/originalBpm en 0) la posición queda cruda.
+        if (originalBpm.load() > 0.0)
+        {
+            positionSeconds = quantizedBeatPos(positionSeconds, getFirstBeatOffset(),
+                                               60.0 / originalBpm.load(), 0.0);
+            positionSeconds = juce::jlimit(0.0, juce::jmax(0.0, getLengthInSeconds()),
+                                           positionSeconds);
+        }
         auto uIdx = static_cast<size_t>(index);
         hotCues[uIdx].store(positionSeconds);
         hotCuesActive[uIdx].store(true);
@@ -747,6 +1483,91 @@ void DeckPlayer::setLoop(double startSeconds, double lengthSeconds, bool enabled
 void DeckPlayer::exitLoop()
 {
     loopActive.store(false);
+}
+
+double DeckPlayer::quantizedBeatPos(double pos, double firstBeat, double interval, double beats)
+{
+    if (interval <= 0.0)
+        return pos;
+    const double idx = std::round((pos - firstBeat) / interval) + beats;
+    return firstBeat + idx * interval;
+}
+
+double DeckPlayer::rollStartFor(double pos, double firstBeat, double interval, double beats)
+{
+    const double length = beats * interval;
+    if (length <= 0.0)
+        return pos;
+    const double k = std::floor((pos - firstBeat) / length);
+    return firstBeat + k * length;
+}
+
+double DeckPlayer::beatInterval() const
+{
+    // P28: el grid describe el ARCHIVO y las posiciones están en tiempo de
+    // archivo (P26), así que el intervalo debe ser file-time (originalBpm),
+    // no el BPM ajustado por pitch — con pitch ≠ 0 beat jump / roll derivaban.
+    double bpm = originalBpm.load();
+    if (bpm <= 0.0)
+        bpm = currentBpm.load();
+    if (bpm <= 0.0)
+        bpm = 120.0;
+    return 60.0 / bpm;
+}
+
+void DeckPlayer::jumpBeats(double beats)
+{
+    const double interval = beatInterval();
+    if (interval <= 0.0)
+        return;
+    setPosition(quantizedBeatPos(getPosition(), getFirstBeatOffset(), interval, beats), true);
+}
+
+void DeckPlayer::startLoopRoll(double beats)
+{
+    const double interval = beatInterval();
+    if (interval <= 0.0 || beats <= 0.0)
+        return;
+    const double start = juce::jmax(0.0, rollStartFor(getPosition(), getFirstBeatOffset(),
+                                                      interval, beats));
+    setLoop(start, beats * interval, true);
+}
+
+void DeckPlayer::releaseLoopRoll()
+{
+    if (!loopActive.load())
+        return;
+    const double end = loopStartSeconds.load() + loopLengthSeconds.load();
+    loopActive.store(false);
+    if (!slipEnabled.load())
+        setPosition(end, false); // sin slip: continuar desde el fin del loop
+    // con slip: el hilo de audio desengancha y retoma en la posicion virtual
+}
+
+void DeckPlayer::setGridBpm(double bpm)
+{
+    const double clamped = juce::jlimit(40.0, 250.0, bpm);
+    gridBpmOverride.store(clamped);
+    originalBpm.store(clamped);
+    currentBpm.store(clamped * (1.0 + (double)pitchPercent.load() / 100.0));
+}
+
+void DeckPlayer::setFirstBeatOffset(double seconds)
+{
+    const double dur = juce::jmax(0.0, trackDurationSeconds.load());
+    const double clamped = juce::jlimit(0.0, dur, seconds);
+    gridOffsetOverride.store(clamped);
+    firstBeatOffsetSeconds.store(clamped);
+}
+
+void DeckPlayer::resetGrid()
+{
+    gridBpmOverride.store(0.0);
+    gridOffsetOverride.store(-1.0);
+    const double bpm = detectedBpm.load();
+    originalBpm.store(bpm);
+    currentBpm.store(bpm * (1.0 + (double)pitchPercent.load() / 100.0));
+    firstBeatOffsetSeconds.store(detectedOffsetSeconds.load());
 }
 
 juce::String DeckPlayer::getTrackTitle() const

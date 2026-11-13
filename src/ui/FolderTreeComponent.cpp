@@ -33,6 +33,16 @@ void FolderTreeComponent::TreeViewInternal::paint(juce::Graphics& g)
         auto rowRect = juce::Rectangle<int>(4, y + 1, getWidth() - 8, getRowHeight() - 2);
         bool isSelected = (row.fullPath == owner.selectedFolder);
 
+        // P17: resaltado al arrastrar pistas sobre una fila de playlist
+        if (row.isPlaylist && i == owner.dragHoverRow)
+        {
+            auto hoverRect = rowRect.toFloat();
+            g.setColour(juce::Colour::fromRGB(0, 229, 255).withAlpha(0.12f));
+            g.fillRoundedRectangle(hoverRect, 5.0f);
+            g.setColour(juce::Colour::fromRGB(0, 229, 255).withAlpha(0.8f));
+            g.drawRoundedRectangle(hoverRect, 5.0f, 1.5f);
+        }
+
         // Row background
         if (isSelected)
         {
@@ -46,6 +56,23 @@ void FolderTreeComponent::TreeViewInternal::paint(juce::Graphics& g)
         }
 
         int indent = rowRect.getX() + row.depth * 14;
+
+        // Fila de encabezado de la sección Playlists: sin chevron ni icono de carpeta
+        if (row.isPlaylistHeader)
+        {
+            auto textRect = juce::Rectangle<int>(indent + 4, y, rowRect.getWidth() - indent - 30, getRowHeight());
+            g.setColour(juce::Colour::fromRGB(122, 131, 148));
+            g.setFont(juce::FontOptions(10.0f, juce::Font::bold));
+            g.drawText(LanguageManager::trUtf8("Playlists", "Playlists"), textRect, juce::Justification::centredLeft, true);
+
+            // Botón "+" de crear playlist (siempre visible, tenue)
+            auto plusRect = juce::Rectangle<float>((float)(getWidth() - 24), (float)(y + 6), 16.0f, 16.0f);
+            auto plusCol = (i == hoveredRow)
+                ? juce::Colour::fromRGB(0, 229, 255)
+                : juce::Colour::fromRGB(100, 108, 125);
+            LucideIcons::draw(g, LucideIcons::IconType::Plus, plusRect.reduced(1.0f), plusCol, 1.8f);
+            continue;
+        }
 
         // 1. Expand / Collapse Chevron Button (if it has children)
         if (row.hasChildren)
@@ -81,7 +108,12 @@ void FolderTreeComponent::TreeViewInternal::paint(juce::Graphics& g)
         // 2. Folder / Download Icon
         auto folderRect = juce::Rectangle<float>((float)indent, (float)(y + 7), 14.0f, 14.0f);
         auto folderCol = isSelected ? juce::Colours::white : juce::Colour::fromRGB(148, 163, 184);
-        if (row.isSystem && row.name == "Descargas")
+        if (row.isPlaylist)
+        {
+            auto plCol = isSelected ? juce::Colours::white : juce::Colour::fromRGB(0, 229, 255);
+            LucideIcons::draw(g, LucideIcons::IconType::ListMusic, folderRect, plCol, 1.5f);
+        }
+        else if (row.isSystem && row.name == "Descargas")
         {
             auto dlCol = isSelected ? juce::Colours::white : juce::Colour::fromRGB(52, 211, 153);
             LucideIcons::draw(g, LucideIcons::IconType::Download, folderRect, dlCol, 1.5f);
@@ -147,6 +179,54 @@ void FolderTreeComponent::TreeViewInternal::mouseExit(const juce::MouseEvent&)
     }
 }
 
+void FolderTreeComponent::TreeViewInternal::itemDragMove(const juce::DragAndDropTarget::SourceDetails& d)
+{
+    int row = d.localPosition.y / getRowHeight();
+    int newHover = -1;
+    if (row >= 0 && row < static_cast<int>(owner.flatRows.size())
+        && owner.flatRows[static_cast<size_t>(row)].isPlaylist)
+    {
+        newHover = row;
+    }
+    if (newHover != owner.dragHoverRow)
+    {
+        owner.dragHoverRow = newHover;
+        repaint();
+    }
+}
+
+void FolderTreeComponent::TreeViewInternal::itemDragExit(const juce::DragAndDropTarget::SourceDetails&)
+{
+    if (owner.dragHoverRow != -1)
+    {
+        owner.dragHoverRow = -1;
+        repaint();
+    }
+}
+
+void FolderTreeComponent::TreeViewInternal::itemDropped(const juce::DragAndDropTarget::SourceDetails& d)
+{
+    owner.dragHoverRow = -1;
+    repaint();
+
+    int row = d.localPosition.y / getRowHeight();
+    if (row < 0 || row >= static_cast<int>(owner.flatRows.size()))
+        return;
+
+    const auto& r = owner.flatRows[static_cast<size_t>(row)];
+    if (!r.isPlaylist || owner.onTracksDroppedIntoPlaylist == nullptr)
+        return;
+
+    juce::StringArray paths;
+    paths.addTokens(d.description.toString(), "\n", "");
+    paths.removeEmptyStrings();
+    if (paths.isEmpty())
+        return;
+
+    // fullPath = "playlist:<id>"
+    owner.onTracksDroppedIntoPlaylist(r.fullPath.substring(9), paths);
+}
+
 void FolderTreeComponent::TreeViewInternal::mouseDown(const juce::MouseEvent& e)
 {
     int rowIndex = e.y / getRowHeight();
@@ -155,9 +235,40 @@ void FolderTreeComponent::TreeViewInternal::mouseDown(const juce::MouseEvent& e)
 
     const auto& row = owner.flatRows[static_cast<size_t>(rowIndex)];
 
+    // Encabezado Playlists: "+" crea, el resto del header expande/colapsa
+    if (row.isPlaylistHeader)
+    {
+        auto plusHit = juce::Rectangle<int>(owner.getWidth() - 28, rowIndex * getRowHeight(), 24, getRowHeight());
+        if (plusHit.contains(e.x, e.y))
+        {
+            if (owner.onCreatePlaylist)
+                owner.onCreatePlaylist();
+            return;
+        }
+        owner.playlistRowsVisible = !owner.playlistRowsVisible;
+        owner.rebuildFlatRows();
+        setSize(owner.viewport.getWidth(), getTotalContentHeight());
+        repaint();
+        return;
+    }
+
     // Right Click Context Menu
     if (e.mods.isPopupMenu())
     {
+        if (row.isPlaylist)
+        {
+            juce::PopupMenu m;
+            m.addItem(1, LanguageManager::trUtf8("Renombrar playlist", "Rename playlist"), true, false);
+            m.addItem(2, LanguageManager::trUtf8("Eliminar playlist", "Delete playlist"), true, false);
+            m.showMenuAsync(juce::PopupMenu::Options().withTargetComponent(this).withMousePosition(),
+                [this, playlistId = row.fullPath.substring((int) juce::String("playlist:").length())](int res) {
+                    if (res == 1 && owner.onRenamePlaylist)
+                        owner.onRenamePlaylist(playlistId);
+                    else if (res == 2 && owner.onDeletePlaylist)
+                        owner.onDeletePlaylist(playlistId);
+                });
+            return;
+        }
         if (!row.isSystem)
         {
             juce::PopupMenu m;
@@ -166,12 +277,29 @@ void FolderTreeComponent::TreeViewInternal::mouseDown(const juce::MouseEvent& e)
                                   + juce::String(row.totalCount) + " "
                                   + LanguageManager::trUtf8("canciones)", "tracks)");
             m.addItem(1, itemText, true, false);
-            m.showMenuAsync(juce::PopupMenu::Options().withTargetComponent(this),
+            m.addItem(2, LanguageManager::trUtf8("Separar 4 stems (carpeta)", "Separate 4 stems (folder)"), true, false);
+            m.showMenuAsync(juce::PopupMenu::Options().withTargetComponent(this).withMousePosition(),
                 [this, path = row.fullPath](int res) {
                     if (res == 1 && owner.onUnsyncFolder)
                     {
                         owner.onUnsyncFolder(path);
                     }
+                    else if (res == 2 && owner.onPrecalcFolder)
+                    {
+                        owner.onPrecalcFolder(path);
+                    }
+                });
+        }
+        else if (row.fullPath == "Todas las Pistas" || row.fullPath == "Descargas")
+        {
+            // P26: las carpetas del sistema no se desincronizan, pero sí
+            // permiten precalcular stems de su contenido.
+            juce::PopupMenu m;
+            m.addItem(1, LanguageManager::trUtf8("Separar 4 stems (carpeta)", "Separate 4 stems (folder)"), true, false);
+            m.showMenuAsync(juce::PopupMenu::Options().withTargetComponent(this).withMousePosition(),
+                [this, path = row.fullPath](int res) {
+                    if (res == 1 && owner.onPrecalcFolder)
+                        owner.onPrecalcFolder(path);
                 });
         }
         return;
@@ -311,6 +439,10 @@ void FolderTreeComponent::navigateFolders(int delta)
         currentIndex = 0;
     else
         currentIndex = juce::jlimit(0, static_cast<int>(flatRows.size()) - 1, currentIndex + delta);
+
+    // El encabezado de Playlists no es seleccionable: se salta
+    if (flatRows[static_cast<size_t>(currentIndex)].isPlaylistHeader)
+        currentIndex = juce::jlimit(0, static_cast<int>(flatRows.size()) - 1, currentIndex + (delta >= 0 ? 1 : -1));
 
     setSelectedFolder(flatRows[static_cast<size_t>(currentIndex)].fullPath);
     if (onSelectFolder)
@@ -515,5 +647,37 @@ void FolderTreeComponent::rebuildFlatRows()
     for (const auto& root : rootNodes)
     {
         flatten(root);
+    }
+
+    // P17: sección Playlists al final del árbol. Cada fila usa
+    // "playlist:<id>" como fullPath para sobrevivir a los renombres.
+    FlatFolderRow plHeader;
+    plHeader.name = "Playlists";
+    plHeader.fullPath = "__playlists_header__";
+    plHeader.isPlaylistHeader = true;
+    flatRows.push_back(plHeader);
+
+    if (playlistRowsVisible)
+    {
+        for (const auto& pl : playlistsInfo)
+        {
+            FlatFolderRow row;
+            row.name = pl.name;
+            row.fullPath = "playlist:" + pl.id;
+            row.directCount = pl.trackCount;
+            row.isPlaylist = true;
+            flatRows.push_back(row);
+        }
+    }
+}
+
+void FolderTreeComponent::setPlaylists(const std::vector<PlaylistRowInfo>& playlists)
+{
+    playlistsInfo = playlists;
+    rebuildFlatRows();
+    if (treeView != nullptr)
+    {
+        treeView->setSize(viewport.getWidth(), treeView->getTotalContentHeight());
+        treeView->repaint();
     }
 }

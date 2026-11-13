@@ -95,6 +95,14 @@ juce::Path LucideIcons::getPath(IconType icon)
             break;
         }
 
+        case IconType::ChevronUp:
+        {
+            p.startNewSubPath(6.0f, 15.0f);
+            p.lineTo(12.0f, 9.0f);
+            p.lineTo(18.0f, 15.0f);
+            break;
+        }
+
         case IconType::Folder:
         {
             p.startNewSubPath(4.0f, 20.0f);
@@ -187,6 +195,21 @@ juce::Path LucideIcons::getPath(IconType icon)
             p.lineTo(21.0f, 16.0f);
             p.startNewSubPath(15.0f, 13.0f);
             p.addEllipse(15.0f, 13.0f, 6.0f, 6.0f);
+            break;
+        }
+
+        case IconType::ListMusic:
+        {
+            // Lucide "list-music": tres líneas + nota musical
+            p.startNewSubPath(3.0f, 6.0f);
+            p.lineTo(16.0f, 6.0f);
+            p.startNewSubPath(3.0f, 12.0f);
+            p.lineTo(12.0f, 12.0f);
+            p.startNewSubPath(3.0f, 18.0f);
+            p.lineTo(12.0f, 18.0f);
+            p.startNewSubPath(21.0f, 15.0f);
+            p.lineTo(21.0f, 6.0f);
+            p.addEllipse(16.0f, 13.0f, 5.0f, 5.0f);
             break;
         }
 
@@ -539,6 +562,20 @@ juce::Path LucideIcons::getPath(IconType icon)
             p.closeSubPath();
 
             p.addEllipse(6.0f, 6.0f, 2.0f, 2.0f);
+            break;
+        }
+
+        case IconType::Mic:
+        {
+            // Icono "mic" de Lucide: capsula + arco inferior + pie
+            p.addRoundedRectangle(9.0f, 2.0f, 6.0f, 10.0f, 3.0f, 3.0f);
+            p.startNewSubPath(5.0f, 11.0f);
+            p.addCentredArc(12.0f, 11.0f, 7.0f, 7.0f, 0.0f,
+                            juce::MathConstants<float>::pi, juce::MathConstants<float>::twoPi, false);
+            p.startNewSubPath(12.0f, 18.0f);
+            p.lineTo(12.0f, 22.0f);
+            p.startNewSubPath(8.0f, 22.0f);
+            p.lineTo(16.0f, 22.0f);
             break;
         }
     }

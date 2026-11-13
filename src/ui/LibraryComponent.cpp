@@ -8,6 +8,8 @@
 #include "../services/YouTubeAudioDownloader.h"
 #include "../services/AsyncFolderScanner.h"
 #include "../services/LibraryCacheManager.h"
+#include "../services/StemSeparationService.h"
+#include "../services/PlaylistStore.h"
 #include "../audio/SampleTrackGenerator.h"
 #include "../audio/BeatDetector.h"
 #include "../audio/KeyDetector.h"
@@ -174,6 +176,19 @@ public:
 
             // Delete button on the right (20px reserved)
             numArea.removeFromRight(20);
+
+            // P22: badge de stems (verde = ready, ámbar = processing; oculto si no hay)
+            const auto stemsStatus = LibraryCacheManager::getInstance().getStemsStatus(track.file);
+            if (stemsStatus == "ready" || stemsStatus == "processing")
+            {
+                auto stemsArea = numArea.removeFromRight(30).reduced(1, 6);
+                const bool ready = stemsStatus == "ready";
+                g.setColour((ready ? juce::Colour::fromRGB(34, 197, 94) : juce::Colour::fromRGB(245, 158, 11)).withAlpha(0.14f));
+                g.fillRoundedRectangle(stemsArea.toFloat(), 3.0f);
+                g.setColour(ready ? juce::Colour::fromRGB(74, 222, 128) : juce::Colour::fromRGB(251, 191, 36));
+                g.setFont(juce::FontOptions(7.5f, juce::Font::bold));
+                g.drawText(ready ? "STEMS" : "SEP", stemsArea, juce::Justification::centred, false);
+            }
 
             // BPM badge or status tag
             auto badgeArea = numArea.removeFromRight(36).reduced(1, 6);
@@ -755,7 +770,98 @@ LibraryComponent::LibraryComponent(juce::AudioFormatManager& fm)
     folderTree.onUnsyncFolder = [this](const juce::String& folderPath) {
         unsyncFolder(folderPath);
     };
+    // P26: precálculo 4-stem de la carpeta (recursivo vía subtree lógico).
+    // "Todas las Pistas" es la biblioteca entera.
+    folderTree.onPrecalcFolder = [this](const juce::String& folderPath) {
+        std::vector<juce::File> files;
+        for (const auto& t : allTracks)
+        {
+            const bool inFolder = (folderPath == "Todas las Pistas")
+                || t.folder == folderPath || t.folder.startsWith(folderPath + " / ")
+                || t.rootFolderPath == folderPath;
+            if (inFolder)
+                files.push_back(t.file);
+        }
+        StemSeparationService::getInstance().enqueueBatchAsync(files,
+            [](int enqueued) {
+                juce::AlertWindow::showMessageBoxAsync(
+                    juce::MessageBoxIconType::InfoIcon,
+                    LanguageManager::trUtf8("Separación de stems", "Stem separation"),
+                    enqueued > 0
+                        ? juce::String(LanguageManager::trUtf8("Encoladas para separar 4 stems: ", "Queued for 4-stem separation: ")) + juce::String(enqueued)
+                        : LanguageManager::trUtf8("No hay pistas pendientes en esta carpeta (ya separadas, en cola o superan el límite de 15 minutos).",
+                                                  "No pending tracks in this folder (already separated, queued, or over the 15-minute limit)."));
+            });
+    };
+    folderTree.onCreatePlaylist = [this]() {
+        showPlaylistNameDialog(LanguageManager::trUtf8("Nueva playlist", "New playlist"), {},
+            [this](const juce::String& name) {
+                if (PlaylistStore::getInstance().createPlaylist(name))
+                    refreshPlaylists();
+            });
+    };
+    folderTree.onRenamePlaylist = [this](const juce::String& playlistId) {
+        auto playlists = PlaylistStore::getInstance().getPlaylists();
+        for (const auto& pl : playlists)
+        {
+            if (pl.id != playlistId)
+                continue;
+            showPlaylistNameDialog(LanguageManager::trUtf8("Renombrar playlist", "Rename playlist"), pl.name,
+                [this, playlistId](const juce::String& name) {
+                    if (PlaylistStore::getInstance().renamePlaylist(playlistId, name))
+                        refreshPlaylists();
+                });
+            break;
+        }
+    };
+    folderTree.onDeletePlaylist = [this](const juce::String& playlistId) {
+        juce::String plName;
+        auto playlists = PlaylistStore::getInstance().getPlaylists();
+        for (const auto& pl : playlists)
+        {
+            if (pl.id == playlistId)
+            {
+                plName = pl.name;
+                break;
+            }
+        }
+        if (plName.isEmpty())
+            return;
+
+        auto message = LanguageManager::trUtf8("¿Eliminar la playlist '", "Delete playlist '")
+                     + plName + LanguageManager::trUtf8("'? Las pistas no se borran del disco.", "'? Tracks are not deleted from disk.");
+        auto* alert = new juce::AlertWindow(LanguageManager::trUtf8("Eliminar playlist", "Delete playlist"),
+                                            message, juce::MessageBoxIconType::QuestionIcon, this);
+        alert->addButton(LanguageManager::trUtf8("Eliminar", "Delete"), 1);
+        alert->addButton(LanguageManager::trUtf8("Cancelar", "Cancel"), 0,
+                         juce::KeyPress(juce::KeyPress::escapeKey));
+        alert->enterModalState(true,
+            juce::ModalCallbackFunction::create(
+                [safe = juce::Component::SafePointer<LibraryComponent>(this), playlistId](int result) {
+                    if (safe != nullptr && result == 1)
+                    {
+                        PlaylistStore::getInstance().deletePlaylist(playlistId);
+                        safe->refreshPlaylists();
+                        if (safe->isPlaylistView() && safe->currentPlaylistId() == playlistId)
+                        {
+                            safe->currentSelectedFolder = "Todas las Pistas";
+                            safe->folderTree.setSelectedFolder("Todas las Pistas");
+                            safe->filterTracks(safe->searchBox.getText());
+                        }
+                    }
+                }),
+            true);
+    };
     addAndMakeVisible(folderTree);
+    refreshPlaylists();
+    folderTree.onTracksDroppedIntoPlaylist = [this](const juce::String& playlistId, const juce::StringArray& paths) {
+        auto& plStore = PlaylistStore::getInstance();
+        for (const auto& p : paths)
+            plStore.addTrack(playlistId, p.trim());
+        refreshPlaylists();
+        if (isPlaylistView() && currentPlaylistId() == playlistId)
+            filterTracks(searchBox.getText());
+    };
 
     // 3. Center Table Area Header
     tableHeaderTitle.setText(juce::String::fromUTF8("Todas las Pistas  0 Canciones"), juce::dontSendNotification);
@@ -896,6 +1002,10 @@ LibraryComponent::LibraryComponent(juce::AudioFormatManager& fm)
     refreshLanguage();
 
     setLibraryMode(LibraryMode::Local);
+
+    // Polling permanente del estado de stems (badge SEP/STEMS) y de eventos
+    // puntuales que marcan tableNeedsRepaint.
+    startTimer(1000);
 }
 
 LibraryComponent::~LibraryComponent()
@@ -917,7 +1027,11 @@ LibraryComponent::~LibraryComponent()
 
 void LibraryComponent::timerCallback()
 {
-    if (tableNeedsRepaint)
+    // El badge SEP/STEMS se pinta leyendo el caché en cada paint(); la tabla
+    // solo cambia si alguien la repinta. Mientras haya separaciones en curso
+    // se repinta cada tic, más una pasada final al completarse la última.
+    const bool stemsActive = LibraryCacheManager::getInstance().hasStemsJobInProgress();
+    if (tableNeedsRepaint || stemsActive || stemsRepaintLatch)
     {
         tableNeedsRepaint = false;
         table.updateContent();
@@ -925,10 +1039,7 @@ void LibraryComponent::timerCallback()
         if (automixQueueView != nullptr)
             automixQueueView->updateContent();
     }
-    else
-    {
-        stopTimer();
-    }
+    stemsRepaintLatch = stemsActive;
 }
 
 void LibraryComponent::updateSyncStatus(int count, bool isScanning, const juce::String& currentFolder)
@@ -1323,6 +1434,16 @@ void LibraryComponent::filterTracks(const juce::String& query)
     filteredTracks.clear();
     auto q = query.trim().toLowerCase();
 
+    const bool inPlaylistView = isPlaylistView();
+    juce::StringArray plOrder;
+    juce::StringArray plSet;
+    if (inPlaylistView)
+    {
+        plOrder = PlaylistStore::getInstance().playlistPaths(currentPlaylistId());
+        for (const auto& p : plOrder)
+            plSet.add(p);
+    }
+
     for (const auto& t : allTracks)
     {
         // 1. Check folder matching
@@ -1334,6 +1455,10 @@ void LibraryComponent::filterTracks(const juce::String& query)
         else if (currentSelectedFolder == "Descargas")
         {
             matchesFolder = (t.folder == "Descargas" || t.folder.startsWith("Descargas / "));
+        }
+        else if (inPlaylistView)
+        {
+            matchesFolder = plSet.contains(t.file.getFullPathName());
         }
         else
         {
@@ -1358,7 +1483,28 @@ void LibraryComponent::filterTracks(const juce::String& query)
         filteredTracks.push_back(t);
     }
 
-    applySorting();
+    // P17: en una playlist el orden es el manual del store, no el sorting de columnas
+    if (inPlaylistView)
+    {
+        std::vector<TrackItem> ordered;
+        ordered.reserve(filteredTracks.size());
+        for (const auto& p : plOrder)
+        {
+            for (const auto& t : filteredTracks)
+            {
+                if (t.file.getFullPathName() == p)
+                {
+                    ordered.push_back(t);
+                    break;
+                }
+            }
+        }
+        filteredTracks.swap(ordered);
+    }
+    else
+    {
+        applySorting();
+    }
 
     // Update table header title
     juce::String folderDisplay = currentSelectedFolder;
@@ -1366,6 +1512,18 @@ void LibraryComponent::filterTracks(const juce::String& query)
         folderDisplay = LanguageManager::trUtf8("Todas las Pistas", "All Tracks");
     else if (currentSelectedFolder == "Descargas")
         folderDisplay = LanguageManager::trUtf8("Descargas", "Downloads");
+    else if (inPlaylistView)
+    {
+        folderDisplay.clear();
+        for (const auto& pl : PlaylistStore::getInstance().getPlaylists())
+        {
+            if (pl.id == currentPlaylistId())
+            {
+                folderDisplay = pl.name;
+                break;
+            }
+        }
+    }
     tableHeaderTitle.setText(folderDisplay + "  " + juce::String((int)filteredTracks.size()) + " " + LanguageManager::trUtf8("Canciones", "Tracks"), juce::dontSendNotification);
 
     table.updateContent();
@@ -1420,7 +1578,7 @@ int LibraryComponent::getNumRows()
     return static_cast<int>(filteredTracks.size());
 }
 
-void LibraryComponent::paintRowBackground(juce::Graphics& g, int rowNumber, int /*width*/, int /*height*/, bool rowIsSelected)
+void LibraryComponent::paintRowBackground(juce::Graphics& g, int rowNumber, int width, int /*height*/, bool rowIsSelected)
 {
     if (rowIsSelected)
     {
@@ -1438,6 +1596,13 @@ void LibraryComponent::paintRowBackground(juce::Graphics& g, int rowNumber, int 
     else
     {
         g.fillAll(juce::Colour::fromRGB(12, 13, 18));
+    }
+
+    // P17: línea de inserción durante el drag de reordenación en playlists
+    if (isPlaylistView() && rowNumber == playlistDropRow)
+    {
+        g.setColour(juce::Colour::fromRGB(0, 229, 255));
+        g.fillRect(0, 0, width, 2);
     }
 }
 
@@ -1505,11 +1670,25 @@ void LibraryComponent::paintCell(juce::Graphics& g, int rowNumber, int columnId,
             break;
         }
 
-        case 3: // Título
+        case 3: // Título (+ badge SEP/STEMS reservado a la derecha)
+        {
+            auto titleArea = cellBounds;
+            const auto stemsStatus = LibraryCacheManager::getInstance().getStemsStatus(track.file);
+            if (stemsStatus == "ready" || stemsStatus == "processing")
+            {
+                const bool ready = stemsStatus == "ready";
+                auto pill = titleArea.removeFromRight(46).reduced(3, 8).toFloat();
+                g.setColour((ready ? juce::Colour::fromRGB(34, 197, 94) : juce::Colour::fromRGB(245, 158, 11)).withAlpha(0.14f));
+                g.fillRoundedRectangle(pill, 3.0f);
+                g.setColour(ready ? juce::Colour::fromRGB(74, 222, 128) : juce::Colour::fromRGB(251, 191, 36));
+                g.setFont(juce::FontOptions(7.5f, juce::Font::bold));
+                g.drawText(ready ? "STEMS" : "SEP", pill, juce::Justification::centred, false);
+            }
             g.setColour(juce::Colours::white);
             g.setFont(juce::FontOptions(12.0f, juce::Font::bold));
-            g.drawText(track.title, cellBounds, juce::Justification::centredLeft, true);
+            g.drawText(track.title, titleArea, juce::Justification::centredLeft, true);
             break;
+        }
 
         case 4: // Artista
             g.setColour(juce::Colour::fromRGB(142, 149, 165));
@@ -1580,6 +1759,154 @@ void LibraryComponent::cellDoubleClicked(int rowNumber, int /*columnId*/, const 
     {
         onLoadTrack(0, filteredTracks[static_cast<size_t>(rowNumber)].file);
     }
+}
+
+void LibraryComponent::cellClicked(int rowNumber, int /*columnId*/, const juce::MouseEvent& e)
+{
+    if (!e.mods.isPopupMenu())
+        return;
+    if (rowNumber < 0 || rowNumber >= (int)filteredTracks.size())
+        return;
+    showTrackContextMenu(rowNumber);
+}
+
+void LibraryComponent::refreshPlaylists()
+{
+    std::vector<PlaylistRowInfo> infos;
+    for (const auto& pl : PlaylistStore::getInstance().getPlaylists())
+    {
+        PlaylistRowInfo info;
+        info.id = pl.id;
+        info.name = pl.name;
+        info.trackCount = (int) pl.paths.size();
+        infos.push_back(std::move(info));
+    }
+    folderTree.setPlaylists(infos);
+}
+
+void LibraryComponent::showPlaylistNameDialog(const juce::String& title, const juce::String& initialName,
+                                              const std::function<void(const juce::String&)>& onAccepted)
+{
+    auto* alert = new juce::AlertWindow(title, {}, juce::MessageBoxIconType::NoIcon, this);
+    alert->addTextEditor("plname", initialName, LanguageManager::trUtf8("Nombre", "Name"));
+    alert->addButton(LanguageManager::trUtf8("Guardar", "Save"), 1,
+                     juce::KeyPress(juce::KeyPress::returnKey));
+    alert->addButton(LanguageManager::trUtf8("Cancelar", "Cancel"), 0,
+                     juce::KeyPress(juce::KeyPress::escapeKey));
+    if (auto* editor = alert->getTextEditor("plname"))
+        editor->grabKeyboardFocus();
+
+    alert->enterModalState(true,
+        juce::ModalCallbackFunction::create(
+            [safe = juce::Component::SafePointer<LibraryComponent>(this), alert, onAccepted](int result) {
+                if (safe == nullptr || result != 1)
+                    return;
+                auto name = alert->getTextEditorContents("plname").trim();
+                if (name.isNotEmpty() && onAccepted)
+                    onAccepted(name);
+            }),
+        true);
+}
+
+void LibraryComponent::showTrackContextMenu(int rowNumber)
+{
+    // El menú aplica a la selección; si la fila clicada no está en ella,
+    // la selección pasa a ser esa fila.
+    if (!table.isRowSelected(rowNumber))
+    {
+        table.deselectAllRows();
+        table.selectRow(rowNumber);
+    }
+
+    std::vector<TrackItem> tracks;
+    auto sel = table.getSelectedRows();
+    for (int i = 0; i < sel.size(); ++i)
+    {
+        int r = sel[i];
+        if (r >= 0 && r < (int)filteredTracks.size())
+            tracks.push_back(filteredTracks[static_cast<size_t>(r)]);
+    }
+    if (tracks.empty())
+        return;
+
+    const bool inPlaylistView = isPlaylistView();
+    const auto& store = PlaylistStore::getInstance();
+    auto playlists = store.getPlaylists();
+
+    enum { idRemove = 1, idNew = 2, idFirstPlaylist = 100 };
+
+    juce::PopupMenu m;
+    if (inPlaylistView)
+        m.addItem(idRemove,
+                  LanguageManager::trUtf8("Quitar de esta playlist", "Remove from this playlist"),
+                  true, false);
+
+    juce::PopupMenu plMenu;
+    std::map<int, juce::String> itemToPlaylist;
+    int nextId = idFirstPlaylist;
+    for (const auto& pl : playlists)
+    {
+        if (inPlaylistView && pl.id == currentPlaylistId())
+            continue;
+        plMenu.addItem(nextId, pl.name, true, false);
+        itemToPlaylist[nextId] = pl.id;
+        ++nextId;
+    }
+    plMenu.addSeparator();
+    plMenu.addItem(idNew, LanguageManager::trUtf8("Nueva playlist…", "New playlist…"), true, false);
+    m.addSubMenu(LanguageManager::trUtf8("Añadir a playlist", "Add to playlist"), plMenu);
+
+    m.showMenuAsync(juce::PopupMenu::Options().withTargetComponent(this).withMousePosition(),
+        [this, inPlaylistView, itemToPlaylist, tracks](int result) {
+            auto& plStore = PlaylistStore::getInstance();
+
+            if (result == idRemove && inPlaylistView)
+            {
+                auto plId = currentPlaylistId();
+                for (const auto& t : tracks)
+                    plStore.removeTrack(plId, t.file.getFullPathName());
+                refreshPlaylists();
+                filterTracks(searchBox.getText());
+                return;
+            }
+
+            if (result == idNew)
+            {
+                showPlaylistNameDialog(LanguageManager::trUtf8("Nueva playlist", "New playlist"), {},
+                    [this, tracks](const juce::String& name) {
+                        auto& plStore2 = PlaylistStore::getInstance();
+                        if (!plStore2.createPlaylist(name))
+                            return;
+                        auto plList = plStore2.getPlaylists();
+                        juce::String newId;
+                        for (const auto& pl : plList)
+                        {
+                            if (pl.name.equalsIgnoreCase(name))
+                            {
+                                newId = pl.id;
+                                break;
+                            }
+                        }
+                        if (newId.isNotEmpty())
+                        {
+                            for (const auto& t : tracks)
+                                PlaylistStore::getInstance().addTrack(newId, t.file.getFullPathName());
+                        }
+                        refreshPlaylists();
+                    });
+                return;
+            }
+
+            auto itPl = itemToPlaylist.find(result);
+            if (itPl != itemToPlaylist.end())
+            {
+                for (const auto& t : tracks)
+                    plStore.addTrack(itPl->second, t.file.getFullPathName());
+                refreshPlaylists();
+                if (isPlaylistView() && currentPlaylistId() == itPl->second)
+                    filterTracks(searchBox.getText());
+            }
+        });
 }
 
 juce::var LibraryComponent::getDragSourceDescription(const juce::SparseSet<int>& currentlySelectedRows)
@@ -1794,12 +2121,7 @@ bool LibraryComponent::isInterestedInDragSource(const SourceDetails& dragSourceD
 
 void LibraryComponent::itemDragEnter(const SourceDetails& dragSourceDetails)
 {
-    bool hover = automixDropArea.contains(dragSourceDetails.localPosition.toFloat());
-    if (hover != automixDropHover)
-    {
-        automixDropHover = hover;
-        repaint();
-    }
+    itemDragMove(dragSourceDetails);
 }
 
 void LibraryComponent::itemDragMove(const SourceDetails& dragSourceDetails)
@@ -1810,6 +2132,26 @@ void LibraryComponent::itemDragMove(const SourceDetails& dragSourceDetails)
         automixDropHover = hover;
         repaint();
     }
+
+    // P17: previsualización del punto de inserción en la vista de playlist
+    int newDropRow = -1;
+    if (isPlaylistView())
+    {
+        auto pt = table.getLocalPoint(this, dragSourceDetails.localPosition);
+        int row = table.getRowContainingPosition(pt.x, pt.y);
+        if (row >= 0)
+        {
+            auto rowPos = table.getRowPosition(row, true);
+            int offsetInRow = pt.y - rowPos.getY();
+            newDropRow = row + ((offsetInRow >= table.getRowHeight() / 2) ? 1 : 0);
+            newDropRow = juce::jlimit(0, (int) filteredTracks.size(), newDropRow);
+        }
+    }
+    if (newDropRow != playlistDropRow)
+    {
+        playlistDropRow = newDropRow;
+        table.repaint();
+    }
 }
 
 void LibraryComponent::itemDragExit(const SourceDetails&)
@@ -1818,6 +2160,11 @@ void LibraryComponent::itemDragExit(const SourceDetails&)
     {
         automixDropHover = false;
         repaint();
+    }
+    if (playlistDropRow != -1)
+    {
+        playlistDropRow = -1;
+        table.repaint();
     }
 }
 
@@ -1830,7 +2177,37 @@ void LibraryComponent::itemDropped(const SourceDetails& dragSourceDetails)
     {
         handleAutomixDropTracks(dragSourceDetails.description.toString());
     }
+    else if (isPlaylistView() && table.getBounds().contains(dragSourceDetails.localPosition))
+    {
+        // P17: reordenar la playlist según el punto de inserción
+        auto pt = table.getLocalPoint(this, dragSourceDetails.localPosition);
+        int row = table.getRowContainingPosition(pt.x, pt.y);
+        if (row >= 0)
+        {
+            auto rowPos = table.getRowPosition(row, true);
+            int insertIdx = row + ((pt.y - rowPos.getY()) >= table.getRowHeight() / 2 ? 1 : 0);
 
+            juce::String beforePath;
+            if (insertIdx < (int) filteredTracks.size())
+                beforePath = filteredTracks[static_cast<size_t>(insertIdx)].file.getFullPathName();
+
+            juce::StringArray lines;
+            lines.addTokens(dragSourceDetails.description.toString(), "\n", "");
+            juce::String dragPath = lines[0].trim();
+            if (dragPath.isNotEmpty())
+            {
+                PlaylistStore::getInstance().reorderTrack(currentPlaylistId(), dragPath, beforePath);
+                refreshPlaylists();
+                filterTracks(searchBox.getText());
+            }
+        }
+    }
+
+    if (playlistDropRow != -1)
+    {
+        playlistDropRow = -1;
+        table.repaint();
+    }
     repaint();
 }
 

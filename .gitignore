@@ -16,3 +16,18 @@ DerivedData/
 *.a
 *.dylib
 *.app
+# P23: runtime ONNX vendorizada (binarios de release, sí van al repo)
+!third_party/onnxruntime/**/*.dylib
+!third_party/onnxruntime/**/*.so
+!third_party/onnxruntime/**/*.so.*
+
+# P23: modelo ML de stems (171 MB, generado con tools/export_stems_model.py)
+assets/models/*.onnx
+assets/models/*.onnx.data
+# ref npy temporales de la verificacion del export
+ref_in.npy
+ref_out.npy
+ref_original.npy
+
+# sesiones de pruebas de navegador
+.playwright-mcp/

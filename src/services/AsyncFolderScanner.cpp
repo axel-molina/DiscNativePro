@@ -38,7 +38,7 @@ void AsyncFolderScanner::startScan(const juce::File& rootFolder, const juce::Str
     batchBuffer.clear();
     lastBatchDispatchTick = juce::Time::getMillisecondCounter();
 
-    uint64_t newScanId = ++currentScanId;
+    ++currentScanId;
 
     startThread(juce::Thread::Priority::normal);
 }
@@ -75,13 +75,12 @@ void AsyncFolderScanner::scanDirectoryRecursive(const juce::File& dir, const juc
 
     std::vector<juce::File> subDirs;
 
-    juce::DirectoryIterator iter(dir, false, "*", juce::File::findFilesAndDirectories);
-    while (iter.next())
+    for (const auto& entry : juce::RangedDirectoryIterator(dir, false, "*", juce::File::findFilesAndDirectories))
     {
         if (threadShouldExit() || cancelRequested.load() || scanId != currentScanId.load())
             return;
 
-        auto f = iter.getFile();
+        auto f = entry.getFile();
         if (f.isDirectory())
         {
             auto dirName = f.getFileName();
@@ -267,12 +266,12 @@ void AsyncFolderScanner::flushBatch(uint64_t scanId, bool isFinal)
 
     int totalFound = tracksFoundCount.load();
 
-    juce::MessageManager::callAsync([this, batchCopy = std::move(batchCopy), totalFound, scanId, isFinal]() {
+    juce::MessageManager::callAsync([this, batch = std::move(batchCopy), totalFound, scanId, isFinal]() {
         if (scanId != currentScanId.load())
             return;
 
-        if (!batchCopy.empty() && onTracksDiscovered)
-            onTracksDiscovered(batchCopy, scanId);
+        if (!batch.empty() && onTracksDiscovered)
+            onTracksDiscovered(batch, scanId);
 
         if (isFinal && onScanFinished)
             onScanFinished(totalFound, scanId);

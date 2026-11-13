@@ -124,6 +124,12 @@ public:
         if (deckIndex == 0) deck1Bpm.store(bpm);
         else if (deckIndex == 1) deck2Bpm.store(bpm);
     }
+    // P21: fase de beat (0..1) del deck para anclar FX rítmicos; -1.0 = sin anclaje
+    void setDeckBeatPhase(int deckIndex, double phase)
+    {
+        if (deckIndex == 0) deck1BeatPhase.store(phase);
+        else if (deckIndex == 1) deck2BeatPhase.store(phase);
+    }
 
 private:
     double currentSampleRate { 44100.0 };
@@ -134,6 +140,8 @@ private:
     DeckFxChain fxChain2;
     std::atomic<float> deck1Bpm { 120.0f };
     std::atomic<float> deck2Bpm { 120.0f };
+    std::atomic<double> deck1BeatPhase { -1.0 };
+    std::atomic<double> deck2BeatPhase { -1.0 };
 
     std::atomic<float> crossfader { 0.0f };    // -1.0 = Deck 1 full, 0.0 = Center, +1.0 = Deck 2 full
     std::atomic<float> masterVolume { 1.0f };

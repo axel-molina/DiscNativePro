@@ -236,6 +236,8 @@ jobs:
         run: |
           mkdir -p dist
           find build -name "DiscNativePro" -type f -perm /111 -exec cp {} dist/ \;
+          # P27: el runtime ONNX vive junto al exe (post-build); sin él la app pierde stems
+          find build -name "libonnxruntime.so*" -type f -exec cp {} dist/ \;
           cp assets/icon.png dist/ 2>/dev/null || true
           cat << 'EOF' > dist/run.sh
           #!/usr/bin/env bash
@@ -245,11 +247,26 @@ jobs:
           chmod +x dist/run.sh dist/DiscNativePro
           tar -czvf DiscNativePro-Linux-x64.tar.gz -C dist .
 
+      - name: Package Linux (.deb)
+        shell: bash
+        run: |
+          cd build && cpack -G DEB
+          cd ..
+          find build -name "*.deb" -exec cp {} . \;
+          ls -la *.deb
+
       - name: Upload Linux Artifact
         uses: actions/upload-artifact@v4
         with:
           name: linux-artifact
           path: DiscNativePro-Linux-x64.tar.gz
+          if-no-files-found: error
+
+      - name: Upload Linux .deb Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-deb-artifact
+          path: "*.deb"
           if-no-files-found: error
 
   build-macos:
@@ -342,6 +359,11 @@ jobs:
         with:
           name: linux-artifact
 
+      - name: Download Linux .deb Artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: linux-deb-artifact
+
       - name: Download macOS Artifact
         uses: actions/download-artifact@v4
         with:
@@ -354,6 +376,7 @@ jobs:
             DiscNativePro-Windows-x64-Setup.exe
             DiscNativePro-Windows-x64.msix
             DiscNativePro-Linux-x64.tar.gz
+            *.deb
             DiscNativePro-macOS-Universal.zip
             DiscNativePro-macOS.dmg
           generate_release_notes: true
