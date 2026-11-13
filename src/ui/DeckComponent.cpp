@@ -1758,8 +1758,13 @@ void DeckComponent::resized()
     }
     area.removeFromBottom(6);
 
-    // 2c-bis. Fila de stems (22px, solo si la pista tiene stems listos)
+    // 2c-bis. Fila de stems (22px, solo si la pista tiene stems listos).
+    // Sin visibilidad explícita los botones quedaban con sus bounds viejos
+    // superpuestos a HOT CUE al cambiar a una pista sin stems.
     stemsRowShown = deck.isStemsReady() || deck.isStems2Engaged();
+    stemsMasterButton.setVisible(stemsRowShown);
+    for (auto& stemButton : stemButtons)
+        stemButton.setVisible(stemsRowShown);
     if (stemsRowShown)
     {
         auto stemsRow = area.removeFromBottom(22);
