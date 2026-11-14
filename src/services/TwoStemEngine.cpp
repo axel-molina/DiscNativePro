@@ -25,7 +25,14 @@ constexpr int64_t kNeed = (int64_t)(kFrames - 1) * kHop + kFft;   // 267264
 
 const OrtApi* ortApi()
 {
-    static const OrtApi* api = OrtGetApiBase()->GetApi(ORT_API_VERSION);
+    // Igual que OnnxStemEngine: fallback de versión para la dylib 1.22 del slice Intel.
+    static const OrtApi* api = []
+    {
+        for (int v = ORT_API_VERSION; v >= 14; --v)
+            if (auto* a = OrtGetApiBase()->GetApi((uint32_t) v))
+                return a;
+        return static_cast<const OrtApi*> (nullptr);
+    }();
     return api;
 }
 

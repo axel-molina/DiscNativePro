@@ -16,7 +16,16 @@ constexpr int64_t kFade = kChunk / 10;  // ventana de fade en los bordes (StemKi
 
 const OrtApi* ortApi()
 {
-    static const OrtApi* api = OrtGetApiBase()->GetApi(ORT_API_VERSION);
+    // En Intel macOS la dylib vendorizada es 1.22 (API 22): pedir ORT_API_VERSION
+    // devolvería null. Ambos motores solo usan funciones de API <= 15, compatibles
+    // por prefijo con cualquier versión >= 14.
+    static const OrtApi* api = []
+    {
+        for (int v = ORT_API_VERSION; v >= 14; --v)
+            if (auto* a = OrtGetApiBase()->GetApi((uint32_t) v))
+                return a;
+        return static_cast<const OrtApi*> (nullptr);
+    }();
     return api;
 }
 

@@ -1912,3 +1912,13 @@ muerto histórico, sin tocarlo para no romper nada del agente concurrente).
 - Pendiente de validación del usuario: importar un mapper+definition real de
   VirtualDJ desde Documents/VirtualDJ (Mappers/Devices) y probar los mapeos
   con la controladora.
+
+# Walkthrough — Bugfix: superposición fila de stems vs HOT CUE (2026-11-13)
+
+**Reporte del usuario**: con una pista con 4 stems cargada, forzó el cambio a otra pista sin stems descargados y los botones STEMS/VOC/DRM/BAS/OTH quedaron superpuestos a la fila HOT CUE.
+
+**Causa raíz**: `DeckComponent::resized()` solo setea bounds de los 5 botones de stems dentro de `if (stemsRowShown)`; al pasar a false, los botones (siempre visibles por `addAndMakeVisible`) conservaban bounds viejos encima de HOT CUE, que recupera el espacio.
+
+**Fix** (commit 24b9ad1, src/ui/DeckComponent.cpp): `setVisible(stemsRowShown)` explícito para stemsMasterButton y los 4 stemButtons antes del `if`. Compilación 0 errores / 0 warnings; app relanzada (Release).
+
+**Release**: v1.4.0 retageado a 24b9ad1 (fix incluido); run CI previo (43466576255, macOS en curso) cancelado por decisión del usuario; nuevo run 43486498080 compilando las 3 plataformas.
