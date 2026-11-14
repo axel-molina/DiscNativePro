@@ -35,6 +35,10 @@
   - Medidor de uso de memoria RAM en tiempo real en la barra superior.
   - Selector de dispositivos de audio y configuración de frecuencias de muestreo / tamaño de búfer.
 
+- **Actualizaciones Automáticas**:
+  - Auto-update "instalar al reiniciar" según canal de instalación: Sparkle en macOS, staging + instalador silencioso al reiniciar en Windows (Setup.exe) y auto-reemplazo con backup en Linux portable.
+  - En Microsoft Store y .deb el updater interno queda deshabilitado (delega en la Store / apt).
+
 ---
 
 ## Requisitos del Sistema

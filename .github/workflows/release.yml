@@ -305,6 +305,13 @@ jobs:
             fi
           done
           echo "OK: universal binary contains arm64 and x86_64"
+          APP_FRAMEWORKS="$APP_PATH/Contents/Frameworks"
+          if [ ! -f "$APP_FRAMEWORKS/libonnxruntime.1.dylib" ]; then
+            echo "ERROR: $APP_FRAMEWORKS/libonnxruntime.1.dylib is missing (binary loads @rpath/libonnxruntime.1.dylib)"
+            ls -la "$APP_FRAMEWORKS"
+            exit 1
+          fi
+          echo "OK: libonnxruntime.1.dylib bundled in Frameworks"
 
       - name: Package macOS App (.zip)
         shell: bash

@@ -98,6 +98,22 @@ central con transport, hotcues, loops y stems.
   video) o solo el audio (modo audio) — configurable en Ajustes.
 - En modo video el deck muestra el reproductor; el BPM/key no se analizan.
 
+## Actualizaciones automáticas
+
+La app detecta cómo fue instalada y gestiona las actualizaciones según el canal:
+
+- **macOS (DMG / .app)**: en **Ajustes → Versión** apretás "Buscar actualizaciones"
+  (motor Sparkle). La versión nueva se descarga y se instala al cerrar la app
+  ("Install on Quit"); al volver a abrirla ya estás actualizado.
+- **Windows (Setup.exe)**: la descarga se completa en segundo plano y se instala
+  automáticamente al reiniciar la app ("Se instalará cuando la aplicación se
+  reinicie").
+- **Windows (Microsoft Store)**: no hay updater interno; Ajustes → Versión indica
+  que las actualizaciones las gestiona la Store.
+- **Linux (.deb)**: se actualiza desde el repositorio apt (`sudo apt upgrade`).
+- **Linux (portable .tar.gz)**: al cerrar la app se reemplaza a sí misma por la
+  versión nueva (con backup y relanzamiento automático).
+
 ## Atajos y sugerencias
 
 - Doble clic en un knob lo vuelve a su valor por defecto.
@@ -110,6 +126,9 @@ central con transport, hotcues, loops y stems.
 
 - **"requires macOS 14.0 o superior"**: la app usa un motor de IA embebido que
   exige macOS 14+.
+- **La app no abre en macOS (versión 1.4.0)**: defecto de empaquetado corregido
+  en la versión 1.4.1. Descargá el DMG nuevo desde el release 1.4.1 y
+  reemplazá la app; no hace falta desinstalar.
 - **La pista suena más rápido/lento de lo esperado**: corregido desde la
   versión 1.3.3 (archivos 44.1 kHz vs 48 kHz); si persiste, avisá con el
   formato del archivo y la placa de audio.

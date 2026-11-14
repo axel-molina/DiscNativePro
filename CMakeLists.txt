@@ -8,7 +8,7 @@ if(APPLE AND NOT DEFINED CMAKE_OSX_DEPLOYMENT_TARGET)
     set(CMAKE_OSX_DEPLOYMENT_TARGET "14.0")
 endif()
 
-project(DiscNativePro VERSION 1.4.0 LANGUAGES C CXX)
+project(DiscNativePro VERSION 1.4.1 LANGUAGES C CXX)
 
 if(APPLE)
     enable_language(OBJCXX)
@@ -266,7 +266,7 @@ if(APPLE)
             "$<TARGET_BUNDLE_DIR:DiscNativePro>/Contents/Frameworks"
         COMMAND ${CMAKE_COMMAND} -E copy_if_different
             "${ORT_ROOT}/macos/lib/libonnxruntime-wheel-1.27.0.dylib"
-            "$<TARGET_BUNDLE_DIR:DiscNativePro>/Contents/Frameworks/"
+            "$<TARGET_BUNDLE_DIR:DiscNativePro>/Contents/Frameworks/libonnxruntime.1.dylib"
         COMMENT "Bundling ONNX Runtime into app Frameworks"
     )
 

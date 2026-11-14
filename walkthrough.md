@@ -1972,3 +1972,35 @@ Objetivo del usuario: la descarga de actualización no debe abrir carpetas ni pe
 - `cmake --build build`: **0 errores, 0 warnings** en código propio (2 warnings JUCE/harfbuzz vendidos en rebuild completo son pre-existentes). Corregidos en el camino: `@kAppcastUrl` no válido para char* (NSString* literal), `juce::Process::getProcessID()` no existe en JUCE 8 (getpid() de unistd), captura de `extractedDir` fuera de JUCE_LINUX en el lambda, unused vars/params con guards.
 - App relanzada (Release, PID verificado). Sparkle.framework presente en Contents/Frameworks.
 - **Pendiente del usuario para activar el updater macOS**: `third_party/sparkle/bin/generate_keys` → pública al build (`-DSPARKLE_EDDSA_PUBLIC_KEY=...`) y privada en secret `SPARKLE_EDDSA_KEY`. Sin eso el feed queda sin items y Sparkle no ofrece updates (la app funciona normal).
+
+---
+
+# Walkthrough — Hotfix v1.4.1: crash al arranque en macOS empaquetado
+
+## Problema reportado
+"La app no abre" — la DiscNativePro instalada (v1.4.0, DMG del GitHub Release) moría al arrancar sin abrir ventana.
+
+## Diagnóstico (evidencia)
+- Crash reports `~/Library/Logs/DiagnosticReports/DiscNativePro-*.ips` (5 el 2026-11-14): `SIGABRT` de dyld, tipo 309, `termination: DYLD "Library missing"`.
+- Motivo exacto: `Library not loaded: @rpath/libonnxruntime.1.dylib` — el binario busca un archivo con ese nombre literal en `Contents/Frameworks/`, pero el POST_BUILD lo copiaba como `libonnxruntime-wheel-1.27.0.dylib`.
+- El build local "funcionaba" por accidente: un rpath extra apuntaba a `third_party/onnxruntime/macos/lib` del repo.
+- El install name de la wheel dylib ya era `@rpath/libonnxruntime.1.dylib` (no hizo falta `install_name_tool`).
+
+## Cambios ([MODIFY])
+- `CMakeLists.txt:11`: bump de versión 1.4.0 → 1.4.1.
+- `CMakeLists.txt:267-269` (POST_BUILD ONNX): la copia al bundle ahora incluye el nombre destino `libonnxruntime.1.dylib` (el que el binario resuelve vía `@executable_path/../Frameworks`).
+- `.github/workflows/release.yml` (job `build-macos`, step `Verify universal binary`): nueva verificación que falla el job si `Contents/Frameworks/libonnxruntime.1.dylib` no existe, para que este defecto nunca vuelva a publicarse.
+
+## Verificación
+1. `cmake --build build`: 0 errores, 0 warnings.
+2. Bundle: `Contents/Frameworks/libonnxruntime.1.dylib` presente.
+3. **Prueba fuera del repo** (condición que reproduce el crash): bundle copiado a `/tmp/dnp_test` y lanzado → proceso vivo (PID 61239). Antes moría con SIGABRT.
+4. **Workaround aplicado a la app instalada**: se copió `libonnxruntime.1.dylib` a `/Applications/DiscNativePro.app/Contents/Frameworks/`, re-firma ad-hoc del bundle exterior y limpieza de quarantine → `open` exitoso, proceso vivo (PID 61453), `codesign --verify --strict` OK.
+5. Regla de relanzamiento cumplida (`pkill` → `open` → `pgrep`).
+
+## Docs sync (release-docs-sync)
+- `docs/manual_usuario.md`: nueva sección "Actualizaciones automáticas" (P30, por canal: Sparkle macOS, Setup.exe Windows, Store, apt, portable) + entrada de troubleshooting del crash de v1.4.0 corregido en 1.4.1.
+- `README.md`: nueva feature "Actualizaciones Automáticas" en Características Principales.
+
+## Release
+- Rama `axel-molina/v1.4.1` (incluye P30 auto-update `cdda2c0` + este fix) → push a `main` → tag `v1.4.1` → CI `release.yml` construye macOS/Windows/Linux y publica el Release si las 3 pasan (la de macOS ahora verifica la dylib).
