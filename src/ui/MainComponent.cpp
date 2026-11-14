@@ -985,6 +985,14 @@ void MainComponent::openGridEditor(int deckIndex)
 
 void MainComponent::scheduleUpdateCheck()
 {
+    // P30: macOS lo lleva Sparkle con su chequeo programado propio; en Store
+    // y .deb el updater interno está deshabilitado. El chequeo JUCE solo
+    // aplica a los contextos con updater propio (Setup Windows / portable
+    // Linux).
+    const auto ctx = UpdateService::getInstallContext();
+    if (ctx != InstallContext::Kind::WinSetup && ctx != InstallContext::Kind::LinuxPortable)
+        return;
+
     // ponytail: diferido 3s para no competir con el arranque del motor de audio;
     // un solo chequeo por lanzamiento (la API anónima permite 60 req/h).
     // Solo enciende el badge: el diálogo nace del clic (orden de ventanas sano,

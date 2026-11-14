@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<rss version="2.0" xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle" xmlns:dc="http://purl.org/dc/elements/1.1/">
+  <channel>
+    <title>DiscNativePro</title>
+    <link>https://discnativepro.dev.ar/</link>
+    <description>Actualizaciones de DiscNativePro para macOS</description>
+    <language>es</language>
+    <!-- Los items los agrega el workflow Release Binaries: cada release firma
+         DiscNativePro-macOS-Universal.zip con EdDSA (sign_update) y agrega un
+         item con sparkle:edSignature y length. -->
+  </channel>
+</rss>

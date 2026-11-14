@@ -1922,3 +1922,53 @@ muerto histórico, sin tocarlo para no romper nada del agente concurrente).
 **Fix** (commit 24b9ad1, src/ui/DeckComponent.cpp): `setVisible(stemsRowShown)` explícito para stemsMasterButton y los 4 stemButtons antes del `if`. Compilación 0 errores / 0 warnings; app relanzada (Release).
 
 **Release**: v1.4.0 retageado a 24b9ad1 (fix incluido); run CI previo (43466576255, macOS en curso) cancelado por decisión del usuario; nuevo run 43486498080 compilando las 3 plataformas.
+
+## Fix adicional v1.4.0 — dylib ORT universal + fallback de API (commit b883047)
+
+Run 3 del CI falló al enlazar x86_64 en macOS: libonnxruntime-wheel-1.27.0.dylib (P25) es arm64-only y ORT no publica binarios Intel desde 1.27 (verificado en PyPI y GitHub Releases). El run 1 de macOS también había fallado por esto (pasó inadvertido).
+
+- Dylib: slice x86_64 extraído de libonnxruntime.1.22.0.dylib (universal2), install name igualado a @rpath/libonnxruntime.1.dylib, fusionado con lipo con el wheel arm64 1.27.0, firma ad-hoc. Archivo final 64 MB, CMake sin cambios.
+- Motores (OnnxStemEngine/TwoStemEngine): GetApi(ORT_API_VERSION) → fallback descendente 27→14 (solo usan funciones de API ≤ 15, compatibles por prefijo). En Intel el 2-stem puede degradar; el 4-stem sobre 1.22 es el setup P23.
+- Build local 0/0; app relanzada. Tag v1.4.0 → b883047; run CI 43534492546.
+
+# Walkthrough — P30: auto-update "instalar al reiniciar" en las 3 plataformas (2026-11-14, rama axel-molina/v1.4.1)
+
+Objetivo del usuario: la descarga de actualización no debe abrir carpetas ni pedir arrastrar nada — se descarga y se instala sola al reiniciar la app. La versión de Microsoft Store queda excluida (Store gestiona sus updates).
+
+## Arquitectura por contexto de instalación (InstallContext)
+
+- [src/services/InstallContext.h](src/services/InstallContext.h) / [.cpp](src/services/InstallContext.cpp) [NEW]: detección `MacApp` / `WinStore` / `WinSetup` / `LinuxDeb` / `LinuxPortable`. Windows: `GetPackageFullName` de kernel32 (≠ `ERROR_APPMODEL_ERROR_NO_PACKAGE` = MSIX). Linux: exe bajo /usr|/opt o presencia de `/var/lib/dpkg/info/discnativepro.list` = .deb.
+- Updater interno activo solo en MacApp / WinSetup / LinuxPortable ([UpdateService::isInternalUpdaterActive](src/services/UpdateService.cpp)); en Store y .deb el chequeo responde vacío sin red.
+
+## macOS — Sparkle 2 (vendorizado)
+
+- third_party/sparkle/Sparkle.framework 2.10.1 (universal, ad-hoc). CMake lo copia a Contents/Frameworks vía POST_BUILD y enlaza; [MacSparkleUpdater.mm](src/services/MacSparkleUpdater.mm) [NEW] inicia `SPUStandardUpdaterController` con feed por delegado (appcast.xml en raw.githubusercontent main — el bundle Info.plist lo genera JUCE y no es fiable para claves custom). Driver estándar = alerta con "Install on Quit": al reiniciar instala solo.
+- `SparkleBridge::startup()/shutdown()` desde Main.cpp; botón "Buscar actualizaciones" de Settings ahora llama a `SparkleBridge::checkForUpdates()` en macOS.
+- CMake: si se pasa `-DSPARKLE_EDDSA_PUBLIC_KEY=<b64>`, plutil inyecta `SUPublicEDKey` + `SUEnableAutomaticChecks` en el Info.plist del bundle. **Pendiente del usuario**: generar el par de claves (`third_party/sparkle/bin/generate_keys`) y pasar la pública al build + privada como secret de GitHub.
+- appcast.xml [NEW] en la raíz: canal vacío; CI agrega items firmados.
+
+## Windows — Inno Setup silencioso
+
+- El Setup.exe se descarga a `%TEMP%/DiscNativePro/update` (no a Descargas). `setPendingInstallOnQuit(path)` persiste en settings.json; al salir, [UpdateService::runPendingInstaller()](src/services/UpdateService.cpp) lo lanza `/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /CloseApplications=force /DIR="<dir instalado>"` — actualiza en el mismo directorio sin interacción.
+- Settings muestra "Se instalará al reiniciar la aplicación" y guarda el pendiente en el callback de descarga.
+
+## Linux portable — self-replace por script
+
+- El tar.gz se extrae en background a `~/.cache/DiscNativePro/update/new` (juce::ChildProcess tar) y se marca pendiente. Al salir, runPendingInstaller escribe `apply_update.sh` (espera `/proc/<pid>` muerto, backup `.bak` del binario, `cp -f staging/*` sobre el dir de la app, limpia staging, relanza run.sh), chmod +x y lo lanza con `Process::openDocument`.
+- .deb guard: updater deshabilitado, Settings muestra "actualizaciones gestionadas por apt".
+
+## UI por contexto (Fase E)
+
+- Settings tab Versión: en Store/.deb solo quedan título + mensaje del canal ("gestionadas automáticamente desde Microsoft Store" / "por apt"); botones y combo ocultos, sin auto-chequeo.
+- MainComponent::scheduleUpdateCheck(): chequeo JUCE de arranque solo para WinSetup/LinuxPortable (Sparkle lleva su chequeo programado en macOS).
+
+## CI (release.yml)
+
+- Job macOS: nuevo paso que firma DiscNativePro-macOS-Universal.zip con `third_party/sparkle/bin/sign_update` usando secret `SPARKLE_EDDSA_KEY`; sin el secret emite warning y no rompe el release.
+- Job publish: checkout de main primero, inserta el item firmado en appcast.xml (python, idempotente por tag, XML validado) y lo commitea a main con github-actions bot.
+
+## Verificación
+
+- `cmake --build build`: **0 errores, 0 warnings** en código propio (2 warnings JUCE/harfbuzz vendidos en rebuild completo son pre-existentes). Corregidos en el camino: `@kAppcastUrl` no válido para char* (NSString* literal), `juce::Process::getProcessID()` no existe en JUCE 8 (getpid() de unistd), captura de `extractedDir` fuera de JUCE_LINUX en el lambda, unused vars/params con guards.
+- App relanzada (Release, PID verificado). Sparkle.framework presente en Contents/Frameworks.
+- **Pendiente del usuario para activar el updater macOS**: `third_party/sparkle/bin/generate_keys` → pública al build (`-DSPARKLE_EDDSA_PUBLIC_KEY=...`) y privada en secret `SPARKLE_EDDSA_KEY`. Sin eso el feed queda sin items y Sparkle no ofrece updates (la app funciona normal).

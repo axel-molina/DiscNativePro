@@ -322,6 +322,32 @@ jobs:
           APP_DIR=$(dirname "$APP_PATH")
           (cd "$APP_DIR" && ditto -c -k --sequesterRsrc --keepParent DiscNativePro.app "$GITHUB_WORKSPACE/DiscNativePro-macOS-Universal.zip")
 
+      - name: Sign macOS zip (Sparkle EdDSA)
+        env:
+          SPARKLE_EDDSA_KEY: ${{ secrets.SPARKLE_EDDSA_KEY }}
+        run: |
+          if [ -z "$SPARKLE_EDDSA_KEY" ]; then
+            echo "::warning::SPARKLE_EDDSA_KEY no definido: el appcast quedará sin este release (Sparkle no lo ofrecerá)."
+            exit 0
+          fi
+          KEYFILE=$(mktemp)
+          printf '%s' "$SPARKLE_EDDSA_KEY" > "$KEYFILE"
+          if ! SIG=$(third_party/sparkle/bin/sign_update "$GITHUB_WORKSPACE/DiscNativePro-macOS-Universal.zip" --ed-key-file "$KEYFILE"); then
+            rm -f "$KEYFILE"
+            echo "sign_update falló"
+            exit 1
+          fi
+          rm -f "$KEYFILE"
+          echo "$SIG" > sparkle_signature.txt
+          cat sparkle_signature.txt
+
+      - name: Upload Sparkle signature
+        uses: actions/upload-artifact@v4
+        with:
+          name: sparkle-signature
+          path: sparkle_signature.txt
+          if-no-files-found: ignore
+
       - name: Package macOS DMG (drag-to-Applications)
         shell: bash
         run: |
@@ -349,6 +375,13 @@ jobs:
     runs-on: ubuntu-latest
     needs: [build-windows, build-linux, build-macos]
     steps:
+      # Primero checkout de main: el job vive en un tag pero appcast.xml se
+      # mantiene en main (el feed que lee Sparkle apunta a la rama main).
+      - name: Checkout main (appcast)
+        uses: actions/checkout@v4
+        with:
+          ref: main
+
       - name: Download Windows Artifact
         uses: actions/download-artifact@v4
         with:
@@ -368,6 +401,66 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: macos-artifact
+
+      - name: Download Sparkle signature
+        uses: actions/download-artifact@v4
+        with:
+          name: sparkle-signature
+        continue-on-error: true
+
+      - name: Update appcast.xml (Sparkle)
+        env:
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          if [[ "$REF_NAME" != v* ]]; then
+            echo "appcast: solo se actualiza en tags v*"
+            exit 0
+          fi
+          if [ ! -f sparkle_signature.txt ]; then
+            echo "::warning::Sin firma Sparkle (falta SPARKLE_EDDSA_KEY): appcast.xml no se actualiza."
+            exit 0
+          fi
+          export TAG="$REF_NAME"
+          export SIG_LINE="$(cat sparkle_signature.txt)"
+          python3 - <<'PY'
+          import os
+          from email.utils import formatdate
+
+          tag = os.environ["TAG"]            # p.ej. "v1.4.1"
+          ver = tag.lstrip("v")
+          sig = os.environ["SIG_LINE"]       # sparkle:edSignature="..." length="..."
+
+          item = f"""    <item>
+          <title>Version {ver}</title>
+          <sparkle:releaseNotesLink>https://github.com/axel-molina/DiscNativePro/releases/tag/{tag}</sparkle:releaseNotesLink>
+          <pubDate>{formatdate(usegmt=True)}</pubDate>
+          <sparkle:shortVersionString>{ver}</sparkle:shortVersionString>
+          <sparkle:version>{ver}</sparkle:version>
+          <enclosure url="https://github.com/axel-molina/DiscNativePro/releases/download/{tag}/DiscNativePro-macOS-Universal.zip" {sig} type="application/octet-stream" />
+          </item>
+          """
+
+          path = "appcast.xml"
+          with open(path) as f:
+              content = f.read()
+
+          if f"/download/{tag}/" in content:
+              # Re-release del mismo tag: reemplazar el item existente.
+              import re
+              pattern = r"    <item>.*?/download/" + re.escape(tag) + r"/.*?</item>\n"
+              content = re.sub(pattern, item, content, flags=re.S)
+          else:
+              content = content.replace("  </channel>", item + "  </channel>\n")
+
+          with open(path, "w") as f:
+              f.write(content)
+          PY
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add appcast.xml
+          git commit -m "ci: appcast.xml para ${TAG}" || { echo "appcast sin cambios"; exit 0; }
+          git push origin main
 
       - name: Publish to GitHub Release
         uses: softprops/action-gh-release@v2

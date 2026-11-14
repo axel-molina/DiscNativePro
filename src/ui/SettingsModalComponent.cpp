@@ -10,6 +10,10 @@
 #include "../services/VdjMappingImporter.h"
 #include "../audio/Mp3Exporter.h"
 
+#if JUCE_MAC
+    #include "../services/MacSparkleUpdater.h"
+#endif
+
 namespace
 {
     // P29: reporte de importación de mappings (Mixxx / VDJ) en un diálogo.
@@ -1951,6 +1955,23 @@ void SettingsModalComponent::setupVersionTab()
     versionStatusLabel.setColour(juce::Label::textColourId, juce::Colour::fromRGB(148, 163, 184));
     bodyContent.addChildComponent(versionStatusLabel);
 
+    // P30: Store (MSIX) y .deb no tienen updater interno — la pestaña queda
+    // reducida al estado de versión con el mensaje del canal correspondiente.
+    if (!UpdateService::isInternalUpdaterActive())
+    {
+        const auto ctx = UpdateService::getInstallContext();
+        if (ctx == InstallContext::Kind::WinStore)
+            versionStatusLabel.setText(LanguageManager::trUtf8(
+                "Las actualizaciones se gestionan automáticamente desde Microsoft Store.",
+                "Updates are managed automatically from the Microsoft Store."),
+                juce::dontSendNotification);
+        else
+            versionStatusLabel.setText(LanguageManager::trUtf8(
+                "Las actualizaciones se gestionan desde el repositorio apt (sudo apt upgrade).",
+                "Updates are managed from the apt repository (sudo apt upgrade)."),
+                juce::dontSendNotification);
+    }
+
     checkUpdatesBtn.setText(LanguageManager::trUtf8("Buscar actualizaciones", "Check for updates"));
     checkUpdatesBtn.setFontSize(11.0f);
     checkUpdatesBtn.setCornerRadius(6.0f);
@@ -1958,7 +1979,14 @@ void SettingsModalComponent::setupVersionTab()
                                     juce::Colours::white,
                                     juce::Colours::white,
                                     juce::Colour::fromRGB(55, 60, 78));
+   #if JUCE_MAC
+    // P30 (macOS): el chequeo manual lo lleva Sparkle con su diálogo estándar
+    // ("Install on Quit"); el panel de "Cambiar de versión" sigue usando el
+    // flujo JUCE de descarga manual.
+    checkUpdatesBtn.onClick = []() { SparkleBridge::checkForUpdates(); };
+   #else
     checkUpdatesBtn.onClick = [this]() { checkUpdatesFromUI(); };
+   #endif
     bodyContent.addChildComponent(checkUpdatesBtn);
 
     // Section: Cambiar de versión
@@ -2026,7 +2054,8 @@ void SettingsModalComponent::setupVersionTab()
                     juce::dontSendNotification);
                 safeThis->downloadProgressBar.repaint();
             },
-            [safeThis](bool success, const juce::String& errMsg, const juce::File& /*file*/) {
+            [safeThis](bool success, const juce::String& errMsg, const juce::File& file) {
+                juce::ignoreUnused(file);
                 if (safeThis == nullptr) return;
                 safeThis->isDownloading = false;
                 safeThis->installVersionBtn.setEnabled(true);
@@ -2034,9 +2063,20 @@ void SettingsModalComponent::setupVersionTab()
 
                 if (success)
                 {
+                   #if JUCE_WINDOWS
+                    // P30 (Setup): la instalación no se dispara desde acá —
+                    // queda marcada y runPendingInstaller la lanza silenciosa
+                    // al cerrar la app.
+                    UpdateService::setPendingInstallOnQuit(file.getFullPathName());
+                   #endif
                     safeThis->downloadProgressValue = 1.0;
                     safeThis->downloadStatusLabel.setText(
+                       #if JUCE_MAC
                         LanguageManager::trUtf8("¡Descarga completada! Abriendo instalador...", "Download complete! Opening installer..."),
+                       #else
+                        LanguageManager::trUtf8("¡Descarga completada! Se instalará al reiniciar la aplicación.",
+                                                "Download complete! It will install when the application restarts."),
+                       #endif
                         juce::dontSendNotification);
                     safeThis->downloadStatusLabel.setColour(juce::Label::textColourId, juce::Colour::fromRGB(74, 222, 128));
                 }
@@ -2589,19 +2629,22 @@ void SettingsModalComponent::updateTabVisibility()
     presetSilverBtn.setVisible(isDesign);
 
     // Version components (Tab 9)
+    // P30: sin updater interno (Store / .deb) solo quedan el título y el
+    // estado de versión; todo el flujo de búsqueda/descarga se oculta.
+    const bool internalUpdater = UpdateService::isInternalUpdaterActive();
     bool isVersion = (activeTab == 9);
     versionSectionTitle.setVisible(isVersion);
     versionAppTitle.setVisible(isVersion);
     versionStatusLabel.setVisible(isVersion);
-    checkUpdatesBtn.setVisible(isVersion);
-    versionChangeTitle.setVisible(isVersion);
-    versionHelpIcon.setVisible(isVersion);
-    versionSelectCombo.setVisible(isVersion);
-    installVersionBtn.setVisible(isVersion);
-    downloadStatusLabel.setVisible(isVersion && downloadStatusLabel.getText().isNotEmpty());
-    downloadProgressBar.setVisible(isVersion && isDownloading);
+    checkUpdatesBtn.setVisible(isVersion && internalUpdater);
+    versionChangeTitle.setVisible(isVersion && internalUpdater);
+    versionHelpIcon.setVisible(isVersion && internalUpdater);
+    versionSelectCombo.setVisible(isVersion && internalUpdater);
+    installVersionBtn.setVisible(isVersion && internalUpdater);
+    downloadStatusLabel.setVisible(isVersion && internalUpdater && downloadStatusLabel.getText().isNotEmpty());
+    downloadProgressBar.setVisible(isVersion && internalUpdater && isDownloading);
 
-    if (isVersion && availableReleases.empty() && !isCheckingUpdates)
+    if (isVersion && internalUpdater && availableReleases.empty() && !isCheckingUpdates)
     {
         checkUpdatesFromUI();
     }

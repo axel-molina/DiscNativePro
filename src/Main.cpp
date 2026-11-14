@@ -1,6 +1,11 @@
 #include <juce_gui_extra/juce_gui_extra.h>
 #include "ui/MainComponent.h"
 #include "services/StemSeparationService.h"
+#include "services/UpdateService.h"
+
+#if JUCE_MAC
+    #include "services/MacSparkleUpdater.h"
+#endif
 
 #if JUCE_LINUX
     #include <cstdlib>
@@ -59,6 +64,12 @@ public:
 
         mainWindow.reset(new MainWindow(getApplicationName()));
 
+       #if JUCE_MAC
+        // P30: Sparkle maneja detección programada y la alerta estándar con
+        // "Install on Quit". Debe vivir después de crear la ventana.
+        SparkleBridge::startup();
+       #endif
+
         if (commandLineParameters.contains("--snapshot"))
         {
             auto path = commandLineParameters.fromFirstOccurrenceOf("--snapshot", false, false).trim();
@@ -88,6 +99,14 @@ public:
 
     void shutdown() override
     {
+        // P30 (Windows Setup): si hay una actualización descargada y confirmada,
+        // el instalador Inno se lanza /VERYSILENT justo antes de morir el
+        // proceso — /CloseApplications=force termina esta instancia.
+        UpdateService::runPendingInstaller();
+
+       #if JUCE_MAC
+        SparkleBridge::shutdown();
+       #endif
         // ORT antes que nada: libera la sesión en contexto vivo (el teardown
         // estático de exit() la mata con abort()).
         StemSeparationService::getInstance().shutdown();

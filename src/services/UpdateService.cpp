@@ -1,6 +1,10 @@
 #include "UpdateService.h"
 #include <juce_events/juce_events.h>
 
+#if JUCE_LINUX
+    #include <unistd.h> // getpid() para el script de auto-reemplazo
+#endif
+
 namespace
 {
 constexpr const char* kLatestReleaseApi =
@@ -162,11 +166,127 @@ void UpdateService::setSkippedTag(const juce::String& tag)
     file.replaceWithText(juce::JSON::toString(json));
 }
 
+InstallContext::Kind UpdateService::getInstallContext()
+{
+    static const InstallContext::Kind ctx = InstallContext::detect();
+    return ctx;
+}
+
+bool UpdateService::isInternalUpdaterActive()
+{
+    switch (getInstallContext())
+    {
+        case InstallContext::Kind::MacApp:
+        case InstallContext::Kind::WinSetup:
+        case InstallContext::Kind::LinuxPortable:
+            return true;
+        case InstallContext::Kind::WinStore:
+        case InstallContext::Kind::LinuxDeb:
+        default:
+            return false;
+    }
+}
+
+void UpdateService::setPendingInstallOnQuit(const juce::String& installerPath)
+{
+    auto file = getSettingsFile();
+    juce::var json;
+    if (file.existsAsFile())
+        json = juce::JSON::parse(file);
+    if (!json.isObject())
+        json = juce::var(new juce::DynamicObject());
+
+    if (auto* obj = json.getDynamicObject())
+    {
+        if (installerPath.isEmpty())
+            obj->removeProperty("pendingInstallOnQuit");
+        else
+            obj->setProperty("pendingInstallOnQuit", installerPath);
+    }
+    file.replaceWithText(juce::JSON::toString(json));
+}
+
+juce::String UpdateService::getPendingInstallOnQuit()
+{
+    auto file = getSettingsFile();
+    if (!file.existsAsFile())
+        return {};
+    auto json = juce::JSON::parse(file);
+    if (json.isObject() && json.hasProperty("pendingInstallOnQuit"))
+        return json["pendingInstallOnQuit"].toString();
+    return {};
+}
+
+void UpdateService::runPendingInstaller()
+{
+    const auto pending = getPendingInstallOnQuit();
+    setPendingInstallOnQuit({});
+    if (pending.isEmpty())
+        return;
+
+   #if JUCE_WINDOWS
+    if (getInstallContext() != InstallContext::Kind::WinSetup)
+        return;
+
+    auto installerFile = juce::File(pending);
+    if (!installerFile.existsAsFile())
+        return;
+
+    // Inno Setup silencioso: sin diálogos, cierra la app en ejecución y
+    // actualiza en el mismo directorio donde ya está instalada.
+    const auto installDir = juce::File::getSpecialLocation(juce::File::currentExecutableFile)
+                                .getParentDirectory().getFullPathName();
+    const juce::String args = "/VERYSILENT /SUPPRESSMSGBOXES /NORESTART "
+                              "/CloseApplications=force "
+                              "/DIR=\"" + installDir + "\"";
+    juce::Process::openDocument(installerFile.getFullPathName(), args);
+   #elif JUCE_LINUX
+    if (getInstallContext() != InstallContext::Kind::LinuxPortable)
+        return;
+
+    auto stagedDir = juce::File(pending);
+    if (!stagedDir.isDirectory())
+        return;
+
+    // Script de auto-reemplazo: espera la muerte de este proceso, hace backup
+    // del binario, copia el staging encima del dir de la app y relanza.
+    // Vive en .cache (fuera del dir de la app) para no ser sobrescrito por la
+    // propia copia. El PID se hornea en el script porque el script sobrevive
+    // al proceso que lo lanza.
+    const auto appDir = juce::File::getSpecialLocation(juce::File::currentExecutableFile)
+                            .getParentDirectory().getFullPathName();
+    const auto script = stagedDir.getParentDirectory().getChildFile("apply_update.sh");
+
+    const juce::String body =
+        "#!/bin/bash\n"
+        "# Auto-reemplazo de DiscNativePro (generado por la app al salir)\n"
+        "DST=\"" + appDir + "\"\n"
+        "SRC=\"" + stagedDir.getFullPathName() + "\"\n"
+        "while [ -d /proc/" + juce::String((int) getpid()) + " ]; do sleep 0.3; done\n"
+        "cp -f \"$DST/DiscNativePro\" \"$DST/DiscNativePro.bak\" 2>/dev/null\n"
+        "cp -f \"$SRC\"/* \"$DST\"/ || exit 1\n"
+        "rm -rf \"$SRC\"\n"
+        "cd \"$DST\" && nohup ./run.sh >/dev/null 2>&1 &\n";
+
+    script.deleteFile();
+    script.replaceWithText(body);
+    script.setExecutePermission(true);
+    juce::Process::openDocument(script.getFullPathName(), {});
+   #endif
+}
+
 void UpdateService::checkForUpdatesAsync(UpdateCallback onComplete)
 {
     juce::Thread::launch([onComplete]() {
         UpdateInfo info;
         info.currentVersion = getCurrentVersion();
+
+        // Store (MSIX) y .deb no usan el updater interno: responder vacío.
+        if (!isInternalUpdaterActive())
+        {
+            juce::MessageManager::callAsync([onComplete, info]() { onComplete(info); });
+            return;
+        }
 
         // 1. Intentar listar releases recientes
         juce::URL listUrl(kReleasesApi);
@@ -273,9 +393,18 @@ void UpdateService::downloadAndOpenReleaseAsset(
             return;
         }
 
+       #if JUCE_WINDOWS
+        // P30: el Setup se descarga a staging en %TEMP% (no a Descargas) y no
+        // se lanza acá: la UI ofrece "Instalar al reiniciar"/"Actualizar ahora"
+        // y runPendingInstaller lo ejecuta /VERYSILENT al cerrar la app.
+        juce::File dlFolder = juce::File::getSpecialLocation(juce::File::tempDirectory)
+                                  .getChildFile("DiscNativePro").getChildFile("update");
+        dlFolder.createDirectory();
+       #else
         auto dlFolder = juce::File::getSpecialLocation(juce::File::userHomeDirectory).getChildFile("Downloads");
         if (!dlFolder.exists())
             dlFolder = juce::File::getSpecialLocation(juce::File::userHomeDirectory);
+       #endif
 
         juce::String safeFileName = assetName.isNotEmpty() ? assetName : downloadUrl.fromLastOccurrenceOf("/", false, false);
         if (safeFileName.isEmpty())
@@ -342,6 +471,40 @@ void UpdateService::downloadAndOpenReleaseAsset(
         out.reset();
 
         bool success = targetFile.existsAsFile() && targetFile.getSize() > 1000;
+
+       #if JUCE_LINUX
+        // P30 LinuxPortable: extraer el tar.gz a staging acá (thread de fondo)
+        // para que el reemplazo al salir solo copie archivos ya listos.
+        juce::File extractedDir;
+        if (success && getInstallContext() == InstallContext::Kind::LinuxPortable
+            && targetFile.getFileName().endsWithIgnoreCase(".tar.gz"))
+        {
+            auto staging = juce::File::getSpecialLocation(juce::File::userHomeDirectory)
+                               .getChildFile(".cache/DiscNativePro/update");
+            staging.createDirectory();
+            auto dest = staging.getChildFile("new");
+            if (dest.exists())
+                dest.deleteRecursively();
+            dest.createDirectory();
+
+            juce::ChildProcess tar;
+            const bool ok = tar.start("tar -xzf \"" + targetFile.getFullPathName()
+                                      + "\" -C \"" + dest.getFullPathName() + "\"")
+                            && tar.waitForProcessToFinish(120000)
+                            && tar.getExitCode() == 0;
+            if (ok)
+            {
+                extractedDir = dest;
+                // Marcado acá en el thread de fondo: evita capturar
+                // extractedDir en el lambda de cierre y la escritura es solo
+                // un JSON en disco.
+                setPendingInstallOnQuit(extractedDir.getFullPathName());
+            }
+            else
+                success = false;
+        }
+       #endif
+
         if (success)
         {
             juce::MessageManager::callAsync([onComplete, targetFile]() {
@@ -356,14 +519,15 @@ void UpdateService::downloadAndOpenReleaseAsset(
                     targetFile.startAsProcess();
                 }
                #elif JUCE_WINDOWS
-                if (targetFile.getFileExtension().equalsIgnoreCase(".exe"))
-                {
-                    targetFile.startAsProcess();
-                }
-                else
-                {
+                // Setup en staging: no se ejecuta desde acá. La UI setea
+                // setPendingInstallOnQuit(targetFile) y runPendingInstaller
+                // lo lanza silencioso al cerrar la app.
+               #elif JUCE_LINUX
+                // Portable: si hubo extracción a staging ya quedó marcado para
+                // instalarse al salir; si no (p. ej. asset no-tar.gz), solo se
+                // revela el archivo.
+                if (getPendingInstallOnQuit().isEmpty())
                     targetFile.revealToUser();
-                }
                #else
                 targetFile.revealToUser();
                #endif

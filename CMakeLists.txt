@@ -129,6 +129,8 @@ target_sources(DiscNativePro
         src/services/WaveformTheme.cpp
         src/services/UpdateService.h
         src/services/UpdateService.cpp
+        src/services/InstallContext.h
+        src/services/InstallContext.cpp
         src/services/UsbDriveScanner.h
         src/services/UsbDriveScanner.cpp
         src/services/LibraryCacheManager.h
@@ -267,6 +269,45 @@ if(APPLE)
             "$<TARGET_BUNDLE_DIR:DiscNativePro>/Contents/Frameworks/"
         COMMENT "Bundling ONNX Runtime into app Frameworks"
     )
+
+    # P30: Sparkle 2 (vendorizado) para auto-update "instalar al reiniciar".
+    # El framework ya trae install name @rpath/Sparkle... y BUILD_RPATH arriba
+    # apunta a Contents/Frameworks, donde se copia en el POST_BUILD.
+    set(SPARKLE_FW "${CMAKE_CURRENT_SOURCE_DIR}/third_party/sparkle/Sparkle.framework")
+    if (EXISTS "${SPARKLE_FW}")
+        target_sources(DiscNativePro PRIVATE
+            src/services/MacSparkleUpdater.h
+            src/services/MacSparkleUpdater.mm
+        )
+        set_source_files_properties(src/services/MacSparkleUpdater.mm
+            PROPERTIES COMPILE_OPTIONS "-fobjc-arc")
+        target_link_libraries(DiscNativePro PRIVATE "${SPARKLE_FW}")
+        add_custom_command(TARGET DiscNativePro POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E copy_directory
+                "${SPARKLE_FW}"
+                "$<TARGET_BUNDLE_DIR:DiscNativePro>/Contents/Frameworks/Sparkle.framework"
+            COMMENT "Bundling Sparkle.framework into app Frameworks"
+        )
+        # P30: sin SUPublicEDKey en el Info.plist, Sparkle rechaza los items
+        # firmados del appcast. La clave pública se pasa con
+        # -DSPARKLE_EDDSA_PUBLIC_KEY="<b64>" (generada con
+        # third_party/sparkle/bin/generate_keys). Sin variable, no se inyecta.
+        if (SPARKLE_EDDSA_PUBLIC_KEY)
+            # plutil -replace es idempotente (PlistBuddy Add falla si ya existe).
+            add_custom_command(TARGET DiscNativePro POST_BUILD
+                COMMAND plutil
+                    -replace SUPublicEDKey
+                    -string "${SPARKLE_EDDSA_PUBLIC_KEY}"
+                    "$<TARGET_BUNDLE_DIR:DiscNativePro>/Contents/Info.plist"
+                COMMAND plutil
+                    -replace SUEnableAutomaticChecks
+                    -bool true
+                    "$<TARGET_BUNDLE_DIR:DiscNativePro>/Contents/Info.plist"
+                COMMENT "Injecting Sparkle SUPublicEDKey into Info.plist"
+            )
+        endif()
+    endif()
+
     if (EXISTS "${STEMS_MODEL}")
         add_custom_command(TARGET DiscNativePro POST_BUILD
             COMMAND ${CMAKE_COMMAND} -E make_directory

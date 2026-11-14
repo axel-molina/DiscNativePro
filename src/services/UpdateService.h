@@ -2,6 +2,7 @@
 
 #include <juce_core/juce_core.h>
 #include <functional>
+#include "InstallContext.h"
 
 struct ReleaseItem
 {
@@ -35,16 +36,31 @@ class UpdateService
 public:
     using UpdateCallback = std::function<void(const UpdateInfo&)>;
 
+    // La UI debe consultar esto antes de ofrecer updater: en WinStore (MSIX)
+    // y LinuxDeb el updater interno está deshabilitado (Store/apt gestionan).
+    static bool isInternalUpdaterActive();
+    static InstallContext::Kind getInstallContext();
+
     // Lanza el chequeo en background y responde en Message Thread.
     // Nunca lanza: sin red, timeout, rate-limit o tag omitido => available=false.
     static void checkForUpdatesAsync(UpdateCallback onComplete);
 
-    // Descarga el asset a Descargas con progreso (0.0f - 1.0f) y lo abre/ejecuta al terminar.
+    // Descarga el asset (a Descargas en macOS/portable-Linux, a %TEMP% staging
+    // en Windows Setup) con progreso y lo abre/ejecuta al terminar.
     static void downloadAndOpenReleaseAsset(
         const juce::String& downloadUrl,
         const juce::String& assetName,
         std::function<void(float progress, const juce::String& statusText)> onProgress,
         std::function<void(bool success, const juce::String& errorMessage, const juce::File& file)> onComplete);
+
+    // P30 (Windows Setup): installer con update pendiente que se ejecuta
+    // silenciosamente al cerrar la app. Ruta vacía = sin pendiente.
+    static void setPendingInstallOnQuit(const juce::String& installerPath);
+    static juce::String getPendingInstallOnQuit();
+
+    // Llama al salir (JUCEApplication::shutdown): si hay installer pendiente y
+    // el contexto es WinSetup, lo lanza /VERYSILENT apuntando al dir actual.
+    static void runPendingInstaller();
 
     static juce::String getCurrentVersion();
     static bool isNewerVersion(const juce::String& latest, const juce::String& current);
