@@ -1138,6 +1138,24 @@ bool DeckPlayer::loadStems2Cache(const juce::File& cacheDir)
     stems2CacheBuf[0] = std::move(bufs[0]);
     stems2CacheBuf[1] = std::move(bufs[1]);
     stems2CacheLen44 = stems2CacheBuf[0].getNumSamples();
+
+    // La caché debe cubrir la duración de la pista. Las escritas antes de
+    // corregir el ratio del resampler del worker quedaron ~18 % más largas
+    // (contenido comprimido en el tiempo); su firma path+mtime+size no cambia,
+    // así que se detectan por duración y se borran para que el streaming
+    // corregido las re-escriba.
+    const double durSec = trackDurationSeconds.load();
+    const double cacheSec = (double)stems2CacheLen44 / 44100.0;
+    if (durSec > 1.0 && std::abs(cacheSec - durSec) > 0.5)
+    {
+        cacheDir.getChildFile("vocals.wav").deleteFile();
+        cacheDir.getChildFile("instrumental.wav").deleteFile();
+        stems2CacheBuf[0].setSize(2, 0, false, false, true);
+        stems2CacheBuf[1].setSize(2, 0, false, false, true);
+        stems2CacheLen44 = 0;
+        return false;
+    }
+
     stems2Cached.store(true); // publicado al final: el callback ve buffers completos
     return true;
 }
@@ -1216,8 +1234,12 @@ void DeckPlayer::startStems2Stream(std::shared_ptr<juce::AudioFormatReader> read
 
         // Lectura del archivo (rate original) con resample lineal a 44.1 kHz
         // solo si hace falta. rd = posición fraccional próxima, en muestras.
+        // ratio = muestras de archivo consumidas por muestra de salida a
+        // 44.1 kHz (semántica de GenericInterpolator::process): un archivo de
+        // 48 kHz consume 1.088 muestras por salida. Invertirlo comprime el
+        // stream de stems en el tiempo y detunea toda la pista.
         const bool resample = std::abs(origRate - 44100.0) > 0.5;
-        const double ratio = 44100.0 / origRate;
+        const double ratio = origRate / 44100.0;
         double rd = 0.0;
         juce::int64 winStart = -1;
         juce::int64 winLen = 0;

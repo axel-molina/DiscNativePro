@@ -2004,3 +2004,13 @@ Objetivo del usuario: la descarga de actualización no debe abrir carpetas ni pe
 
 ## Release
 - Rama `axel-molina/v1.4.1` (incluye P30 auto-update `cdda2c0` + este fix) → push a `main` → tag `v1.4.1` → CI `release.yml` construye macOS/Windows/Linux y publica el Release si las 3 pasan (la de macOS ahora verifica la dylib).
+
+# Walkthrough — Fix: detune al activar/desactivar stems (2026-11-14, rama axel-molina/v1.4.1)
+
+**Reporte del usuario**: al cargar una canción y activar/desactivar stems cambia la afinación del tema.
+
+**Causa raíz**: el worker de streaming 2-stem (P25, [DeckPlayer.cpp](src/audio/DeckPlayer.cpp) `fillFeed()`) resamplea el archivo a 44.1 kHz con `ratio = 44100/origRate` y avanza `rd += ratio` — invertido. La semántica correcta (verificada en `GenericInterpolator::process` de JUCE: speedRatio = muestras de entrada por muestra de salida; `OnnxStemEngine::separate` lo usa bien) es `origRate/44100`. Con un archivo de 48 kHz el stream separado quedaba comprimido en el tiempo ~15.6 % (≈ −2.6 semitonos y más lento) al leerlo el callback; al desactivar stems volvía el original correcto → "cambia la afinación al activar/desactivar". Solo afecta archivos con sample rate ≠ 44.1 kHz (audio de YouTube es 48 kHz); la separación 4-stem offline estaba limpia.
+
+**Bug colateral corregido**: las cachés 2-stem (`vocals.wav`/`instrumental.wav`) ya escritas con el ratio invertido quedaron ~18 % más largas y comprimidas; la firma de validez (path+mtime+size) no cambia. `loadStems2Cache()` ahora valida duración contra `trackDurationSeconds` (±0.5 s) y borra las cachés inválidas para que el streaming corregido las re-escriba.
+
+**Verificación**: `cmake --build build` 0 errores / 0 warnings; app relanzada (Release). Pendiente del usuario: probar la pista original (activar/desactivar stems sin detune) y recargar la pista para validar la caché regenerada.
