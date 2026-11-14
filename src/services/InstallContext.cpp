@@ -2,6 +2,10 @@
 
 #if JUCE_WINDOWS
     #include <windows.h>
+    // SDKs antiguos (runner de CI) no declaran este código de winerror.h.
+    #ifndef ERROR_APPMODEL_ERROR_NO_PACKAGE
+        #define ERROR_APPMODEL_ERROR_NO_PACKAGE 15700
+    #endif
 #endif
 
 InstallContext::Kind InstallContext::detect()
