@@ -322,6 +322,8 @@ jobs:
             exit 1
           fi
           echo "Found app at: $APP_PATH"
+          echo "Clearing extended attributes (codesign rejects FinderInfo detritus)..."
+          xattr -cr "$APP_PATH"
           echo "Signing app bundle ad-hoc to seal resources and prevent Gatekeeper damage error..."
           codesign --force --deep --sign - "$APP_PATH"
           echo "Verifying app bundle signature..."

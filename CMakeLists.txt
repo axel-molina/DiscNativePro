@@ -283,8 +283,17 @@ if(APPLE)
             PROPERTIES COMPILE_OPTIONS "-fobjc-arc")
         target_link_libraries(DiscNativePro PRIVATE "${SPARKLE_FW}")
         add_custom_command(TARGET DiscNativePro POST_BUILD
-            COMMAND ${CMAKE_COMMAND} -E copy_directory
+            # cp -R preserva los symlinks de la raíz (Resources -> Versions/...);
+            # cmake -E copy_directory los desreferencia y codesign rechaza el
+            # framework ("bundle format is ambiguous").
+            COMMAND ${CMAKE_COMMAND} -E rm -rf
+                "$<TARGET_BUNDLE_DIR:DiscNativePro>/Contents/Frameworks/Sparkle.framework"
+            COMMAND cp -R
                 "${SPARKLE_FW}"
+                "$<TARGET_BUNDLE_DIR:DiscNativePro>/Contents/Frameworks/"
+            # El framework vendido trae com.apple.FinderInfo que codesign
+            # rechaza ("resource fork... detritus not allowed").
+            COMMAND xattr -cr
                 "$<TARGET_BUNDLE_DIR:DiscNativePro>/Contents/Frameworks/Sparkle.framework"
             COMMENT "Bundling Sparkle.framework into app Frameworks"
         )

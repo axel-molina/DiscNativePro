@@ -2014,3 +2014,9 @@ Objetivo del usuario: la descarga de actualización no debe abrir carpetas ni pe
 **Bug colateral corregido**: las cachés 2-stem (`vocals.wav`/`instrumental.wav`) ya escritas con el ratio invertido quedaron ~18 % más largas y comprimidas; la firma de validez (path+mtime+size) no cambia. `loadStems2Cache()` ahora valida duración contra `trackDurationSeconds` (±0.5 s) y borra las cachés inválidas para que el streaming corregido las re-escriba.
 
 **Verificación**: `cmake --build build` 0 errores / 0 warnings; app relanzada (Release). Pendiente del usuario: probar la pista original (activar/desactivar stems sin detune) y recargar la pista para validar la caché regenerada.
+
+## Corrección CI adicional (run 43635655028, macOS job)
+- `Package macOS App (.zip)` fallaba: codesign rechazaba el bundle por "resource fork / Finder information detritus".
+  1. `Sparkle.framework` (nueva en P30) trae `com.apple.FinderInfo` en sus directorios → añadido `xattr -cr` en POST_BUILD y como red de seguridad sobre el bundle antes de firmar en `release.yml`.
+  2. Con eso destapado un segundo problema: `cmake -E copy_directory` desreferencia los symlinks raíz del framework (Resources -> Versions/...) y codesign lo rechaza como "bundle format is ambiguous" → reemplazado por `cp -R` (preserva symlinks) + `rm -rf` previo del destino.
+- Verificación local completa: bundle en /tmp (sin FileProvider que re-estampa xattrs) → `xattr -cr` → `codesign --force --deep --sign -` → `--verify --deep --strict` OK ("satisfies its Designated Requirement") y la app abre.
