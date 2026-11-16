@@ -1,6 +1,7 @@
 #pragma once
 
 #include <juce_gui_basics/juce_gui_basics.h>
+#include <unordered_map>
 #include "../midi/MidiManager.h"
 #include "../services/LanguageManager.h"
 #include "DjButton.h"
@@ -34,6 +35,9 @@ private:
     void exportMapping();
     void importMapping();
     void resetToFactoryDefaults();
+    void updateConflictButton();
+    void showConflictDetails();
+    void handleLearningFinished(const juce::String& actionId);
 
     MidiMappingManager& mappingMgr;
 
@@ -44,9 +48,17 @@ private:
     DjButton resetDefaultsBtn;
     DjButton exportBtn;
     DjButton importBtn;
+    DjButton conflictBtn;
 
     juce::TableListBox table;
     std::vector<MidiActionDefinition> filteredActions;
+
+    // P34: acciones en conflicto (actionId → nº de acciones que comparten su control)
+    std::unordered_map<juce::String, int> conflictCounts;
+
+    // P34: control previo de la acción en modo Learn (para revertir si el usuario cancela)
+    juce::String learningActionId;
+    MidiBinding previousBinding;
 
     std::unique_ptr<juce::FileChooser> fileChooser;
 

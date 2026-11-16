@@ -73,6 +73,29 @@ MidiModalComponent::MidiModalComponent(MidiManager& midiMgr)
     devicesHeader.setColour(juce::Label::textColourId, juce::Colours::white);
     addAndMakeVisible(devicesHeader);
 
+    // P34: selector de perfil de controladora
+    profileHeader.setFont(juce::FontOptions(10.5f, juce::Font::bold));
+    profileHeader.setColour(juce::Label::textColourId, juce::Colours::white);
+    addAndMakeVisible(profileHeader);
+
+    profileCombo.setColour(juce::ComboBox::backgroundColourId, juce::Colour::fromRGB(18, 20, 28));
+    profileCombo.setColour(juce::ComboBox::textColourId, juce::Colours::white);
+    profileCombo.setColour(juce::ComboBox::outlineColourId, juce::Colour::fromRGB(38, 43, 58));
+    profileCombo.onChange = [this]() {
+        switch (profileCombo.getSelectedId())
+        {
+            case 2: midi.setControllerProfileOverride(true, MidiControllerFamily::PioneerDDJ); break;
+            case 3: midi.setControllerProfileOverride(true, MidiControllerFamily::DenonMC); break;
+            case 4: midi.setControllerProfileOverride(true, MidiControllerFamily::Generic); break;
+            default: midi.setControllerProfileOverride(false, MidiControllerFamily::Generic); break;
+        }
+    };
+    addAndMakeVisible(profileCombo);
+
+    profileBadge.setFont(juce::FontOptions(10.0f, juce::Font::bold));
+    profileBadge.setColour(juce::Label::textColourId, juce::Colour::fromRGB(46, 196, 182));
+    addAndMakeVisible(profileBadge);
+
     scanBtn.setColour(juce::TextButton::buttonColourId, juce::Colour::fromRGB(24, 28, 36));
     scanBtn.setColour(juce::TextButton::textColourOffId, juce::Colour::fromRGB(0, 180, 216));
     scanBtn.onClick = [this]() {
@@ -103,7 +126,7 @@ MidiModalComponent::MidiModalComponent(MidiManager& midiMgr)
     LanguageManager::getInstance().addListener(this);
     refreshLanguage();
     refreshDeviceList();
-    setSize(480, 326);
+    setSize(480, 340);
 }
 
 MidiModalComponent::~MidiModalComponent()
@@ -126,7 +149,40 @@ void MidiModalComponent::refreshLanguage()
     mixxxBtn.setButtonText(LanguageManager::trUtf8("Importar Mixxx", "Import Mixxx"));
     monitorHeader.setText(LanguageManager::trUtf8("MONITOR DE SEÑALES MIDI EN VIVO", "LIVE MIDI SIGNAL MONITOR"), juce::dontSendNotification);
     monitorText.setText(LanguageManager::trUtf8("Esperando movimiento de fader, jog o pad...", "Waiting for fader, jog or pad movement..."), juce::dontSendNotification);
+
+    profileHeader.setText(LanguageManager::trUtf8("PERFIL", "PROFILE"), juce::dontSendNotification);
+
+    const int selected = profileCombo.getSelectedId();
+    profileCombo.clear(juce::dontSendNotification);
+    profileCombo.addItem(LanguageManager::trUtf8("Automático", "Automatic"), 1);
+    profileCombo.addItem(MidiControllerProfile::getNameEs(MidiControllerFamily::PioneerDDJ), 2);
+    profileCombo.addItem(MidiControllerProfile::getNameEs(MidiControllerFamily::DenonMC), 3);
+    profileCombo.addItem(MidiControllerProfile::getNameEs(MidiControllerFamily::Generic), 4);
+    profileCombo.setSelectedId(selected > 0 ? selected : 1, juce::dontSendNotification);
+
+    refreshProfileBadge();
     refreshDeviceList();
+}
+
+void MidiModalComponent::refreshProfileBadge()
+{
+    const bool english = LanguageManager::getInstance().isEnglish();
+    const auto detected = MidiControllerProfile::detect(currentDevices);
+    const auto active = midi.getActiveProfile();
+    const bool manual = midi.getMappingManager().hasProfileOverride();
+
+    const juce::String name = english ? MidiControllerProfile::getNameEn(active)
+                                       : MidiControllerProfile::getNameEs(active);
+
+    if (manual)
+        profileBadge.setText(LanguageManager::trUtf8("Manual", "Manual") + ": " + name, juce::dontSendNotification);
+    else
+        profileBadge.setText(LanguageManager::trUtf8("Detectado", "Detected") + ": " + name, juce::dontSendNotification);
+
+    profileBadge.setColour(juce::Label::textColourId,
+                           detected == MidiControllerFamily::Generic
+                               ? juce::Colour::fromRGB(142, 149, 165)
+                               : juce::Colour::fromRGB(46, 196, 182));
 }
 
 void MidiModalComponent::refreshDeviceList()
@@ -134,6 +190,7 @@ void MidiModalComponent::refreshDeviceList()
     currentDevices = midi.getConnectedDeviceNames();
     devicesHeader.setText(LanguageManager::trUtf8("DISPOSITIVOS CONECTADOS (", "CONNECTED DEVICES (") + juce::String(currentDevices.size()) + ")",
                           juce::dontSendNotification);
+    refreshProfileBadge();
     repaint();
 }
 
@@ -224,7 +281,7 @@ void MidiModalComponent::paint(juce::Graphics& g)
                       juce::Colour::fromRGB(46, 196, 182), 1.8f);
 
     // Devices List Card area
-    juce::Rectangle<float> devBox(16.0f, 128.0f, (float)getWidth() - 32.0f, 110.0f);
+    juce::Rectangle<float> devBox(16.0f, 154.0f, (float)getWidth() - 32.0f, 110.0f);
     if (currentDevices.isEmpty())
     {
         g.setColour(juce::Colour::fromRGB(17, 18, 25));
@@ -246,7 +303,7 @@ void MidiModalComponent::paint(juce::Graphics& g)
     }
     else
     {
-        float cardY = 128.0f;
+        float cardY = 154.0f;
         for (int i = 0; i < currentDevices.size() && i < 2; ++i)
         {
             juce::Rectangle<float> card(16.0f, cardY, (float)getWidth() - 32.0f, 48.0f);
@@ -284,7 +341,7 @@ void MidiModalComponent::paint(juce::Graphics& g)
     }
 
     // Monitor background box #0d0e14
-    juce::Rectangle<float> monBox(16.0f, 248.0f, (float)getWidth() - 32.0f, 60.0f);
+    juce::Rectangle<float> monBox(16.0f, 272.0f, (float)getWidth() - 32.0f, 60.0f);
     g.setColour(juce::Colour::fromRGB(13, 14, 20));
     g.fillRoundedRectangle(monBox, 6.0f);
     g.setColour(juce::Colour::fromRGB(33, 37, 52));
@@ -303,12 +360,17 @@ void MidiModalComponent::resized()
     // Description text
     descLabel.setBounds(16, 48, getWidth() - 32, 42);
 
+    // Controller profile row
+    profileHeader.setBounds(16, 94, 56, 22);
+    profileCombo.setBounds(76, 94, 168, 22);
+    profileBadge.setBounds(252, 96, getWidth() - 252 - 16, 18);
+
     // Devices bar
-    devicesHeader.setBounds(16, 98, 236, 22);
-    scanBtn.setBounds(getWidth() - 96, 98, 80, 22);
-    mixxxBtn.setBounds(getWidth() - 210, 98, 106, 22);
+    devicesHeader.setBounds(16, 124, 236, 22);
+    scanBtn.setBounds(getWidth() - 96, 124, 80, 22);
+    mixxxBtn.setBounds(getWidth() - 210, 124, 106, 22);
 
     // Monitor text
-    monitorHeader.setBounds(24, 252, getWidth() - 48, 16);
-    monitorText.setBounds(24, 274, getWidth() - 48, 24);
+    monitorHeader.setBounds(24, 276, getWidth() - 48, 16);
+    monitorText.setBounds(24, 298, getWidth() - 48, 24);
 }

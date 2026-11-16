@@ -75,8 +75,32 @@ void MidiManager::rescanDevices()
     for (const auto& outDev : outDevices)
         lastOutputIds.add(outDev.identifier);
 
+    // P34: perfil de controladora (Pioneer DDJ / Denon MC / genérica).
+    updateControllerProfile();
+
     if (onDevicesChanged)
         onDevicesChanged();
+}
+
+void MidiManager::updateControllerProfile()
+{
+    const auto detected = MidiControllerProfile::detect(connectedDevices);
+
+    const MidiControllerFamily target = mappingManager.hasProfileOverride()
+                                          ? mappingManager.getProfileOverride()
+                                          : detected;
+
+    if (target != activeProfile)
+    {
+        activeProfile = target;
+        mappingManager.applyProfileDefaults(target);
+    }
+}
+
+void MidiManager::setControllerProfileOverride(bool enabled, MidiControllerFamily family)
+{
+    mappingManager.setProfileOverride(enabled, family);
+    updateControllerProfile();
 }
 
 void MidiManager::sendMidiMessage(const juce::MidiMessage& message)
@@ -692,12 +716,36 @@ void MidiManager::handleIncomingMidiMessage(juce::MidiInput* /*source*/, const j
     }
 
     // 2. Process custom MIDI Mapping dispatch
-    if (auto* matched = mappingManager.matchMessage(message))
+    // P34: en la familia Denon la Deck B puede llegar por el canal 2 (layout
+    // DN-SC2000) o por el 3 (layout MC3000). Se normaliza al 3 para que una
+    // sola tabla de controles sirva para ambas variantes.
+    juce::MidiMessage msg = message;
+    if (activeProfile == MidiControllerFamily::DenonMC
+        && msg.getChannel() == DenonMidi::kDeckBAliasChannel)
     {
-        if (dispatchMappedAction(*matched, message))
+        msg.setChannel(DenonMidi::kDeckBChannel);
+    }
+
+    if (auto* matched = mappingManager.matchMessage(msg))
+    {
+        if (dispatchMappedAction(*matched, msg))
             return;
     }
 
+    // 3. Fallback de hardware según la familia de controladora
+    if (activeProfile == MidiControllerFamily::DenonMC)
+    {
+        handleDenonMessage(msg);
+        return;
+    }
+
+    // En el perfil genérico no se interpreta el CC 5 como tempo del Pioneer:
+    // en la mayoría de las controladoras ese CC es el volumen del canal.
+    handlePioneerMessage(msg, activeProfile != MidiControllerFamily::Generic);
+}
+
+void MidiManager::handlePioneerMessage(const juce::MidiMessage& message, bool allowShiftedTempo)
+{
     // 1. Pioneer DDJ-SB2 Tempo Faders (14-bit Pitch Bend Messages: 0xE0 on Ch 1, 0xE1 on Ch 2)
     if (message.isPitchWheel())
     {
@@ -767,10 +815,18 @@ void MidiManager::handleIncomingMidiMessage(juce::MidiInput* /*source*/, const j
                     return;
 
                 case 0:  // Pioneer DDJ-SB2 Tempo Fader MSB (0x00)
-                case 5:  // Shifted Tempo Fader MSB (0x05)
                     tempoMsb[0] = val;
                     apply14BitTempo(0);
                     return;
+
+                case 5:  // Shifted Tempo Fader MSB (0x05) — exclusivo del Pioneer
+                    if (allowShiftedTempo)
+                    {
+                        tempoMsb[0] = val;
+                        apply14BitTempo(0);
+                        return;
+                    }
+                    break;
 
                 case 32: // Pioneer DDJ-SB2 Tempo Fader LSB (0x20)
                 case 37: // Shifted Tempo Fader LSB (0x25)
@@ -826,10 +882,18 @@ void MidiManager::handleIncomingMidiMessage(juce::MidiInput* /*source*/, const j
                     return;
 
                 case 0:  // Pioneer DDJ-SB2 Tempo Fader MSB (0x00)
-                case 5:  // Shifted Tempo Fader MSB (0x05)
                     tempoMsb[1] = val;
                     apply14BitTempo(1);
                     return;
+
+                case 5:  // Shifted Tempo Fader MSB (0x05) — exclusivo del Pioneer
+                    if (allowShiftedTempo)
+                    {
+                        tempoMsb[1] = val;
+                        apply14BitTempo(1);
+                        return;
+                    }
+                    break;
 
                 case 32: // Pioneer DDJ-SB2 Tempo Fader LSB (0x20)
                 case 37: // Shifted Tempo Fader LSB (0x25)
@@ -1241,5 +1305,203 @@ void MidiManager::handleIncomingMidiMessage(juce::MidiInput* /*source*/, const j
             if (d2.hasHotCue(idx)) d2.jumpToHotCue(idx);
             else d2.setHotCue(idx, d2.getPosition());
         }
+    }
+}
+
+// P34: fallback de hardware para la familia Denon MC. Solo entra aquí lo que
+// el usuario no tiene mapeado: los valores vienen del preset oficial de Mixxx
+// "Denon MC3000.midi.xml" (Deck A = canal 1, Deck B = canal 3).
+void MidiManager::handleDenonMessage(const juce::MidiMessage& message)
+{
+    const int ch = message.getChannel();
+
+    if (message.isController())
+    {
+        const int cc = message.getControllerNumber();
+        const int val = message.getControllerValue();
+        const float norm = static_cast<float>(val) / 127.0f;
+
+        if (ch == DenonMidi::kDeckAChannel)
+        {
+            switch (cc)
+            {
+                case DenonMidi::kVolumeA:
+                    engine.getMixer().getChannel(0).volumeFader.store(norm);
+                    return;
+                case DenonMidi::kTrimA:
+                    engine.getMixer().getChannel(0).gain.store(norm * 2.0f);
+                    return;
+                case DenonMidi::kHighA:
+                    engine.getMixer().getChannel(0).eqHigh.store(norm);
+                    return;
+                case DenonMidi::kMidA:
+                    engine.getMixer().getChannel(0).eqMid.store(norm);
+                    return;
+                case DenonMidi::kLowA:
+                    engine.getMixer().getChannel(0).eqLow.store(norm);
+                    return;
+                case DenonMidi::kCrossfader:
+                    engine.setCrossfader((norm * 2.0f) - 1.0f);
+                    return;
+                case DenonMidi::kJog:
+                    handleJogWheel(0, 33, val);
+                    return;
+                case DenonMidi::kBrowse:
+                {
+                    // El encoder del Denon alterna 0 / 127 (no valores relativos).
+                    const int delta = (val == 0) ? 1 : -1;
+                    if (onBrowseRotate)
+                        juce::MessageManager::callAsync([this, delta]() { if (onBrowseRotate) onBrowseRotate(delta); });
+                    return;
+                }
+                default:
+                    break;
+            }
+        }
+        else if (ch == DenonMidi::kDeckBChannel)
+        {
+            switch (cc)
+            {
+                case DenonMidi::kVolumeB:
+                    engine.getMixer().getChannel(1).volumeFader.store(norm);
+                    return;
+                case DenonMidi::kTrimB:
+                    engine.getMixer().getChannel(1).gain.store(norm * 2.0f);
+                    return;
+                case DenonMidi::kHighB:
+                    engine.getMixer().getChannel(1).eqHigh.store(norm);
+                    return;
+                case DenonMidi::kMidB:
+                    engine.getMixer().getChannel(1).eqMid.store(norm);
+                    return;
+                case DenonMidi::kLowB:
+                    engine.getMixer().getChannel(1).eqLow.store(norm);
+                    return;
+                case DenonMidi::kJog:
+                    handleJogWheel(1, 33, val);
+                    return;
+                case DenonMidi::kMasterVolume:
+                    engine.getMixer().setMasterVolume(norm * 1.5f);
+                    return;
+                case DenonMidi::kHeadphonesVolume:
+                    engine.getMixer().setPhonesVolume(norm * 1.5f);
+                    return;
+                default:
+                    break;
+            }
+        }
+        return;
+    }
+
+    if (message.isNoteOn())
+    {
+        const int note = message.getNoteNumber();
+
+        if (ch == DenonMidi::kDeckAChannel)
+        {
+            switch (note)
+            {
+                case DenonMidi::kPlay:
+                    if (onPlayPause)
+                        juce::MessageManager::callAsync([this]() { if (onPlayPause) onPlayPause(0); });
+                    else { auto& d = engine.getDeck(0); if (d.isPlaying()) d.pause(); else d.play(); }
+                    return;
+                case DenonMidi::kCue:
+                    if (onCue)
+                        juce::MessageManager::callAsync([this]() { if (onCue) onCue(0); });
+                    else
+                        engine.getDeck(0).triggerCue();
+                    return;
+                case DenonMidi::kPflA:
+                    engine.getMixer().getChannel(0).setCue(!engine.getMixer().getChannel(0).isCue());
+                    return;
+                case DenonMidi::kKeylock:
+                {
+                    auto& d = engine.getDeck(0);
+                    const float cur = d.getPitchRange();
+                    d.setPitchRange((cur < 12.0f) ? 16.0f : ((cur < 30.0f) ? 50.0f : 8.0f));
+                    return;
+                }
+                case DenonMidi::kHotCue1:
+                case DenonMidi::kHotCue2:
+                case DenonMidi::kHotCue3:
+                case DenonMidi::kHotCue4:
+                {
+                    const int idx = (note == DenonMidi::kHotCue1) ? 0
+                                  : (note == DenonMidi::kHotCue2) ? 1
+                                  : (note == DenonMidi::kHotCue3) ? 2 : 3;
+                    auto& d = engine.getDeck(0);
+                    if (d.hasHotCue(idx)) d.jumpToHotCue(idx);
+                    else d.setHotCue(idx, d.getPosition());
+                    return;
+                }
+                case DenonMidi::kLoadDeck1:
+                    if (onLoadTrack)
+                        juce::MessageManager::callAsync([this]() { if (onLoadTrack) onLoadTrack(0); });
+                    return;
+                case DenonMidi::kLoadDeck2:
+                    if (onLoadTrack)
+                        juce::MessageManager::callAsync([this]() { if (onLoadTrack) onLoadTrack(1); });
+                    return;
+                default:
+                    break;
+            }
+        }
+        else if (ch == DenonMidi::kDeckBChannel)
+        {
+            switch (note)
+            {
+                case DenonMidi::kPlay:
+                    if (onPlayPause)
+                        juce::MessageManager::callAsync([this]() { if (onPlayPause) onPlayPause(1); });
+                    else { auto& d = engine.getDeck(1); if (d.isPlaying()) d.pause(); else d.play(); }
+                    return;
+                case DenonMidi::kCue:
+                    if (onCue)
+                        juce::MessageManager::callAsync([this]() { if (onCue) onCue(1); });
+                    else
+                        engine.getDeck(1).triggerCue();
+                    return;
+                case DenonMidi::kPflB:
+                    engine.getMixer().getChannel(1).setCue(!engine.getMixer().getChannel(1).isCue());
+                    return;
+                case DenonMidi::kKeylock:
+                {
+                    auto& d = engine.getDeck(1);
+                    const float cur = d.getPitchRange();
+                    d.setPitchRange((cur < 12.0f) ? 16.0f : ((cur < 30.0f) ? 50.0f : 8.0f));
+                    return;
+                }
+                case DenonMidi::kHotCue1:
+                case DenonMidi::kHotCue2:
+                case DenonMidi::kHotCue3:
+                case DenonMidi::kHotCue4:
+                {
+                    const int idx = (note == DenonMidi::kHotCue1) ? 0
+                                  : (note == DenonMidi::kHotCue2) ? 1
+                                  : (note == DenonMidi::kHotCue3) ? 2 : 3;
+                    auto& d = engine.getDeck(1);
+                    if (d.hasHotCue(idx)) d.jumpToHotCue(idx);
+                    else d.setHotCue(idx, d.getPosition());
+                    return;
+                }
+                default:
+                    break;
+            }
+        }
+        return;
+    }
+
+    if (message.isPitchWheel())
+    {
+        // Rate (fader de pitch) del Denon: PitchBend con centro en 8192.
+        const int delta = message.getPitchWheelValue() - 8192;
+        if (std::abs(delta) <= 32)
+            return;
+
+        const float norm = juce::jlimit(-1.0f, 1.0f, static_cast<float>(delta) / 8192.0f);
+        const int deckIdx = (ch == DenonMidi::kDeckBChannel) ? 1 : 0;
+        auto& deck = engine.getDeck(deckIdx);
+        deck.setPitchPercent(norm * deck.getPitchRange());
     }
 }

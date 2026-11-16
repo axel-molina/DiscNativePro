@@ -3,6 +3,7 @@
 #include <juce_gui_basics/juce_gui_basics.h>
 #include <atomic>
 #include "../midi/MidiManager.h"
+#include "../midi/MidiControllerProfile.h"
 #include "../services/LanguageManager.h"
 #include "LucideIcons.h"
 
@@ -21,6 +22,7 @@ public:
 private:
     void refreshDeviceList();
     void importMixxxPreset();
+    void refreshProfileBadge();
 
     MidiManager& midi;
 
@@ -33,6 +35,11 @@ private:
 
     // Device list container
     juce::StringArray currentDevices;
+
+    // P34: perfil de controladora (tabla hardware + bindings por defecto)
+    juce::Label profileHeader;
+    juce::ComboBox profileCombo;
+    juce::Label profileBadge;
 
     // Monitor box
     juce::Label monitorHeader;

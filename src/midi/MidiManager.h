@@ -27,6 +27,12 @@ public:
     MidiMappingManager& getMappingManager() { return mappingManager; }
     const MidiMappingManager& getMappingManager() const { return mappingManager; }
 
+    // P34: familia de controladora detectada (Pioneer DDJ / Denon MC / genérica).
+    MidiControllerFamily getActiveProfile() const { return activeProfile; }
+
+    // Fija el perfil a mano (desactiva la detección automática).
+    void setControllerProfileOverride(bool enabled, MidiControllerFamily family);
+
     // P27: proveedor de estado para el feedback LED (MainComponent consulta
     // decks/mezclador). El follower envía solo cambios (diff) en el timer.
     void setLedStateProvider(std::function<bool(const juce::String& actionId)> provider) { ledStateProvider = std::move(provider); }
@@ -45,6 +51,11 @@ private:
     AudioEngine& engine;
     MidiMappingManager mappingManager;
     bool dispatchMappedAction(const MidiActionDefinition& def, const juce::MidiMessage& message);
+    // P34: fallbacks de hardware por familia de controladora.
+    void handlePioneerMessage(const juce::MidiMessage& message, bool allowShiftedTempo);
+    void handleDenonMessage(const juce::MidiMessage& message);
+    void updateControllerProfile();
+    MidiControllerFamily activeProfile { MidiControllerFamily::Generic };
     bool deviceConnected { false };
     juce::StringArray connectedDevices;
     std::unique_ptr<juce::MidiOutput> midiOutput;

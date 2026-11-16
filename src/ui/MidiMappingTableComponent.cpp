@@ -121,7 +121,17 @@ MidiMappingTableComponent::MidiMappingTableComponent(MidiManager& midiMgr)
     importBtn.onClick = [this]() { importMapping(); };
     addAndMakeVisible(importBtn);
 
-    // 5. Configurar TableListBox
+    // 5. Contador de conflictos de mapeo
+    conflictBtn.setFontSize(10.0f);
+    conflictBtn.setCornerRadius(5.0f);
+    conflictBtn.setCustomColours(juce::Colour::fromRGB(24, 27, 36),
+                                 juce::Colour::fromRGB(248, 113, 113),
+                                 juce::Colour::fromRGB(248, 113, 113),
+                                 juce::Colour::fromRGB(36, 40, 54));
+    conflictBtn.onClick = [this]() { showConflictDetails(); };
+    addAndMakeVisible(conflictBtn);
+
+    // 6. Configurar TableListBox
     table.setModel(this);
     table.setColour(juce::TableListBox::backgroundColourId, juce::Colour::fromRGB(14, 16, 22));
     table.setColour(juce::TableListBox::outlineColourId, juce::Colour::fromRGB(32, 36, 48));
@@ -137,17 +147,22 @@ MidiMappingTableComponent::MidiMappingTableComponent(MidiManager& midiMgr)
     table.setRowHeight(32);
     addAndMakeVisible(table);
 
-    // Listeners del MappingManager
+    // Listeners del MappingManager. El aprendizaje se dispara desde el hilo
+    // MIDI, así que las actualizaciones de UI se postergan al hilo de mensajes.
     mappingMgr.onMappingChanged = [this]() {
-        refreshData();
+        juce::MessageManager::callAsync([this]() { refreshData(); });
     };
-    mappingMgr.onLearningStarted = [this](const juce::String&) {
+    mappingMgr.onLearningStarted = [this](const juce::String& actionId) {
+        if (const auto* def = mappingMgr.findAction(actionId))
+            previousBinding = def->binding;
+        learningActionId = actionId;
         table.updateContent();
         table.repaint();
     };
-    mappingMgr.onLearningFinished = [this](const juce::String&, const MidiBinding&) {
+    mappingMgr.onLearningFinished = [this](const juce::String& actionId, const MidiBinding&) {
         table.updateContent();
         table.repaint();
+        juce::MessageManager::callAsync([this, actionId]() { handleLearningFinished(actionId); });
     };
 
     LanguageManager::getInstance().addListener(this);
@@ -223,6 +238,14 @@ void MidiMappingTableComponent::updateFilteredActions()
             filteredActions.push_back(a);
         }
     }
+
+    conflictCounts.clear();
+    for (const auto& c : mappingMgr.findConflicts())
+    {
+        ++conflictCounts[c.actionId];
+        ++conflictCounts[c.otherActionId];
+    }
+    updateConflictButton();
 
     table.updateContent();
     table.repaint();
@@ -320,6 +343,9 @@ void MidiMappingTableComponent::paintCell(juce::Graphics& g, int rowNumber, int 
         case 3: // Control asignado
         {
             auto pill = cellBounds.toFloat().reduced(2, 2);
+            const auto conflictIt = conflictCounts.find(action.id);
+            const int conflicts = conflictIt != conflictCounts.end() ? conflictIt->second : 0;
+
             if (isLearningThis)
             {
                 g.setColour(juce::Colour::fromRGB(245, 158, 11).withAlpha(0.25f));
@@ -341,9 +367,22 @@ void MidiMappingTableComponent::paintCell(juce::Graphics& g, int rowNumber, int 
                 g.setColour(juce::Colour::fromRGB(36, 40, 56));
                 g.drawRoundedRectangle(pill, 4.0f, 1.0f);
 
+                auto textArea = pill;
+                if (conflicts > 0)
+                    textArea.removeFromRight(18.0f);
+
                 g.setColour(textCol);
                 g.setFont(juce::FontOptions("Menlo", 10.5f, juce::Font::bold));
-                g.drawText(action.binding.getDisplayText(), pill, juce::Justification::centred, false);
+                g.drawText(action.binding.getDisplayText(), textArea, juce::Justification::centred, false);
+
+                if (conflicts > 0)
+                {
+                    g.setColour(juce::Colour::fromRGB(239, 68, 68));
+                    g.setFont(juce::FontOptions(11.0f, juce::Font::bold));
+                    g.drawText(juce::String::fromUTF8("\xE2\x9A\xA0"),
+                               juce::Rectangle<float>(pill.getRight() - 17.0f, pill.getY(), 16.0f, pill.getHeight()),
+                               juce::Justification::centred, false);
+                }
             }
             break;
         }
@@ -438,6 +477,108 @@ void MidiMappingTableComponent::importMapping()
         });
 }
 
+void MidiMappingTableComponent::updateConflictButton()
+{
+    const int total = static_cast<int>(conflictCounts.size());
+    const bool hasConflicts = total > 0;
+
+    conflictBtn.setVisible(hasConflicts);
+    conflictBtn.setText(hasConflicts ? juce::String::fromUTF8("\xE2\x9A\xA0") + juce::String(total) : juce::String());
+    conflictBtn.setTooltip(hasConflicts
+                               ? LanguageManager::trUtf8("Controles MIDI duplicados: pulsa para ver el detalle",
+                                                         "Duplicate MIDI controls: click for details")
+                               : juce::String());
+
+    resized();
+}
+
+void MidiMappingTableComponent::showConflictDetails()
+{
+    const auto conflicts = mappingMgr.findConflicts();
+    if (conflicts.empty())
+        return;
+
+    const bool english = LanguageManager::getInstance().isEnglish();
+    juce::String message;
+
+    for (const auto& c : conflicts)
+    {
+        const auto* a = mappingMgr.findAction(c.actionId);
+        const auto* b = mappingMgr.findAction(c.otherActionId);
+        if (a == nullptr || b == nullptr)
+            continue;
+
+        const juce::String nameA = english ? a->nameEn : a->nameEs;
+        const juce::String nameB = english ? b->nameEn : b->nameEs;
+        message += juce::String::fromUTF8("\xE2\x9A\xA0") + " " + nameA + "  "
+                   + juce::String::fromUTF8("\xE2\x86\x92") + "  " + nameB + "\n";
+    }
+
+    message += "\n" + LanguageManager::trUtf8("Ambos controles responden al mismo mensaje MIDI. En cada pareja solo se ejecutará el primero de la tabla.",
+                                              "Both controls answer the same MIDI message. In each pair only the first one in the table will run.");
+
+    juce::AlertWindow::showAsync(juce::MessageBoxOptions()
+                                     .withTitle(LanguageManager::trUtf8("Controles MIDI en conflicto", "Conflicting MIDI controls"))
+                                     .withMessage(message)
+                                     .withButton("OK")
+                                     .withIconType(juce::MessageBoxIconType::WarningIcon),
+                                 nullptr);
+}
+
+void MidiMappingTableComponent::handleLearningFinished(const juce::String& actionId)
+{
+    const auto* def = mappingMgr.findAction(actionId);
+    if (def == nullptr || !def->binding.isValid())
+        return;
+
+    // El aprendizaje se canceló: el control no cambió, no hay nada que preguntar.
+    if (def->binding == previousBinding)
+        return;
+
+    const auto conflicts = mappingMgr.findConflictsFor(actionId);
+    if (conflicts.empty())
+        return;
+
+    const bool english = LanguageManager::getInstance().isEnglish();
+    juce::String message = LanguageManager::trUtf8("El control aprendido ya está asignado a:",
+                                                   "The learned control is already assigned to:");
+
+    for (const auto& c : conflicts)
+    {
+        const auto* other = mappingMgr.findAction(c.otherActionId);
+        if (other == nullptr)
+            continue;
+
+        const juce::String name = english ? other->nameEn : other->nameEs;
+        message += "\n" + juce::String::fromUTF8("\xE2\x80\xA2") + " " + name;
+    }
+
+    message += "\n\n" + LanguageManager::trUtf8("¿Liberar ese control para quedarte con el nuevo?",
+                                                "Release that control so the new one takes over?");
+
+    juce::AlertWindow::showAsync(juce::MessageBoxOptions()
+                                     .withTitle(LanguageManager::trUtf8("Control MIDI duplicado", "Duplicate MIDI control"))
+                                     .withMessage(message)
+                                     .withButton(LanguageManager::trUtf8("Reemplazar", "Replace"))
+                                     .withButton(LanguageManager::trUtf8("Cancelar", "Cancel"))
+                                     .withIconType(juce::MessageBoxIconType::WarningIcon),
+                                 [this, actionId, conflicts](int buttonIndex)
+                                 {
+                                     if (buttonIndex == 0)
+                                     {
+                                         for (const auto& c : conflicts)
+                                             mappingMgr.clearBinding(c.otherActionId);
+                                     }
+                                     else
+                                     {
+                                         mappingMgr.setBinding(actionId, previousBinding);
+                                         mappingMgr.saveToUserFile();
+                                     }
+
+                                     refreshData();
+                                 });
+}
+
 void MidiMappingTableComponent::paint(juce::Graphics& g)
 {
     auto bounds = getLocalBounds().toFloat();
@@ -455,6 +596,12 @@ void MidiMappingTableComponent::resized()
     auto topBar = area.removeFromTop(30);
     categoryFilterCombo.setBounds(topBar.removeFromLeft(180));
     topBar.removeFromLeft(8);
+
+    if (conflictBtn.isVisible())
+    {
+        conflictBtn.setBounds(topBar.removeFromLeft(38));
+        topBar.removeFromLeft(6);
+    }
 
     resetDefaultsBtn.setBounds(topBar.removeFromRight(140));
     topBar.removeFromRight(6);

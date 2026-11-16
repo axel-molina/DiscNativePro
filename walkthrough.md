@@ -2168,3 +2168,71 @@ Variables de entorno: `APPIMAGE_EXTRACT_AND_RUN=1` (los runners de GitHub no tie
 **Nota**: los archivos de config de cada agente viven en su home (`~/.codex/config.toml`, `~/.config/opencode/opencode.json`, `~/.gemini/config/mcp_config.json`, `~/.commandcode/mcp.json`) y quedan fuera del repo. No se copiaron ni imprimieron tokens/secretos de terceros que ya estaban en esos archivos.
 
 **Pendiente del usuario**: verificar en la próxima sesión de cada agente que `mem_context` devuelve el contexto del proyecto; la primera corrida de CI del AppImage puede necesitar iteración (ajustes de paquetes del plugin gtk o del nombre del AppImage generado).
+
+---
+
+# Walkthrough — P34: perfiles de controladora MIDI + tabla Denon + detección de conflictos (Notion #13)
+
+**Ticket**: Notion Product Backlog #13 — "MIDI: el fader de volumen del canal 1 mueve el pitch y el crossfader no responde" (Bug, Prioridad Alta, feedback `DNP-FB-11`, plataforma reportada Linux).
+**Hardware del usuario**: Denon MC2000.
+
+## 1. Causa raíz (verificada con el preset oficial, no por suposición)
+
+El preset oficial de Mixxx `res/controllers/Denon MC3000.midi.xml` confirma:
+- **Volumen Deck A = CC 5 en canal MIDI 1**.
+- **Crossfader = CC 22 en canal MIDI 1**.
+- Deck A = canal 1, Deck B = canal 3 (el layout DN-SC2000 usa canal 2 → se acepta como alias).
+
+La app tenía un único bloque de hardware "estilo Pioneer" que reclamaba **CC 5 / canal 1 como MSB del tempo de 14 bits** (`MidiManager.cpp`, rama `case 5:` del bloque genérico) y **no tenía ninguna rama para CC 22**, así que el crossfader caía en el fallback genérico ("Deck 1 Low EQ") y quedaba muerto. Los dos síntomas del ticket quedan explicados exactamente por la tabla Denon; la tabla MC4000 (crossfader CC 8, volumen CC 28) no los explicaría.
+
+## 2. Cambios
+
+### `[NEW]` `src/midi/MidiControllerProfile.h` / `.cpp`
+- `enum class MidiControllerFamily { Generic, PioneerDDJ, DenonMC }`.
+- `MidiControllerProfile::detect(deviceNames)`: por nombre del dispositivo (denon, dn sc2000, mc2000/3000/4000/6000/7000 → Denon; pioneer/ddj → Pioneer; resto → Genérica).
+- `namespace DenonMidi`: constantes de la tabla (volumen A CC5 / B CC16, trim 1/18, high 2/13, mid 3/14, low 4/21, crossfader 22, jog 81, browse 84, master 146, phones 144/137; play 67, cue 66, PFL 1/5, keylock 6, hotcues 35/36/37/50, load 98/99).
+
+### `[MODIFY]` `src/midi/MidiMapping.h` / `.cpp`
+- `MidiActionDefinition` gana `factoryBinding` (tabla Pioneer **inmutable**) y `MidiMappingManager` guarda `defaultBinding` por perfil.
+- `resolveDefaultBinding(family, actionId)`: tabla Denon → lista de acciones limpiadas para Denon (sync, keyshift, jog platter, EQ filter, browse push, pads de performance/stems) → si no, `factoryBinding`.
+- `applyProfileDefaults(family)`: migra los defaults al perfil activo. **Regla de preservación**: un binding de usuario solo se reescribe si sigue siendo igual al default anterior ("intocado"); lo customized por el usuario se respeta.
+- `bindingsConflict()` / `findConflicts()` / `findConflictsFor(actionId)`: dos acciones chocan si comparten tipo + número y sus canales son iguales o uno es comodín (0).
+- Persistencia: el JSON (`~/Library/Application Support/DiscNativePro/midi_mapping.json`) ahora guarda `profile` y `profileOverride` → al reiniciar se recupera el baseline correcto.
+
+### `[MODIFY]` `src/midi/MidiManager.h` / `.cpp`
+- Dispatch por perfil: `matchMessage` → `dispatchMappedAction` → bloque hardware **de la familia activa**.
+- `handleDenonMessage()`: implementa la tabla Denon verificada (Deck A canal 1, Deck B canal 3 con alias de canal 2, jog con encoding `valor - 64` = el que ya usa `handleJogWheel`, browse encoder con delta 0→+1 / resto→-1, pitch bend → pitch de la bandeja, +/− deadzone).
+- `handlePioneerMessage()` conserva **verbatim** el bloque existente; solo `case 5` (MSB de tempo con shift) queda restringido a Pioneer, de modo que una controladora desconocida ya no mueve el pitch con CC 5.
+- Normalización de canal: en familia Denon, el canal 2 (layout DN-SC2000) se reescribe a canal 3 → una sola tabla sirve para ambas variantes de Deck B.
+- `updateControllerProfile()` en cada `rescanDevices()`: detecta la familia y aplica los defaults del perfil (respetando el override manual).
+- `setControllerProfileOverride(enabled, family)` para forzar el perfil desde la UI.
+
+### `[MODIFY]` `src/ui/MidiMappingTableComponent.h` / `.cpp`
+- Contador **⚠ N** en la barra superior (solo visible si hay conflictos) que abre el detalle de las parejas duplicadas.
+- Indicador **⚠** en la celda "CONTROL ASIGNADO" de cada fila en conflicto.
+- Al aprender un control que ya está asignado a otra acción, diálogo **"Reemplazar / Cancelar"**: *Reemplazar* libera el control de la otra acción; *Cancelar* restaura el binding previo de la acción aprendida (persistido en disco).
+- Las actualizaciones de UI que llegan desde el hilo MIDI se postergan con `MessageManager::callAsync` (el `AlertWindow` solo puede abrirse en el hilo de mensajes).
+
+### `[MODIFY]` `src/ui/MidiModalComponent.h` / `.cpp`
+- Selector **PERFIL**: Automático / Pioneer DDJ / Denon MC / Genérica → `MidiManager::setControllerProfileOverride`.
+- Badge **"Detectado: Denon MC"** (o "Manual: …" si el usuario fuerza el perfil).
+- El modal crece de 326 a 340 px para dar espacio a la fila nueva (perfil / dispositivos / monitor).
+
+### `[MODIFY]` `CMakeLists.txt`
+- Se agrega `src/midi/MidiControllerProfile.h` y `.cpp` a la lista explícita de fuentes.
+
+## 3. Verificación
+
+- `cmake --build build` → **0 errores, 0 warnings** (`grep -icE "warning|error"` → 0 sobre el log completo de la recompilación de los 4 ficheros MIDI/UI tocados).
+- Regla de relanzamiento cumplida: `pkill -f DiscNativePro` → `open build/DiscNativePro_artefacts/Release/DiscNativePro.app` → `pgrep -fl DiscNativePro` → PID vivo, proceso estable (sin crash a los +8 s).
+- `git diff --stat`: 9 ficheros modificados + 2 nuevos, 783 inserciones.
+
+## 4. Pendiente de validación física (usuario)
+
+La app compila y arranca, pero **el fix no está validado contra el MC2000 real**: eso requiere el hardware del usuario.
+- Con el MC2000 conectado: abrir Ajustes → MIDI y confirmar que el badge dice **"Detectado: Denon MC"**.
+- Mover el **fader de volumen del canal 1**: debe mover el volumen de la Deck 1 y **no** tocar el pitch.
+- Mover el **crossfader**: debe mover el crossfader del mezclador.
+- Si algún control no coincide, el **monitor MIDI en vivo** del modal muestra el mensaje crudo (canal/CC/nota) → se ajusta la tabla Denon con ese dato.
+
+El ticket Notion #13 queda **"En curso"** con Validación "No iniciada" hasta que el usuario confirme en su hardware.

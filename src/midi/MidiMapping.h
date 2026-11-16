@@ -6,6 +6,7 @@
 #include <vector>
 #include <functional>
 #include <unordered_map>
+#include "MidiControllerProfile.h"
 
 enum class MidiMessageType
 {
@@ -32,6 +33,13 @@ struct MidiBinding
 
     bool isValid() const { return type != MidiMessageType::None; }
     void clear() { type = MidiMessageType::None; channel = 0; number = -1; }
+
+    bool operator== (const MidiBinding& other) const
+    {
+        return type == other.type && channel == other.channel && number == other.number;
+    }
+
+    bool operator!= (const MidiBinding& other) const { return !(*this == other); }
 
     bool matches(const juce::MidiMessage& msg) const
     {
@@ -84,7 +92,16 @@ struct MidiActionDefinition
     MidiActionCategory category { MidiActionCategory::Transport };
     int deckIndex { -1 }; // 0 = Deck 1, 1 = Deck 2, -1 = Global
     MidiBinding binding;
-    MidiBinding defaultBinding;
+    MidiBinding defaultBinding;   // default vigente (depende del perfil de controladora)
+    MidiBinding factoryBinding;   // default de fábrica (tabla Pioneer DDJ), inmutable
+};
+
+// Dos acciones entran en conflicto si escuchan el mismo mensaje MIDI:
+// mismo tipo, mismo número y canales compatibles (iguales o alguno "cualquier canal").
+struct MidiMappingConflict
+{
+    juce::String actionId;
+    juce::String otherActionId;
 };
 
 class MidiMappingManager
@@ -115,6 +132,24 @@ public:
     void clearBinding(const juce::String& actionId);
     void resetToDefaults();
 
+    // P34: perfil de controladora. Cada familia tiene su propia tabla de
+    // controles (Pioneer DDJ = tabla de fábrica; Denon MC = tabla Denon).
+    MidiControllerFamily getProfile() const { return profile; }
+    bool hasProfileOverride() const { return profileOverrideEnabled; }
+    MidiControllerFamily getProfileOverride() const { return profileOverride; }
+
+    // Aplica la tabla del perfil indicado: las acciones que el usuario nunca
+    // tocó adoptan el default del perfil; las personalizadas se conservan.
+    void applyProfileDefaults(MidiControllerFamily family);
+
+    // Fijación manual del perfil desde la UI (desactiva la detección automática).
+    void setProfileOverride(bool enabled, MidiControllerFamily family);
+
+    // Conflictos de asignación
+    static bool bindingsConflict(const MidiBinding& a, const MidiBinding& b);
+    std::vector<MidiMappingConflict> findConflicts() const;
+    std::vector<MidiMappingConflict> findConflictsFor(const juce::String& actionId) const;
+
     // P26: aplica en lote bindings importados (p. ej. presets Mixxx) y
     // persiste una sola vez. Devuelve cuántos se aplicaron.
     int applyImportedBindings(const std::vector<std::pair<juce::String, MidiBinding>>& bindings);
@@ -142,8 +177,14 @@ private:
     juce::var toVar() const;
     bool fromVar(const juce::var& v);
 
+    void applyProfileDefaultsInternal(MidiControllerFamily family);
+    MidiBinding resolveDefaultBinding(MidiControllerFamily family, const juce::String& actionId) const;
+
     std::vector<MidiActionDefinition> actions;
     std::unordered_map<juce::String, MidiBinding> outputBindings; // P27: acción → mensaje LED
     bool learningActive { false };
     juce::String learningActionId;
+    MidiControllerFamily profile { MidiControllerFamily::Generic };
+    bool profileOverrideEnabled { false };
+    MidiControllerFamily profileOverride { MidiControllerFamily::Generic };
 };

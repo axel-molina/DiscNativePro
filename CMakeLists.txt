@@ -107,6 +107,8 @@ target_sources(DiscNativePro
         src/midi/MidiManager.cpp
         src/midi/MidiMapping.h
         src/midi/MidiMapping.cpp
+        src/midi/MidiControllerProfile.h
+        src/midi/MidiControllerProfile.cpp
         src/services/YouTubeService.h
         src/services/YouTubeService.cpp
         src/services/YouTubeAudioDownloader.h
