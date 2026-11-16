@@ -99,6 +99,19 @@ No necesitas tener una computadora con Windows ni compilar manualmente:
 3. En la sección inferior **Artifacts**, descarga el archivo comprimido **`DiscNativePro-Windows-x64.zip`**.
 4. Descomprímelo en cualquier PC con Windows y ejecuta directamente **`DiscNativePro.exe`**.
 
+> **El paquete debe contener 4 archivos y el `.exe` no puede moverse solo.** La app carga
+> ONNX Runtime de forma estática al arrancar (`onnxruntime.lib`), así que el loader de
+> Windows necesita estas dos DLL **en la misma carpeta** que el ejecutable:
+> ```
+> DiscNativePro.exe
+> WebView2Loader.dll
+> onnxruntime.dll
+> onnxruntime_providers_shared.dll
+> ```
+> Si falta cualquiera de ellas, Windows muestra un error y la app no abre
+> (`0xc000007b` / `0xc0000135`). Si movés el `.exe` a otra carpeta, mové también las
+> dos DLL de ONNX Runtime.
+
 ---
 
 ### Opción B: Compilación Manual en una PC con Windows
@@ -140,6 +153,9 @@ El binario ejecutable optimizado estará disponible en:
 ```powershell
 .\build\DiscNativePro_artefacts\Release\DiscNativePro.exe
 ```
+En esa misma carpeta deben estar `onnxruntime.dll` y `onnxruntime_providers_shared.dll`
+(CMake las copia automáticamente al compilar): la app las carga al arrancar y no abre
+si faltan.
 
 ---
 

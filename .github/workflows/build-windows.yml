@@ -14,6 +14,10 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - name: Verify Windows packaging manifest
+        shell: bash
+        run: bash tools/check-windows-packaging.sh
+
       - name: Setup MSVC developer environment
         uses: ilammy/msvc-dev-cmd@v1
 
@@ -46,6 +50,28 @@ jobs:
           if ($dllPath) {
             Write-Host "Found WebView2Loader.dll at: $dllPath"
             Copy-Item $dllPath -Destination "dist\WebView2Loader.dll"
+          }
+          # ONNX Runtime: el ejecutable la carga al arrancar (import estático de
+          # onnxruntime.lib -> el loader de Windows resuelve onnxruntime.dll antes
+          # de main). CMake deja estas DLL junto al .exe; si el paquete no las
+          # incluye, la app no arranca (0xc000007b / 0xc0000135).
+          foreach ($ortDll in @("onnxruntime.dll", "onnxruntime_providers_shared.dll")) {
+            $ortPath = Join-Path $exeDir $ortDll
+            if (-not (Test-Path $ortPath)) {
+              Write-Error "Missing ONNX Runtime DLL next to the executable: $ortDll"
+              exit 1
+            }
+            Copy-Item $ortPath -Destination "dist\$ortDll"
+            Write-Host "Copied $ortDll to dist\"
+          }
+          # Guarda de regresión: el paquete debe llevar TODO lo que el loader
+          # necesita. Si falta una DLL, el job falla en vez de publicar un
+          # artefacto que no arranca.
+          $required = @("DiscNativePro.exe", "WebView2Loader.dll", "onnxruntime.dll", "onnxruntime_providers_shared.dll")
+          $missing = $required | Where-Object { -not (Test-Path "dist\$_") }
+          if ($missing) {
+            Write-Error "Missing files in dist: $($missing -join ', ')"
+            exit 1
           }
           Compress-Archive -Path "dist\*" -DestinationPath "DiscNativePro-Windows-x64.zip" -Force
           Write-Host "Package created: DiscNativePro-Windows-x64.zip"

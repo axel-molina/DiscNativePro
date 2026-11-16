@@ -56,6 +56,26 @@ jobs:
           if ($dllPath) {
             Copy-Item $dllPath -Destination "dist\WebView2Loader.dll"
           }
+          # ONNX Runtime: el ejecutable la carga al arrancar (import estático de
+          # onnxruntime.lib -> el loader de Windows resuelve onnxruntime.dll antes
+          # de main). CMake deja estas DLL junto al .exe; sin ellas la app no
+          # arranca (0xc000007b / 0xc0000135).
+          foreach ($ortDll in @("onnxruntime.dll", "onnxruntime_providers_shared.dll")) {
+            $ortPath = Join-Path $exeDir $ortDll
+            if (-not (Test-Path $ortPath)) {
+              Write-Error "Missing ONNX Runtime DLL next to the executable: $ortDll"
+              exit 1
+            }
+            Copy-Item $ortPath -Destination "dist\$ortDll"
+          }
+          # Guarda de regresión: el instalador se arma desde dist\, así que dist\
+          # debe llevar todo lo que el loader necesita para arrancar.
+          $required = @("DiscNativePro.exe", "WebView2Loader.dll", "onnxruntime.dll", "onnxruntime_providers_shared.dll")
+          $missing = $required | Where-Object { -not (Test-Path "dist\$_") }
+          if ($missing) {
+            Write-Error "Missing files in dist: $($missing -join ', ')"
+            exit 1
+          }
 
           if (-not (Get-Command iscc -ErrorAction SilentlyContinue)) {
             if (Test-Path "C:\Program Files (x86)\Inno Setup 6\ISCC.exe") {
@@ -95,6 +115,23 @@ jobs:
           $dllPath = Join-Path $exeDir "WebView2Loader.dll"
           if (Test-Path $dllPath) {
             Copy-Item $dllPath -Destination "msix\WebView2Loader.dll"
+          }
+          # ONNX Runtime: dependencia de carga (link-time) del ejecutable. Sin
+          # estas DLL en el staging el paquete MSIX se instala pero no arranca.
+          foreach ($ortDll in @("onnxruntime.dll", "onnxruntime_providers_shared.dll")) {
+            $ortPath = Join-Path $exeDir $ortDll
+            if (-not (Test-Path $ortPath)) {
+              Write-Error "Missing ONNX Runtime DLL next to the executable: $ortDll"
+              exit 1
+            }
+            Copy-Item $ortPath -Destination "msix\$ortDll"
+          }
+          # Guarda de regresión: makeappx empaqueta lo que hay en msix\.
+          $required = @("DiscNativePro.exe", "WebView2Loader.dll", "onnxruntime.dll", "onnxruntime_providers_shared.dll")
+          $missing = $required | Where-Object { -not (Test-Path "msix\$_") }
+          if ($missing) {
+            Write-Error "Missing files in msix: $($missing -join ', ')"
+            exit 1
           }
 
           # 2. Assets visuales desde el icono de la app (44/150/50 px)

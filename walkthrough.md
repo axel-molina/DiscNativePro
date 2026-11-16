@@ -2416,3 +2416,68 @@ Todo el texto usaba el sans por defecto de JUCE (Lucida Grande en macOS, Verdana
 ## 4. Nota de alcance
 
 Sora no publica itálica: el único italic de la app (`AIMatchView.cpp:158`) pasa a renderizarse en regular. Si se quiere cursiva real, hay que añadir una tercera cara o usar la variante del sistema solo para ese caso.
+
+---
+
+# Walkthrough — P38: los artefactos de Windows no empaquetan ONNX Runtime (la app no arrancaba con 0xc000007b)
+
+> Ticket: Notion **#14** «Windows: la app no arranca desde la v1.4.0 (error 0xc000007b al lanzar)» · Prioridad Crítica.
+> Aprobación humana en el chat: 2026-11-16 («aplica el fix»).
+
+## 1. Qué pasaba
+
+Desde la **v1.4.0** ningún artefacto de Windows arrancaba: el ZIP del CI, el instalador Inno Setup y el paquete MSIX fallaban al lanzarse (`0xc000007b`, reportado por un usuario de YouTube en el feedback DNP-FB-12). Con la **1.3.3** la app arrancaba bien.
+
+## 2. Causa raíz (verificada contra el repo)
+
+`CMakeLists.txt:349-360` (bloque `WIN32`) enlaza `third_party/onnxruntime/windows/lib/onnxruntime.lib` — una *import library* — y `src/services/OnnxStemEngine.cpp:17-30` / `src/services/TwoStemEngine.cpp:32` llaman `OrtGetApiBase()` de forma **estática** (no `dlopen`). El loader de Windows resuelve `onnxruntime.dll` **antes** de `main`: si la DLL no está junto al `.exe`, el proceso no arranca.
+
+El POST_BUILD de CMake (`:352-360`) deja las dos DLL junto al ejecutable, pero **los tres artefactos publicados se arman a mano y se las saltaban**:
+
+| Artefacto | Dónde se arma | Contenido anterior |
+|---|---|---|
+| `DiscNativePro-Windows-x64.zip` | `.github/workflows/build-windows.yml:36-50` | exe + `WebView2Loader.dll` |
+| `DiscNativePro-Windows-x64-Setup.exe` | `.github/workflows/release.yml:47-57` → `installer/windows/installer.iss:43-45` | exe + `WebView2Loader.dll` |
+| `DiscNativePro-Windows-x64.msix` | `.github/workflows/release.yml:93-98` | exe + `WebView2Loader.dll` |
+
+Contraste que confirma el diagnóstico: **Linux sí copia el runtime** (`release.yml:247`) y **macOS lo empaqueta en el `.app`** (`CMakeLists.txt:287-289`). Windows era el único que había quedado atrás. ONNX Runtime llegó en 1.4.0 con el motor ML de stems (commit `a1edd66`) → de ahí el corte exacto de versión.
+
+## 3. Cambios
+
+### `[MODIFY]` `.github/workflows/build-windows.yml` (step *Package Windows Binary*)
+- Copia `onnxruntime.dll` y `onnxruntime_providers_shared.dll` desde `$exeDir` (donde el POST_BUILD de CMake las deja) a `dist\`, **fallando el job** si alguna no está.
+- Guarda de regresión: el job falla si en `dist\` falta cualquiera de los 4 archivos obligatorios (`DiscNativePro.exe`, `WebView2Loader.dll`, `onnxruntime.dll`, `onnxruntime_providers_shared.dll`) — así no se vuelve a publicar un artefacto que no arranca.
+
+### `[MODIFY]` `.github/workflows/release.yml` (job `build-windows`)
+- Misma copia + guarda en el step **Build Windows Installer (Inno Setup)** → `dist\` (de ahí toma el instalador).
+- Misma copia + guarda en el step **Package MSIX** → `msix\` (staging de `makeappx`).
+
+### `[MODIFY]` `installer/windows/installer.iss`
+- `[Files]`: los dos `Source` nuevos (`..\..\dist\onnxruntime.dll` y `..\..\dist\onnxruntime_providers_shared.dll`) a `{app}`. Si el workflow no los deja en `dist\`, Inno Setup falla al compilar → no se publica un instalador roto.
+
+### `[NEW]` `tools/check-windows-packaging.sh`
+- Check ejecutable en cualquier plataforma: falla si las DLL vendorizadas no están en `third_party/onnxruntime/windows/lib/` o si alguno de los 3 caminos de empaquetado no las menciona. Se ejecuta como primer paso del job de Windows (falla rápido, antes de compilar).
+
+### `[MODIFY]` `README.md`
+- Sección *Compilación y Generación del `.exe` en Windows*: documenta los 4 archivos que el paquete debe contener y que el `.exe` no puede moverse solo (las dos DLL de ONNX Runtime van con él). Mismo aviso al final de la compilación manual (Opción B).
+
+### Sin cambios (deliberado)
+- **CMake**: el POST_BUILD ya copia las DLL donde deben estar; el fallo era de empaquetado, no de compilación.
+- **Código C++**: el runtime se carga bien si la DLL está presente.
+- **Versión**: publicar un release nuevo es decisión del usuario (no se bumpea la versión en este fix).
+
+## 4. Verificación (real, en esta máquina)
+
+1. **Parseo YAML** de los 3 workflows con PyYAML 6.0.3 → OK (`build-windows` con 8 steps; `release` con jobs `build-windows`, `build-linux`, `build-macos`, `publish-release`).
+2. **Check local ejecutado**: `bash tools/check-windows-packaging.sh` → OK (exit 0).
+3. **Guarda probada en negativo**: borrando las menciones de `onnxruntime*` del `installer.iss` el check devuelve exit 1 con el mensaje «Empaquetado de Windows incompleto: la app no arrancaría en Windows»; restaurado → exit 0.
+4. **DLL vendorizadas confirmadas**: `third_party/onnxruntime/windows/lib/onnxruntime.dll` y `onnxruntime_providers_shared.dll` existen, son **PE32+ x86-64** (`file`) y están versionadas en git (`git ls-files`).
+5. **Build local**: `cmake --build build` → **0 errores, 0 warnings**.
+6. **Relanzamiento (regla del repo)**: `pkill -f DiscNativePro` → `open build/DiscNativePro_artefacts/Debug/DiscNativePro.app` → `pgrep -fl DiscNativePro` → proceso vivo (PID 86967).
+7. **CI**: el job `build-windows` es la validación real del paquete (Windows no es compilable desde macOS). El guard falla si vuelve a faltar una DLL.
+
+## 5. Pendiente
+
+- **Publicar el release**: hasta que corra el CI con estos cambios, el release v1.4.0 sigue roto para Windows. Hace falta `push` + tag (decisión del usuario; la rama `axel-molina/v1.4.2` aún no tiene remoto).
+- **Validación final con el usuario**: que la app arranque en sus dos portátiles Windows (criterio de aceptación explícito del ticket). Si tras el fix persistiera el `0xc000007b`, la causa pasaría a ser el antivirus/antimalware o un binario corrupto — el dato a mirar es el log del Event Viewer.
+- **Verificación de la hipótesis**: el error `0xc000007b` también aparece con binario truncado o bloqueado por antivirus (una DLL faltante suele dar `0xc0000135`), por eso la confirmación final es del usuario y no del código.

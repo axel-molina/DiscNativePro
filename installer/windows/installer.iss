@@ -43,6 +43,10 @@ Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{
 [Files]
 Source: "..\..\dist\DiscNativePro.exe"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\..\dist\WebView2Loader.dll"; DestDir: "{app}"; Flags: ignoreversion
+; ONNX Runtime: dependencia de carga (link-time) del ejecutable. Si falta
+; onnxruntime.dll junto al .exe, la app no arranca (0xc000007b / 0xc0000135).
+Source: "..\..\dist\onnxruntime.dll"; DestDir: "{app}"; Flags: ignoreversion
+Source: "..\..\dist\onnxruntime_providers_shared.dll"; DestDir: "{app}"; Flags: ignoreversion
 
 [Icons]
 Name: "{autoprograms}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"
