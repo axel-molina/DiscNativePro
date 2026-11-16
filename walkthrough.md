@@ -2580,12 +2580,11 @@ Junto al `loopActive.store(false)` (`:160`) se limpian `loopStartSeconds` y `loo
 1. **Build**: `cmake --build build` → **0 errores y 0 warnings** (hubo que corregir 2 avisos de `-Wfloat-equal` introducidos por la comparación de `double` del estado del loop: se resolvió con tolerancia `1e-6` vía `std::abs`).
 2. **Aritmética del recorte comprobada con una simulación** (7 casos, todos OK): loop dentro de la ventana · loop parcialmente fuera · loop pasado fuera (no se dibuja) · loop futuro fuera (no se dibuja) · loop pasado visible (abajo del centro) · loop cruzando la aguja · sin loop definido. El alto de la región es exactamente `duración × pixelsPerSecond` (2 s × 70 px/s = 140 px).
 3. **Relanzamiento**: `pkill -f DiscNativePro` → `open build/DiscNativePro_artefacts/Release/DiscNativePro.app` → `pgrep -fl DiscNativePro` → proceso vivo; la captura de pantalla confirma que la app levanta y dibuja la columna central sin artefactos (sin loop activo no hay marcador, como corresponde).
-4. **Visual con loop activo**: pendiente de revisión del usuario (no se pudo automatizar el clic: macOS no concede a `osascript` el permiso de accesibilidad, error -25211).
+4. **Visual con loop activo**: **validado por el usuario** (2026-11-16): *«funciona perfecto»*. La región se ve como debe, alineada con la aguja y sincronizada con la reproducción. No se pudo automatizar el clic (macOS no concede a `osascript` el permiso de accesibilidad, error -25211), así que la prueba la hizo el usuario.
 
 ## 5. Pendiente
 
-- **Revisión visual del usuario**: cargar una pista → pulsar **LOOP** → la región azul tiene que aparecer en la columna central, alineada con la aguja y sincronizada con la reproducción; al volver a pulsar LOOP (loop inactivo) queda solo el borde tenue.
-- **Publicación**: entra en el mismo grupo de la **v1.4.2** (sin push parcial).
+- **Publicación**: entra en el mismo grupo de la **v1.4.2** (sin push parcial). El commit `1ac311c` es local; la rama `axel-molina/v1.4.2` sigue sin remoto.
 
 ## 6. Nota
 
