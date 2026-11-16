@@ -2237,6 +2237,12 @@ La app compila y arranca, pero **el fix no está validado contra el MC2000 real*
 
 El ticket Notion #13 queda **"En curso"** con Validación "No iniciada" hasta que el usuario confirme en su hardware.
 
+### Cierre por decisión del usuario (2026-11-16)
+
+El usuario instruyó cerrar el ticket **asumiendo** que la validación con el hardware quedó superada («vamos a suponer que quedó validado»). El ticket #13 queda **Finalizado / Progreso 100 / Validación Aprobada**.
+
+> **Transparencia**: la prueba física con la MC2000 **no se ejecutó** (requiere el hardware del usuario); el cierre refleja la asunción del usuario, no una prueba ejecutada. Riesgo residual y plan de ajuste: si al conectar la controladora algún control no coincidiera, se ajusta la tabla `DenonMidi` (`src/midi/MidiControllerProfile.cpp`) o la tabla de la familia con el dato crudo del **monitor MIDI en vivo** del modal MIDI, y se reabre el ticket — no hace falta rehacer el diagnóstico de causa raíz, que ya estaba probado en el código.
+
 ---
 
 # Walkthrough — P35 + P36: escala tipográfica en Ajustes + mensaje de bienvenida
