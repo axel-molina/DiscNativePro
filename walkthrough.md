@@ -2487,3 +2487,51 @@ Contraste que confirma el diagnóstico: **Linux sí copia el runtime** (`release
 - **Lo que falta para la v1.4.2**: `push` de la rama `axel-molina/v1.4.2` (hoy sin remoto) + tag `v1.4.2` → corren los 3 jobs del `release.yml` y el `build-windows` valida el paquete de verdad. Hasta entonces, el release v1.4.0/v1.4.1 sigue roto en Windows.
 - **Validación final con el usuario**: que la app arranque en sus dos portátiles Windows con el artefacto de la v1.4.2 (criterio de aceptación del ticket). Si tras el fix persistiera el `0xc000007b`, la causa pasaría a ser el antivirus/antimalware o un binario corrupto — el dato a mirar es el log del Event Viewer.
 - **Verificación de la hipótesis**: el error `0xc000007b` también aparece con binario truncado o bloqueado por antivirus (una DLL faltante suele dar `0xc0000135`), por eso la confirmación final es del usuario y no del código.
+
+---
+
+# Walkthrough — P39: los 17 textos que solo existían en español (DNP-TK-15)
+
+> Ticket: **DNP-TK-15** «i18n: verificar y corregir las traducciones de todos los textos visibles» · rama `axel-molina/v1.4.2`.
+> Plan: `implementation_plan.md` (sección P39).
+
+## 1. Auditoría: el alcance real era 17, no 124
+
+La app ya tenía 507 llamadas a `LanguageManager::trUtf8()`. El contador ingenuo de literales visibles en español daba 124, pero **casi todos se sobrescriben en runtime**: `refreshLanguage()` (invocado por `languageChanged()`) reescribe todos los textos cuando cambia el idioma.
+
+El análisis correcto es **a nivel de componente**: un componente cuenta como deuda si *nunca* recibe una versión con `trUtf8`. Con ese criterio quedan **17 literales** en 2 archivos (de los cuales 3 son símbolos —`×½`, `×2`, `✕`— y 1 es la viñeta `● ` de un badge cuyo texto ya estaba traducido: no son deuda real).
+
+| Archivo | Literales | Bloque |
+|---|---|---|
+| `src/ui/SettingsModalComponent.cpp` | 16 | Stems (8), Micrófono/Talkover (5), Transmitir (3) |
+| `src/ui/LibraryComponent.cpp` | 1 | Cabecera de la tabla de pistas |
+
+## 2. Cambios
+
+### `[MODIFY]` `src/ui/SettingsModalComponent.cpp`
+- **Helper `stemsStatusDescription()`** en el `namespace` anónimo: fuente única para la descripción del motor de stems (la larga, con sus dos variantes) → el texto inicial y la re-traducción en caliente no pueden desincronizarse.
+- `setupGeneralTab()`: `stemsSectionLabel`, `stemsStatusDescLabel`, `stemsModeLabel`, `stemsModeCombo` (2 ítems), `stemsPrecalcBtn` («Precalcular biblioteca…» y «Encolando...»).
+- `updateStemsPrecalcButton()`: «En cola: N pistas» → *In queue: N tracks* (la palabra «pistas» estaba suelta en español).
+- `setupSoundTab()`: `soundSectionMic`, `micEnableToggle`, `micGainLabel`, `micDuckLabel`, `micDuckAutoToggle`.
+- `setupTransmitTab()`: ítems 1 («Servidor de radio propio…») y 5 («RTMP personalizado») del combo de destino, y `broadcastMountLabel` («Mount:»).
+- **`refreshLanguage()`**: se añaden los 16 anteriores para que se re-traduzcan **en caliente** al cambiar de idioma (no solo al arrancar). En `stemsModeCombo` y `broadcastDestCombo` se guarda el `getSelectedId()` antes del `clear()` y se restaura después, para no perder la selección.
+
+### `[MODIFY]` `src/ui/LibraryComponent.cpp`
+- `tableHeaderTitle`: el valor inicial «Todas las Pistas  0 Canciones» → `trUtf8("Todas las Pistas", "All Tracks") + "  0 " + trUtf8("Canciones", "Tracks")`. (El valor dinámico ya estaba traducido en los 3 sitios que lo reescriben.)
+
+## 3. Verificación
+
+- **Auditoría re-ejecutada** con el mismo script (mismo criterio, a nivel de componente): **0 literales visibles sin `trUtf8`** en todo `src/ui`.
+- **Medición de las cadenas nuevas en inglés** contra la caja real de cada control (métricas de Sora): **16/16 caben** → ninguna reintroduce compresión horizontal (el problema que se corrigió en P35b).
+- `cmake --build build` → **0 errores, 0 warnings**; app relanzada.
+- **Verificación visual real** con la app en inglés (`settings.json` → `"language": "en"`), capturas 1:1:
+  - General → «Stems (Track Separation)», «Embedded separation engine. Fast mode: …», «Stems Mode:», «Fast — 2 live stems (voice/instrumental)», «Precompute library (4 stems)».
+  - Transmitir → «Destination:», «RTMP Ingest URL:», «Broadcast mix live», «Podcast (export recording to MP3)», «Export to MP3».
+  - Biblioteca → «All Tracks  24 Tracks», «Downloads  24».
+  - Idioma restaurado a español después de la prueba (`"language": "es"`) y app relanzada.
+- El bloque de Micrófono no se ve en esta configuración (es condicional y ya estaba oculto antes del cambio), pero sus textos quedan traducidos en código.
+
+## 4. Pendiente
+
+- **Higiene del backlog** (sin código): cerrar **#1, #2 y #3**, que llevan `[DESCARTADO]` en el título pero siguen con Estado «Nuevo».
+- Revisión de los tickets que ficaram *Finalizado* con Validación «Pendiente» (contradicción con la regla de no cerrar sin validación).

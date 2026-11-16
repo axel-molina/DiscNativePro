@@ -17,6 +17,18 @@
 
 namespace
 {
+    // P38: descripción del motor de stems. Fuente única para el texto inicial
+    // y para la re-traducción en caliente (refreshLanguage).
+    juce::String stemsStatusDescription()
+    {
+        if (StemSeparationService::isModelAvailable())
+            return LanguageManager::trUtf8("Motor de separación embebido. Modo Rápido: voz/instrumental en vivo mientras suena la pista (voz muteada en ~segundos) y caché instantánea en la segunda carga. Modo Completo: 4 stems precalculados (vocals/drums/bass/other) listos al terminar la separación.",
+                                          "Embedded separation engine. Fast mode: live voice/instrumental while the track plays (voice muted within ~seconds) and instant cache on the second load. Full mode: 4 precomputed stems (vocals/drums/bass/other) ready when separation finishes.");
+
+        return LanguageManager::trUtf8("Motor de separación: no disponible — el modelo no está incluido en esta build.",
+                                      "Separation engine: not available — the model is not included in this build.");
+    }
+
     // P29: reporte de importación de mappings (Mixxx / VDJ) en un diálogo.
     void showMappingImportResult(const juce::String& title,
                                  const juce::String& error,
@@ -459,32 +471,26 @@ void SettingsModalComponent::setupGeneralTab()
     updateRecordingFolderUI();
 
     // Section 3b: Stems (separación automática, P22)
-    stemsSectionLabel.setText(juce::String::fromUTF8("Stems (Separación de Pistas)"), juce::dontSendNotification);
+    stemsSectionLabel.setText(LanguageManager::trUtf8("Stems (Separación de Pistas)", "Stems (Track Separation)"), juce::dontSendNotification);
     stemsSectionLabel.setFont(juce::FontOptions(UiType::section, juce::Font::bold));
     stemsSectionLabel.setColour(juce::Label::textColourId, juce::Colour::fromRGB(0, 180, 216));
     bodyContent.addChildComponent(stemsSectionLabel);
 
     {
-        const bool demucs = StemSeparationService::isModelAvailable();
-        juce::String txt;
-        if (demucs)
-            txt = juce::String::fromUTF8("Motor de separación embebido. Modo Rápido: voz/instrumental en vivo mientras suena la pista (voz muteada en ~segundos) y caché instantánea en la segunda carga. Modo Completo: 4 stems precalculados (vocals/drums/bass/other) listos al terminar la separación.");
-        else
-            txt = juce::String::fromUTF8("Motor de separación: no disponible — el modelo no está incluido en esta build.");
-        stemsStatusDescLabel.setText(txt, juce::dontSendNotification);
+        stemsStatusDescLabel.setText(stemsStatusDescription(), juce::dontSendNotification);
     }
     stemsStatusDescLabel.setFont(juce::FontOptions(UiType::caption, juce::Font::plain));
     stemsStatusDescLabel.setColour(juce::Label::textColourId, juce::Colour::fromRGB(150, 155, 170));
     bodyContent.addChildComponent(stemsStatusDescLabel);
 
     // P25 Fase D: selector de modo de stems (Rápido = 2-stem en vivo, default).
-    stemsModeLabel.setText(juce::String::fromUTF8("Modo de Stems:"), juce::dontSendNotification);
+    stemsModeLabel.setText(LanguageManager::trUtf8("Modo de Stems:", "Stems Mode:"), juce::dontSendNotification);
     stemsModeLabel.setFont(juce::FontOptions(UiType::body, juce::Font::plain));
     stemsModeLabel.setColour(juce::Label::textColourId, juce::Colour::fromRGB(160, 165, 180));
     bodyContent.addChildComponent(stemsModeLabel);
 
-    stemsModeCombo.addItem(juce::String::fromUTF8("Rápido — 2 stems en vivo (voz/instrumental)"), 1);
-    stemsModeCombo.addItem(juce::String::fromUTF8("Completo — 4 stems precalculados"), 2);
+    stemsModeCombo.addItem(LanguageManager::trUtf8("Rápido — 2 stems en vivo (voz/instrumental)", "Fast — 2 live stems (voice/instrumental)"), 1);
+    stemsModeCombo.addItem(LanguageManager::trUtf8("Completo — 4 stems precalculados", "Full — 4 precomputed stems"), 2);
     stemsModeCombo.setSelectedId(audioEngine.getDeck(0).isStemsPrecompute4() ? 2 : 1,
                                  juce::dontSendNotification);
     stemsModeCombo.onChange = [this]() {
@@ -496,7 +502,7 @@ void SettingsModalComponent::setupGeneralTab()
     bodyContent.addChildComponent(stemsModeCombo);
 
     // P26: precálculo en lote de toda la biblioteca indexada (4 stems).
-    stemsPrecalcBtn.setText(juce::String::fromUTF8("Precalcular biblioteca (4 stems)"));
+    stemsPrecalcBtn.setText(LanguageManager::trUtf8("Precalcular biblioteca (4 stems)", "Precompute library (4 stems)"));
     stemsPrecalcBtn.setFontSize(UiType::caption);
     stemsPrecalcBtn.setCornerRadius(5.0f);
     stemsPrecalcBtn.setCustomColours(juce::Colour::fromRGB(26, 28, 36),
@@ -506,7 +512,7 @@ void SettingsModalComponent::setupGeneralTab()
     stemsPrecalcBtn.onClick = [this]() {
         auto tracks = LibraryCacheManager::getInstance().getCachedTracks();
         stemsPrecalcBtn.setEnabled(false);
-        stemsPrecalcBtn.setText(juce::String::fromUTF8("Encolando..."));
+        stemsPrecalcBtn.setText(LanguageManager::trUtf8("Encolando...", "Enqueuing..."));
         StemSeparationService::getInstance().enqueueBatchAsync(tracks, [this](int enqueued) {
             stemsPrecalcBtn.setEnabled(true);
             updateStemsPrecalcButton();
@@ -644,13 +650,13 @@ void SettingsModalComponent::updateStemsPrecalcButton()
     if (pending > 0)
     {
         stemsPrecalcBtn.setEnabled(false);
-        stemsPrecalcBtn.setText(juce::String::fromUTF8("En cola: ")
-                                + juce::String(pending) + juce::String::fromUTF8(" pistas"));
+        stemsPrecalcBtn.setText(LanguageManager::trUtf8("En cola: ", "In queue: ")
+                                + juce::String(pending) + " " + LanguageManager::trUtf8("pistas", "tracks"));
     }
     else
     {
         stemsPrecalcBtn.setEnabled(true);
-        stemsPrecalcBtn.setText(juce::String::fromUTF8("Precalcular biblioteca (4 stems)"));
+        stemsPrecalcBtn.setText(LanguageManager::trUtf8("Precalcular biblioteca (4 stems)", "Precompute library (4 stems)"));
     }
 }
 
@@ -736,6 +742,19 @@ void SettingsModalComponent::refreshLanguage()
     downloadsOpenBtn.setText(LanguageManager::trUtf8("Abrir Carpeta", "Open Folder"));
     downloadsResetBtn.setText(LanguageManager::trUtf8("Por defecto", "Default"));
 
+    // Bloque Stems (P38: faltaba la re-traducción en caliente)
+    stemsSectionLabel.setText(LanguageManager::trUtf8("Stems (Separación de Pistas)", "Stems (Track Separation)"), juce::dontSendNotification);
+    stemsStatusDescLabel.setText(stemsStatusDescription(), juce::dontSendNotification);
+    stemsModeLabel.setText(LanguageManager::trUtf8("Modo de Stems:", "Stems Mode:"), juce::dontSendNotification);
+    {
+        const int curStemsMode = stemsModeCombo.getSelectedId();
+        stemsModeCombo.clear(juce::dontSendNotification);
+        stemsModeCombo.addItem(LanguageManager::trUtf8("Rápido — 2 stems en vivo (voz/instrumental)", "Fast — 2 live stems (voice/instrumental)"), 1);
+        stemsModeCombo.addItem(LanguageManager::trUtf8("Completo — 4 stems precalculados", "Full — 4 precomputed stems"), 2);
+        stemsModeCombo.setSelectedId(curStemsMode > 0 ? curStemsMode : 1, juce::dontSendNotification);
+    }
+    updateStemsPrecalcButton();
+
     // La versión nunca se hardcodea: se lee de la fuente runtime única
     // (UpdateService::getCurrentVersion -> JUCEApplication::getApplicationVersion,
     // alimentada por APP_VERSION en CMake). Un build 1.0.0 muestra 1.0.0; 1.3.0, 1.3.0.
@@ -807,6 +826,13 @@ void SettingsModalComponent::refreshLanguage()
     cueMixLabel.setText(LanguageManager::trUtf8("Mezcla Auriculares (CUE a la izquierda / MASTER a la derecha):", "Headphone Mix (CUE left / MASTER right):"), juce::dontSendNotification);
     cueVolumeLabel.setText(LanguageManager::trUtf8("Volumen Master de Auriculares:", "Headphone Master Volume:"), juce::dontSendNotification);
 
+    // Bloque Micrófono / Talkover (P38: faltaba la re-traducción en caliente)
+    soundSectionMic.setText(LanguageManager::trUtf8("Micrófono (Talkover)", "Microphone (Talkover)"), juce::dontSendNotification);
+    micEnableToggle.setButtonText(LanguageManager::trUtf8("Habilitar micrófono (envía tu voz a la mezcla master)", "Enable microphone (sends your voice to the master mix)"));
+    micGainLabel.setText(LanguageManager::trUtf8("Ganancia de entrada (GAIN):", "Input Gain (GAIN):"), juce::dontSendNotification);
+    micDuckLabel.setText(LanguageManager::trUtf8("Profundidad del Duck (bajada de música al hablar):", "Duck Depth (music drop while talking):"), juce::dontSendNotification);
+    micDuckAutoToggle.setButtonText(LanguageManager::trUtf8("Duck automático al hablar (detecta voz y baja la música)", "Automatic ducking when talking (detects voice and lowers the music)"));
+
     // Tab 3: MIDI
     midiTitleLabel.setText(LanguageManager::trUtf8("Controladores USB MIDI", "USB MIDI Controllers"), juce::dontSendNotification);
     midiDescLabel.setText(LanguageManager::trUtf8("DiscNativePro detecta automáticamente cualquier controladora DJ física conectada por USB (Pioneer DDJ, Hercules, Numark, Native Instruments). Mapea jog wheels, perillas de EQ, faders y pads.", "DiscNativePro automatically detects any USB physical DJ controller (Pioneer DDJ, Hercules, Numark, Native Instruments). Maps jog wheels, EQ knobs, faders and pads."), juce::dontSendNotification);
@@ -833,6 +859,18 @@ void SettingsModalComponent::refreshLanguage()
         "Emite la mezcla master en vivo a tu radio propia o a tus redes (YouTube, Facebook, Twitch). Los oyentes se conectan a la plataforma, no a tu app.",
         "Streams the master mix live to your own radio server or to your networks (YouTube, Facebook, Twitch). Listeners connect to the platform, not to your app."), juce::dontSendNotification);
     broadcastDestLabel.setText(LanguageManager::trUtf8("Destino de la emisión:", "Destination:"), juce::dontSendNotification);
+    {
+        // P38: los ítems del combo de destino también estaban solo en español.
+        const int curDest = broadcastDestCombo.getSelectedId();
+        broadcastDestCombo.clear(juce::dontSendNotification);
+        broadcastDestCombo.addItem(LanguageManager::trUtf8("Servidor de radio propio (Icecast/Shoutcast)", "Own radio server (Icecast/Shoutcast)"), 1);
+        broadcastDestCombo.addItem("YouTube Live", 2);
+        broadcastDestCombo.addItem("Facebook Live", 3);
+        broadcastDestCombo.addItem("Twitch", 4);
+        broadcastDestCombo.addItem(LanguageManager::trUtf8("RTMP personalizado", "Custom RTMP"), 5);
+        broadcastDestCombo.setSelectedId(curDest > 0 ? curDest : 1, juce::dontSendNotification);
+    }
+    broadcastMountLabel.setText(LanguageManager::trUtf8("Mount:", "Mount:"), juce::dontSendNotification);
     broadcastSectionTitle.setText(LanguageManager::trUtf8("Servidor de radio (Icecast/Shoutcast)",
                                                           "Radio server (Icecast/Shoutcast)"), juce::dontSendNotification);
     broadcastDescLabel.setText(LanguageManager::trUtf8("Datos de tu servidor propio de streaming.",
@@ -1051,12 +1089,12 @@ void SettingsModalComponent::setupSoundTab()
     bodyContent.addChildComponent(ceilingSlider);
 
     // Section 5: Micrófono (Talkover) — control completo desde aquí (P18d)
-    soundSectionMic.setText(juce::String::fromUTF8("Micrófono (Talkover)"), juce::dontSendNotification);
+    soundSectionMic.setText(LanguageManager::trUtf8("Micrófono (Talkover)", "Microphone (Talkover)"), juce::dontSendNotification);
     soundSectionMic.setFont(juce::FontOptions(UiType::section, juce::Font::bold));
     soundSectionMic.setColour(juce::Label::textColourId, juce::Colour::fromRGB(0, 180, 216));
     bodyContent.addChildComponent(soundSectionMic);
 
-    micEnableToggle.setButtonText(juce::String::fromUTF8("Habilitar micrófono (envía tu voz a la mezcla master)"));
+    micEnableToggle.setButtonText(LanguageManager::trUtf8("Habilitar micrófono (envía tu voz a la mezcla master)", "Enable microphone (sends your voice to the master mix)"));
     micEnableToggle.setToggleState(audioEngine.getMicChannel().isEnabled(), juce::dontSendNotification);
     micEnableToggle.setColour(juce::ToggleButton::textColourId, juce::Colours::white.withAlpha(0.85f));
     micEnableToggle.onClick = [this]() {
@@ -1064,7 +1102,7 @@ void SettingsModalComponent::setupSoundTab()
     };
     bodyContent.addChildComponent(micEnableToggle);
 
-    micGainLabel.setText(juce::String::fromUTF8("Ganancia de entrada (GAIN):"), juce::dontSendNotification);
+    micGainLabel.setText(LanguageManager::trUtf8("Ganancia de entrada (GAIN):", "Input Gain (GAIN):"), juce::dontSendNotification);
     micGainLabel.setFont(juce::FontOptions(UiType::body, juce::Font::plain));
     micGainLabel.setColour(juce::Label::textColourId, juce::Colour::fromRGB(160, 165, 180));
     bodyContent.addChildComponent(micGainLabel);
@@ -1077,7 +1115,7 @@ void SettingsModalComponent::setupSoundTab()
     };
     bodyContent.addChildComponent(micGainSlider);
 
-    micDuckLabel.setText(juce::String::fromUTF8("Profundidad del Duck (bajada de música al hablar):"), juce::dontSendNotification);
+    micDuckLabel.setText(LanguageManager::trUtf8("Profundidad del Duck (bajada de música al hablar):", "Duck Depth (music drop while talking):"), juce::dontSendNotification);
     micDuckLabel.setFont(juce::FontOptions(UiType::body, juce::Font::plain));
     micDuckLabel.setColour(juce::Label::textColourId, juce::Colour::fromRGB(160, 165, 180));
     bodyContent.addChildComponent(micDuckLabel);
@@ -1090,7 +1128,7 @@ void SettingsModalComponent::setupSoundTab()
     };
     bodyContent.addChildComponent(micDuckSlider);
 
-    micDuckAutoToggle.setButtonText(juce::String::fromUTF8("Duck automático al hablar (detecta voz y baja la música)"));
+    micDuckAutoToggle.setButtonText(LanguageManager::trUtf8("Duck automático al hablar (detecta voz y baja la música)", "Automatic ducking when talking (detects voice and lowers the music)"));
     micDuckAutoToggle.setToggleState(audioEngine.getMicChannel().duckEnabled.load(), juce::dontSendNotification);
     micDuckAutoToggle.setColour(juce::ToggleButton::textColourId, juce::Colours::white.withAlpha(0.85f));
     micDuckAutoToggle.onClick = [this]() {
@@ -1273,11 +1311,11 @@ void SettingsModalComponent::setupTransmitTab()
     broadcastDestLabel.setText(juce::String::fromUTF8("Destino de la emisión:"), juce::dontSendNotification);
     bodyContent.addChildComponent(broadcastDestLabel);
 
-    broadcastDestCombo.addItem(juce::String::fromUTF8("Servidor de radio propio (Icecast/Shoutcast)"), 1);
+    broadcastDestCombo.addItem(LanguageManager::trUtf8("Servidor de radio propio (Icecast/Shoutcast)", "Own radio server (Icecast/Shoutcast)"), 1);
     broadcastDestCombo.addItem("YouTube Live", 2);
     broadcastDestCombo.addItem("Facebook Live", 3);
     broadcastDestCombo.addItem("Twitch", 4);
-    broadcastDestCombo.addItem("RTMP personalizado", 5);
+    broadcastDestCombo.addItem(LanguageManager::trUtf8("RTMP personalizado", "Custom RTMP"), 5);
     broadcastDestCombo.setSelectedId(juce::jmax(1, juce::jmin(5, readStringSetting(broadcastDestProperty, "1").getIntValue())),
                                      juce::dontSendNotification);
     broadcastDestCombo.onChange = [this]() {
@@ -1329,7 +1367,7 @@ void SettingsModalComponent::setupTransmitTab()
     bodyContent.addChildComponent(broadcastPortEditor);
 
     styleLabel(broadcastMountLabel);
-    broadcastMountLabel.setText(juce::String::fromUTF8("Mount:"), juce::dontSendNotification);
+    broadcastMountLabel.setText(LanguageManager::trUtf8("Mount:", "Mount:"), juce::dontSendNotification);
     bodyContent.addChildComponent(broadcastMountLabel);
     styleEditor(broadcastMountEditor);
     broadcastMountEditor.setTextToShowWhenEmpty("/stream", juce::Colour::fromRGB(100, 108, 125));

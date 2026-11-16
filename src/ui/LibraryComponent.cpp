@@ -864,7 +864,7 @@ LibraryComponent::LibraryComponent(juce::AudioFormatManager& fm)
     };
 
     // 3. Center Table Area Header
-    tableHeaderTitle.setText(juce::String::fromUTF8("Todas las Pistas  0 Canciones"), juce::dontSendNotification);
+    tableHeaderTitle.setText(LanguageManager::trUtf8("Todas las Pistas", "All Tracks") + "  0 " + LanguageManager::trUtf8("Canciones", "Tracks"), juce::dontSendNotification);
     tableHeaderTitle.setFont(juce::FontOptions(12.5f, juce::Font::bold));
     tableHeaderTitle.setColour(juce::Label::textColourId, juce::Colours::white);
     addAndMakeVisible(tableHeaderTitle);
