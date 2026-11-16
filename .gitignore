@@ -31,3 +31,6 @@ ref_original.npy
 
 # sesiones de pruebas de navegador
 .playwright-mcp/
+
+# Engram: memoria local compartida entre agentes (no versionar)
+.engram/

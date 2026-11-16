@@ -57,3 +57,20 @@ Cada solicitud o requerimiento nuevo debe ejecutarse siguiendo este orden estric
 
 - **Cero Placeholders**: Queda prohibido emitir código con comentarios evasivos como `// TODO`, `// resto del código`, `/* implement here */` o `...`.
 - **Producción Lista**: Todo archivo entregado o editado debe estar completo, rigurosamente estructurado y listo para compilar sin requerir que el usuario intervenga manualmente.
+
+---
+
+## 5. Memoria Compartida entre Agentes (Engram)
+
+- Los agentes que trabajan en este repo comparten memoria persistente mediante **Engram** (servidor MCP `engram`, tools `mem_*`).
+- **Store compartido**: `~/.engram/engram.db` (local a la máquina). **Proyecto**: `discnativepro`, fijado con `--project=discnativepro` en la config MCP de cada agente (Qoder, Codex, OpenCode, Antigravity, Command Code).
+- **Binding del repo**: `.engram/config.json` (`project_name: DiscNativePro`); está en `.gitignore` porque es estado local.
+
+### Reglas de uso
+
+1. **Al arrancar** una tarea: llamar `mem_current_project` y `mem_context` (o `mem_search`) antes de preguntar al usuario por decisiones ya tomadas en otra sesión.
+2. **Guardar proactivamente** con `mem_save` lo que costaría reconstruir: decisiones de arquitectura, fixes (qué estaba mal, por qué y cómo se corrigió), hallazgos de build/CI. No guardar cada evento.
+3. **Tras una compactación o reset de contexto**: persistir el resumen con `mem_session_summary` antes de continuar trabajando.
+4. **No pedir al usuario que copie/pegue chats**: usar `mem_search` para recuperar el trabajo previo.
+5. La memoria es bookkeeping interno: completarla antes de redactar la respuesta final al usuario, y nunca reemplaza la respuesta.
+
