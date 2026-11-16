@@ -185,7 +185,7 @@ void YouTubeVideoComponent::paint(juce::Graphics& g)
     g.setColour(juce::Colour::fromRGB(20, 24, 32));
     g.fillRoundedRectangle(volRect, 4.0f);
     g.setColour(volPercent > 0 ? juce::Colour::fromRGB(74, 222, 128) : juce::Colour::fromRGB(239, 68, 68));
-    g.setFont(juce::FontOptions("Segoe UI", 9.5f, juce::Font::plain));
+    g.setFont(juce::FontOptions(9.5f, juce::Font::plain));
     g.drawText(volPercent > 0 ? juce::String::formatted("VOL %d%%", volPercent) : "MUTED",
                volRect, juce::Justification::centred, false);
 }

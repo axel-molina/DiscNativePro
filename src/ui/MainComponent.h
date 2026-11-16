@@ -12,6 +12,8 @@
 #include <juce_gui_basics/juce_gui_basics.h>
 #include <memory>
 
+class WelcomeModalComponent;
+
 class MainComponent : public juce::Component,
                       public juce::DragAndDropContainer,
                       public juce::Timer
@@ -44,6 +46,7 @@ private:
     bool isSamplerPanelVisible { false };
     juce::Component::SafePointer<juce::DialogWindow> settingsWindow;
     juce::Component::SafePointer<juce::DialogWindow> gridWindow; // P16: editor de beat grid
+    juce::Component::SafePointer<juce::DialogWindow> welcomeWindow; // P36: aviso de bienvenida
     std::unique_ptr<juce::TooltipWindow> tooltipWindow;
 
     // Automix orchestration state
@@ -62,6 +65,7 @@ private:
     void startSmartAutomix();
     void openSettings(int targetTab = 0);
     void openGridEditor(int deckIndex);
+    void showWelcomeDialog();
 
     // Update notification (GitHub Releases, once per launch)
     UpdateInfo pendingUpdate;

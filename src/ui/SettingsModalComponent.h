@@ -32,6 +32,7 @@ public:
     std::function<void()> onClose;
     std::function<void()> onDownloadsFolderChanged;
     std::function<void(bool)> onUpdateAvailabilityChanged;
+    std::function<void()> onShowWelcome;
 
 private:
     void setupGeneralTab();
@@ -300,6 +301,9 @@ private:
     juce::TextButton undoButton { "Deshacer" };
     juce::TextButton applyButton { "Aplicar" };
     juce::Label appInfoLabel;
+
+    // --- P36: reabrir el aviso de bienvenida ---
+    DjButton showWelcomeBtn;
 
     // Cuerpo con scroll vertical (solo hace scroll si la tab desborda)
     juce::Viewport bodyViewport;

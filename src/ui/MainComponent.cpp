@@ -2,6 +2,7 @@
 #include "MidiModalComponent.h"
 #include "SettingsModalComponent.h"
 #include "GridEditorComponent.h"
+#include "WelcomeModalComponent.h"
 #include "CoverArtGenerator.h"
 #include "../services/LanguageManager.h"
 #include "../services/AIService.h"
@@ -233,6 +234,15 @@ MainComponent::MainComponent()
     setSize(1360, 860);
 
     scheduleUpdateCheck();
+
+    // P36: aviso de bienvenida en el primer arranque. Es una ventana propia
+    // (no modal bloqueante): la app se puede seguir usando mientras esta abierta.
+    juce::Timer::callAfterDelay(900, [safeThis]() {
+        if (safeThis == nullptr)
+            return;
+        if (WelcomeModalComponent::shouldShowOnStartup())
+            safeThis->showWelcomeDialog();
+    });
 }
 
 MainComponent::~MainComponent()
@@ -948,11 +958,40 @@ void MainComponent::openSettings(int targetTab)
         topBar.setUpdateAvailable(available);
     };
 
+    // P36: el aviso de bienvenida se puede reabrir desde Preferencias > General.
+    modal->onShowWelcome = [this]() {
+        showWelcomeDialog();
+    };
+
     modal->onClose = [this]() {
         if (settingsWindow != nullptr)
         {
             settingsWindow->closeButtonPressed();
         }
+    };
+}
+
+void MainComponent::showWelcomeDialog()
+{
+    if (welcomeWindow != nullptr)
+    {
+        welcomeWindow->toFront(true);
+        return;
+    }
+
+    auto* modal = new WelcomeModalComponent();
+    juce::DialogWindow::LaunchOptions opt;
+    opt.dialogTitle = LanguageManager::trUtf8("Bienvenido a DiscNativePro", "Welcome to DiscNativePro");
+    opt.dialogBackgroundColour = juce::Colour::fromRGB(26, 29, 38);
+    opt.content.setOwned(modal);
+    opt.resizable = false;
+    opt.useNativeTitleBar = true;
+    opt.escapeKeyTriggersCloseButton = true;
+    welcomeWindow = opt.launchAsync();
+
+    modal->onDismiss = [this]() {
+        if (welcomeWindow != nullptr)
+            welcomeWindow->closeButtonPressed();
     };
 }
 

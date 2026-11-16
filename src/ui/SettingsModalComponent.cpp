@@ -1,4 +1,5 @@
 #include "SettingsModalComponent.h"
+#include "UiTypeScale.h"
 #include "../services/YouTubeService.h"
 #include "../services/WaveformTheme.h"
 #include "../services/SecretStore.h"
@@ -180,7 +181,7 @@ SettingsModalComponent::SettingsModalComponent(AudioEngine& engine, MidiManager&
     auto setupTabBtn = [this](DjButton& btn, LucideIcons::IconType icon, const juce::String& text, int tabIdx) {
         btn.setIcon(icon, 14.0f);
         btn.setText(text);
-        btn.setFontSize(9.5f);
+        btn.setFontSize(UiType::micro);
         btn.setStackedLayout(true);
         btn.setCornerRadius(6.0f);
         btn.onClick = [this, tabIdx]() {
@@ -266,12 +267,12 @@ void SettingsModalComponent::setupGeneralTab()
 {
     // Section 0: Idioma / Language
     languageSectionLabel.setText(LanguageManager::trUtf8("Idioma de la Interfaz", "Interface Language"), juce::dontSendNotification);
-    languageSectionLabel.setFont(juce::FontOptions(11.5f, juce::Font::bold));
+    languageSectionLabel.setFont(juce::FontOptions(UiType::section, juce::Font::bold));
     languageSectionLabel.setColour(juce::Label::textColourId, juce::Colour::fromRGB(0, 180, 216));
     bodyContent.addChildComponent(languageSectionLabel);
 
     languageSelectLabel.setText(LanguageManager::trUtf8("Idioma:", "Language:"), juce::dontSendNotification);
-    languageSelectLabel.setFont(juce::FontOptions(11.0f, juce::Font::plain));
+    languageSelectLabel.setFont(juce::FontOptions(UiType::body, juce::Font::plain));
     languageSelectLabel.setColour(juce::Label::textColourId, juce::Colour::fromRGB(160, 165, 180));
     bodyContent.addChildComponent(languageSelectLabel);
 
@@ -300,7 +301,7 @@ void SettingsModalComponent::setupGeneralTab()
 
     // Section 1: Comportamiento de Decks
     generalSectionDeck.setText(juce::String::fromUTF8("Comportamiento de Decks"), juce::dontSendNotification);
-    generalSectionDeck.setFont(juce::FontOptions(11.5f, juce::Font::bold));
+    generalSectionDeck.setFont(juce::FontOptions(UiType::section, juce::Font::bold));
     generalSectionDeck.setColour(juce::Label::textColourId, juce::Colour::fromRGB(0, 180, 216));
     bodyContent.addChildComponent(generalSectionDeck);
 
@@ -321,7 +322,7 @@ void SettingsModalComponent::setupGeneralTab()
     bodyContent.addChildComponent(autoplayOnLoadToggle);
 
     jogModeLabel.setText(juce::String::fromUTF8("Modo Jog Wheel:"), juce::dontSendNotification);
-    jogModeLabel.setFont(juce::FontOptions(11.0f, juce::Font::plain));
+    jogModeLabel.setFont(juce::FontOptions(UiType::body, juce::Font::plain));
     jogModeLabel.setColour(juce::Label::textColourId, juce::Colour::fromRGB(160, 165, 180));
     bodyContent.addChildComponent(jogModeLabel);
 
@@ -336,7 +337,7 @@ void SettingsModalComponent::setupGeneralTab()
     bodyContent.addChildComponent(jogModeCombo);
 
     pitchRangeLabel.setText(juce::String::fromUTF8("Rango de Pitch por defecto:"), juce::dontSendNotification);
-    pitchRangeLabel.setFont(juce::FontOptions(11.0f, juce::Font::plain));
+    pitchRangeLabel.setFont(juce::FontOptions(UiType::body, juce::Font::plain));
     pitchRangeLabel.setColour(juce::Label::textColourId, juce::Colour::fromRGB(160, 165, 180));
     bodyContent.addChildComponent(pitchRangeLabel);
 
@@ -369,12 +370,12 @@ void SettingsModalComponent::setupGeneralTab()
 
     // Section 2: Visualización y Rendimiento
     generalSectionDisplay.setText(juce::String::fromUTF8("Visualización y Rendimiento"), juce::dontSendNotification);
-    generalSectionDisplay.setFont(juce::FontOptions(11.5f, juce::Font::bold));
+    generalSectionDisplay.setFont(juce::FontOptions(UiType::section, juce::Font::bold));
     generalSectionDisplay.setColour(juce::Label::textColourId, juce::Colour::fromRGB(0, 180, 216));
     bodyContent.addChildComponent(generalSectionDisplay);
 
     waveformFpsLabel.setText(juce::String::fromUTF8("Tasa de refresco de formas de onda:"), juce::dontSendNotification);
-    waveformFpsLabel.setFont(juce::FontOptions(11.0f, juce::Font::plain));
+    waveformFpsLabel.setFont(juce::FontOptions(UiType::body, juce::Font::plain));
     waveformFpsLabel.setColour(juce::Label::textColourId, juce::Colour::fromRGB(160, 165, 180));
     bodyContent.addChildComponent(waveformFpsLabel);
 
@@ -385,12 +386,12 @@ void SettingsModalComponent::setupGeneralTab()
 
     // Section 3: Grabación de Sesiones
     recSectionLabel.setText(juce::String::fromUTF8("Grabación de Sesiones"), juce::dontSendNotification);
-    recSectionLabel.setFont(juce::FontOptions(11.5f, juce::Font::bold));
+    recSectionLabel.setFont(juce::FontOptions(UiType::section, juce::Font::bold));
     recSectionLabel.setColour(juce::Label::textColourId, juce::Colour::fromRGB(0, 180, 216));
     bodyContent.addChildComponent(recSectionLabel);
 
     recFolderDescLabel.setText(juce::String::fromUTF8("Carpeta de destino para archivos grabados (.wav 24-bit):"), juce::dontSendNotification);
-    recFolderDescLabel.setFont(juce::FontOptions(11.0f, juce::Font::plain));
+    recFolderDescLabel.setFont(juce::FontOptions(UiType::body, juce::Font::plain));
     recFolderDescLabel.setColour(juce::Label::textColourId, juce::Colour::fromRGB(160, 165, 180));
     bodyContent.addChildComponent(recFolderDescLabel);
 
@@ -398,12 +399,12 @@ void SettingsModalComponent::setupGeneralTab()
     recFolderEditor.setColour(juce::TextEditor::backgroundColourId, juce::Colour::fromRGB(17, 19, 26));
     recFolderEditor.setColour(juce::TextEditor::textColourId, juce::Colour::fromRGB(220, 225, 235));
     recFolderEditor.setColour(juce::TextEditor::outlineColourId, juce::Colour::fromRGB(38, 43, 58));
-    recFolderEditor.setFont(juce::FontOptions("Menlo", 10.5f, juce::Font::plain));
+    recFolderEditor.setFont(juce::FontOptions("Menlo", UiType::caption, juce::Font::plain));
     bodyContent.addChildComponent(recFolderEditor);
 
     recBrowseBtn.setIcon(LucideIcons::IconType::Folder, 12.0f);
     recBrowseBtn.setText(juce::String::fromUTF8("Examinar..."));
-    recBrowseBtn.setFontSize(10.5f);
+    recBrowseBtn.setFontSize(UiType::caption);
     recBrowseBtn.setCornerRadius(5.0f);
     recBrowseBtn.setCustomColours(juce::Colour::fromRGB(32, 35, 48),
                                  juce::Colour::fromRGB(200, 205, 220),
@@ -428,7 +429,7 @@ void SettingsModalComponent::setupGeneralTab()
 
     recOpenBtn.setIcon(LucideIcons::IconType::Folder, 12.0f);
     recOpenBtn.setText(juce::String::fromUTF8("Abrir Carpeta"));
-    recOpenBtn.setFontSize(10.5f);
+    recOpenBtn.setFontSize(UiType::caption);
     recOpenBtn.setCornerRadius(5.0f);
     recOpenBtn.setCustomColours(juce::Colour::fromRGB(32, 35, 48),
                                juce::Colour::fromRGB(200, 205, 220),
@@ -443,7 +444,7 @@ void SettingsModalComponent::setupGeneralTab()
     bodyContent.addChildComponent(recOpenBtn);
 
     recResetBtn.setText(juce::String::fromUTF8("Por defecto"));
-    recResetBtn.setFontSize(10.5f);
+    recResetBtn.setFontSize(UiType::caption);
     recResetBtn.setCornerRadius(5.0f);
     recResetBtn.setCustomColours(juce::Colour::fromRGB(26, 28, 36),
                                 juce::Colour::fromRGB(140, 145, 160),
@@ -459,7 +460,7 @@ void SettingsModalComponent::setupGeneralTab()
 
     // Section 3b: Stems (separación automática, P22)
     stemsSectionLabel.setText(juce::String::fromUTF8("Stems (Separación de Pistas)"), juce::dontSendNotification);
-    stemsSectionLabel.setFont(juce::FontOptions(11.5f, juce::Font::bold));
+    stemsSectionLabel.setFont(juce::FontOptions(UiType::section, juce::Font::bold));
     stemsSectionLabel.setColour(juce::Label::textColourId, juce::Colour::fromRGB(0, 180, 216));
     bodyContent.addChildComponent(stemsSectionLabel);
 
@@ -472,13 +473,13 @@ void SettingsModalComponent::setupGeneralTab()
             txt = juce::String::fromUTF8("Motor de separación: no disponible — el modelo no está incluido en esta build.");
         stemsStatusDescLabel.setText(txt, juce::dontSendNotification);
     }
-    stemsStatusDescLabel.setFont(juce::FontOptions(10.5f, juce::Font::plain));
+    stemsStatusDescLabel.setFont(juce::FontOptions(UiType::caption, juce::Font::plain));
     stemsStatusDescLabel.setColour(juce::Label::textColourId, juce::Colour::fromRGB(150, 155, 170));
     bodyContent.addChildComponent(stemsStatusDescLabel);
 
     // P25 Fase D: selector de modo de stems (Rápido = 2-stem en vivo, default).
     stemsModeLabel.setText(juce::String::fromUTF8("Modo de Stems:"), juce::dontSendNotification);
-    stemsModeLabel.setFont(juce::FontOptions(11.0f, juce::Font::plain));
+    stemsModeLabel.setFont(juce::FontOptions(UiType::body, juce::Font::plain));
     stemsModeLabel.setColour(juce::Label::textColourId, juce::Colour::fromRGB(160, 165, 180));
     bodyContent.addChildComponent(stemsModeLabel);
 
@@ -496,7 +497,7 @@ void SettingsModalComponent::setupGeneralTab()
 
     // P26: precálculo en lote de toda la biblioteca indexada (4 stems).
     stemsPrecalcBtn.setText(juce::String::fromUTF8("Precalcular biblioteca (4 stems)"));
-    stemsPrecalcBtn.setFontSize(10.5f);
+    stemsPrecalcBtn.setFontSize(UiType::caption);
     stemsPrecalcBtn.setCornerRadius(5.0f);
     stemsPrecalcBtn.setCustomColours(juce::Colour::fromRGB(26, 28, 36),
                                      juce::Colour::fromRGB(140, 145, 160),
@@ -523,7 +524,7 @@ void SettingsModalComponent::setupGeneralTab()
 
     // Section 4: Descargas de YouTube y Archivos Locales
     downloadsSectionLabel.setText(juce::String::fromUTF8("Descargas de YouTube y Archivos Locales"), juce::dontSendNotification);
-    downloadsSectionLabel.setFont(juce::FontOptions(11.5f, juce::Font::bold));
+    downloadsSectionLabel.setFont(juce::FontOptions(UiType::section, juce::Font::bold));
     downloadsSectionLabel.setColour(juce::Label::textColourId, juce::Colour::fromRGB(0, 180, 216));
     bodyContent.addChildComponent(downloadsSectionLabel);
 
@@ -538,7 +539,7 @@ void SettingsModalComponent::setupGeneralTab()
     bodyContent.addChildComponent(saveDownloadsToggle);
 
     downloadsFolderDescLabel.setText(juce::String::fromUTF8("Carpeta de destino para canciones descargadas (.m4a AAC):"), juce::dontSendNotification);
-    downloadsFolderDescLabel.setFont(juce::FontOptions(11.0f, juce::Font::plain));
+    downloadsFolderDescLabel.setFont(juce::FontOptions(UiType::body, juce::Font::plain));
     downloadsFolderDescLabel.setColour(juce::Label::textColourId, juce::Colour::fromRGB(160, 165, 180));
     bodyContent.addChildComponent(downloadsFolderDescLabel);
 
@@ -546,12 +547,12 @@ void SettingsModalComponent::setupGeneralTab()
     downloadsFolderEditor.setColour(juce::TextEditor::backgroundColourId, juce::Colour::fromRGB(17, 19, 26));
     downloadsFolderEditor.setColour(juce::TextEditor::textColourId, juce::Colour::fromRGB(220, 225, 235));
     downloadsFolderEditor.setColour(juce::TextEditor::outlineColourId, juce::Colour::fromRGB(38, 43, 58));
-    downloadsFolderEditor.setFont(juce::FontOptions("Menlo", 10.5f, juce::Font::plain));
+    downloadsFolderEditor.setFont(juce::FontOptions("Menlo", UiType::caption, juce::Font::plain));
     bodyContent.addChildComponent(downloadsFolderEditor);
 
     downloadsBrowseBtn.setIcon(LucideIcons::IconType::Folder, 12.0f);
     downloadsBrowseBtn.setText(juce::String::fromUTF8("Examinar..."));
-    downloadsBrowseBtn.setFontSize(10.5f);
+    downloadsBrowseBtn.setFontSize(UiType::caption);
     downloadsBrowseBtn.setCornerRadius(5.0f);
     downloadsBrowseBtn.setCustomColours(juce::Colour::fromRGB(32, 35, 48),
                                       juce::Colour::fromRGB(200, 205, 220),
@@ -578,7 +579,7 @@ void SettingsModalComponent::setupGeneralTab()
 
     downloadsOpenBtn.setIcon(LucideIcons::IconType::Folder, 12.0f);
     downloadsOpenBtn.setText(juce::String::fromUTF8("Abrir Carpeta"));
-    downloadsOpenBtn.setFontSize(10.5f);
+    downloadsOpenBtn.setFontSize(UiType::caption);
     downloadsOpenBtn.setCornerRadius(5.0f);
     downloadsOpenBtn.setCustomColours(juce::Colour::fromRGB(32, 35, 48),
                                     juce::Colour::fromRGB(200, 205, 220),
@@ -593,7 +594,7 @@ void SettingsModalComponent::setupGeneralTab()
     bodyContent.addChildComponent(downloadsOpenBtn);
 
     downloadsResetBtn.setText(juce::String::fromUTF8("Por defecto"));
-    downloadsResetBtn.setFontSize(10.5f);
+    downloadsResetBtn.setFontSize(UiType::caption);
     downloadsResetBtn.setCornerRadius(5.0f);
     downloadsResetBtn.setCustomColours(juce::Colour::fromRGB(26, 28, 36),
                                      juce::Colour::fromRGB(140, 145, 160),
@@ -606,6 +607,26 @@ void SettingsModalComponent::setupGeneralTab()
             onDownloadsFolderChanged();
     };
     bodyContent.addChildComponent(downloadsResetBtn);
+
+    // La línea de versión reservaba su hueco en el layout pero nunca se añadía
+    // al árbol de componentes, por lo que quedaba invisible.
+    appInfoLabel.setFont(juce::FontOptions(UiType::caption, juce::Font::plain));
+    appInfoLabel.setColour(juce::Label::textColourId, juce::Colour::fromRGB(148, 163, 184));
+    bodyContent.addChildComponent(appInfoLabel);
+
+    // P36: botón para reabrir el aviso de bienvenida (proyecto en desarrollo).
+    showWelcomeBtn.setIcon(LucideIcons::IconType::Star, 14.0f);
+    showWelcomeBtn.setFontSize(UiType::caption);
+    showWelcomeBtn.setCornerRadius(6.0f);
+    showWelcomeBtn.setCustomColours(juce::Colour::fromRGB(32, 35, 48),
+                                    juce::Colours::white,
+                                    juce::Colour::fromRGB(200, 205, 215),
+                                    juce::Colour::fromRGB(55, 60, 78));
+    showWelcomeBtn.onClick = [this]() {
+        if (onShowWelcome)
+            onShowWelcome();
+    };
+    bodyContent.addChildComponent(showWelcomeBtn);
 
     updateDownloadsFolderUI();
 }
@@ -721,6 +742,7 @@ void SettingsModalComponent::refreshLanguage()
     const juce::String appVersion = UpdateService::getCurrentVersion();
     appInfoLabel.setText(LanguageManager::tr("DiscNativePro DJ Workstation v" + appVersion + " • Motor C++20 nativo con JUCE 8, CoreAudio y SIMD DSP.",
                                              "DiscNativePro DJ Workstation v" + appVersion + " • Native C++20 engine with JUCE 8, CoreAudio & SIMD DSP."), juce::dontSendNotification);
+    showWelcomeBtn.setText(LanguageManager::trUtf8("Ver mensaje de bienvenida", "Show welcome message"));
 
     // Tab 1: Dispositivos / Devices
     routingSectionLabel.setText(LanguageManager::trUtf8("Enrutamiento de Salidas de Audio (Pioneer DDJ / Multi-Canal)", "Audio Output Routing (Pioneer DDJ / Multi-Channel)"), juce::dontSendNotification);
@@ -892,13 +914,13 @@ void SettingsModalComponent::setupDevicesTab()
 
     // Section: Enrutamiento de Canales de Audio
     routingSectionLabel.setText(juce::String::fromUTF8("Enrutamiento de Salidas de Audio (Pioneer DDJ / Multi-Canal)"), juce::dontSendNotification);
-    routingSectionLabel.setFont(juce::FontOptions(11.5f, juce::Font::bold));
+    routingSectionLabel.setFont(juce::FontOptions(UiType::section, juce::Font::bold));
     routingSectionLabel.setColour(juce::Label::textColourId, juce::Colour::fromRGB(0, 180, 216));
     bodyContent.addChildComponent(routingSectionLabel);
 
     // Master Routing
     masterRoutingLabel.setText(juce::String::fromUTF8("Salida Master (Altavoces / Club):"), juce::dontSendNotification);
-    masterRoutingLabel.setFont(juce::FontOptions(11.0f, juce::Font::plain));
+    masterRoutingLabel.setFont(juce::FontOptions(UiType::body, juce::Font::plain));
     masterRoutingLabel.setColour(juce::Label::textColourId, juce::Colour::fromRGB(160, 165, 180));
     bodyContent.addChildComponent(masterRoutingLabel);
 
@@ -912,7 +934,7 @@ void SettingsModalComponent::setupDevicesTab()
 
     // CUE Routing
     cueRoutingLabel.setText(juce::String::fromUTF8("Salida Auriculares (Preescucha CUE):"), juce::dontSendNotification);
-    cueRoutingLabel.setFont(juce::FontOptions(11.0f, juce::Font::plain));
+    cueRoutingLabel.setFont(juce::FontOptions(UiType::body, juce::Font::plain));
     cueRoutingLabel.setColour(juce::Label::textColourId, juce::Colour::fromRGB(160, 165, 180));
     bodyContent.addChildComponent(cueRoutingLabel);
 
@@ -927,7 +949,7 @@ void SettingsModalComponent::setupDevicesTab()
     // Status Badge
     controllerDetectedBadge.setText(juce::String::fromUTF8("● Controladora DJ 4 Canales Detectada (Master: Ch 1-2 • Auriculares: Ch 3-4)"), juce::dontSendNotification);
     controllerDetectedBadge.setColour(juce::Label::textColourId, juce::Colour::fromRGB(74, 222, 128));
-    controllerDetectedBadge.setFont(juce::FontOptions(10.5f, juce::Font::bold));
+    controllerDetectedBadge.setFont(juce::FontOptions(UiType::caption, juce::Font::bold));
     bodyContent.addChildComponent(controllerDetectedBadge);
 }
 
@@ -935,7 +957,7 @@ void SettingsModalComponent::setupSoundTab()
 {
     // Section 1: Motor de Audio
     soundSectionEngine.setText(juce::String::fromUTF8("Motor de Audio CoreAudio"), juce::dontSendNotification);
-    soundSectionEngine.setFont(juce::FontOptions(11.5f, juce::Font::bold));
+    soundSectionEngine.setFont(juce::FontOptions(UiType::section, juce::Font::bold));
     soundSectionEngine.setColour(juce::Label::textColourId, juce::Colour::fromRGB(0, 180, 216));
     bodyContent.addChildComponent(soundSectionEngine);
 
@@ -943,12 +965,12 @@ void SettingsModalComponent::setupSoundTab()
     if (sr <= 0) sr = 44100;
     sampleRateInfoLabel.setText(juce::String::fromUTF8("Frecuencia de Muestreo (Sample Rate): ") + juce::String(sr) + " Hz (CoreAudio)",
                                 juce::dontSendNotification);
-    sampleRateInfoLabel.setFont(juce::FontOptions(11.0f, juce::Font::plain));
+    sampleRateInfoLabel.setFont(juce::FontOptions(UiType::body, juce::Font::plain));
     sampleRateInfoLabel.setColour(juce::Label::textColourId, juce::Colour::fromRGB(180, 185, 200));
     bodyContent.addChildComponent(sampleRateInfoLabel);
 
     bufferSizeLabel.setText(juce::String::fromUTF8("Tamaño de Buffer de Audio / Latencia:"), juce::dontSendNotification);
-    bufferSizeLabel.setFont(juce::FontOptions(11.0f, juce::Font::plain));
+    bufferSizeLabel.setFont(juce::FontOptions(UiType::body, juce::Font::plain));
     bufferSizeLabel.setColour(juce::Label::textColourId, juce::Colour::fromRGB(160, 165, 180));
     bodyContent.addChildComponent(bufferSizeLabel);
 
@@ -967,12 +989,12 @@ void SettingsModalComponent::setupSoundTab()
 
     // Section 2: Mezclador & Curvas
     soundSectionMixer.setText(juce::String::fromUTF8("Ecualizador & Crossfader"), juce::dontSendNotification);
-    soundSectionMixer.setFont(juce::FontOptions(11.5f, juce::Font::bold));
+    soundSectionMixer.setFont(juce::FontOptions(UiType::section, juce::Font::bold));
     soundSectionMixer.setColour(juce::Label::textColourId, juce::Colour::fromRGB(0, 180, 216));
     bodyContent.addChildComponent(soundSectionMixer);
 
     eqModeLabel.setText(juce::String::fromUTF8("Curva de Ecualizador (EQ Mode):"), juce::dontSendNotification);
-    eqModeLabel.setFont(juce::FontOptions(11.0f, juce::Font::plain));
+    eqModeLabel.setFont(juce::FontOptions(UiType::body, juce::Font::plain));
     eqModeLabel.setColour(juce::Label::textColourId, juce::Colour::fromRGB(160, 165, 180));
     bodyContent.addChildComponent(eqModeLabel);
 
@@ -982,7 +1004,7 @@ void SettingsModalComponent::setupSoundTab()
     bodyContent.addChildComponent(eqModeCombo);
 
     crossfaderCurveLabel.setText(juce::String::fromUTF8("Curva de Crossfader por defecto:"), juce::dontSendNotification);
-    crossfaderCurveLabel.setFont(juce::FontOptions(11.0f, juce::Font::plain));
+    crossfaderCurveLabel.setFont(juce::FontOptions(UiType::body, juce::Font::plain));
     crossfaderCurveLabel.setColour(juce::Label::textColourId, juce::Colour::fromRGB(160, 165, 180));
     bodyContent.addChildComponent(crossfaderCurveLabel);
 
@@ -994,12 +1016,12 @@ void SettingsModalComponent::setupSoundTab()
 
     // Section 3: Margen Dinámico & Limitador
     soundSectionMaster.setText(juce::String::fromUTF8("Margen Dinámico y Limitador Master"), juce::dontSendNotification);
-    soundSectionMaster.setFont(juce::FontOptions(11.5f, juce::Font::bold));
+    soundSectionMaster.setFont(juce::FontOptions(UiType::section, juce::Font::bold));
     soundSectionMaster.setColour(juce::Label::textColourId, juce::Colour::fromRGB(0, 180, 216));
     bodyContent.addChildComponent(soundSectionMaster);
 
     headroomLabel.setText(juce::String::fromUTF8("Margen Dinámico Master (Headroom):"), juce::dontSendNotification);
-    headroomLabel.setFont(juce::FontOptions(11.0f, juce::Font::plain));
+    headroomLabel.setFont(juce::FontOptions(UiType::body, juce::Font::plain));
     headroomLabel.setColour(juce::Label::textColourId, juce::Colour::fromRGB(160, 165, 180));
     bodyContent.addChildComponent(headroomLabel);
 
@@ -1015,7 +1037,7 @@ void SettingsModalComponent::setupSoundTab()
     bodyContent.addChildComponent(masterLimiterToggle);
 
     ceilingLabel.setText(juce::String::fromUTF8("Techo del Limitador (CEILING):"), juce::dontSendNotification);
-    ceilingLabel.setFont(juce::FontOptions(11.0f, juce::Font::plain));
+    ceilingLabel.setFont(juce::FontOptions(UiType::body, juce::Font::plain));
     ceilingLabel.setColour(juce::Label::textColourId, juce::Colour::fromRGB(160, 165, 180));
     bodyContent.addChildComponent(ceilingLabel);
 
@@ -1030,7 +1052,7 @@ void SettingsModalComponent::setupSoundTab()
 
     // Section 5: Micrófono (Talkover) — control completo desde aquí (P18d)
     soundSectionMic.setText(juce::String::fromUTF8("Micrófono (Talkover)"), juce::dontSendNotification);
-    soundSectionMic.setFont(juce::FontOptions(11.5f, juce::Font::bold));
+    soundSectionMic.setFont(juce::FontOptions(UiType::section, juce::Font::bold));
     soundSectionMic.setColour(juce::Label::textColourId, juce::Colour::fromRGB(0, 180, 216));
     bodyContent.addChildComponent(soundSectionMic);
 
@@ -1043,7 +1065,7 @@ void SettingsModalComponent::setupSoundTab()
     bodyContent.addChildComponent(micEnableToggle);
 
     micGainLabel.setText(juce::String::fromUTF8("Ganancia de entrada (GAIN):"), juce::dontSendNotification);
-    micGainLabel.setFont(juce::FontOptions(11.0f, juce::Font::plain));
+    micGainLabel.setFont(juce::FontOptions(UiType::body, juce::Font::plain));
     micGainLabel.setColour(juce::Label::textColourId, juce::Colour::fromRGB(160, 165, 180));
     bodyContent.addChildComponent(micGainLabel);
 
@@ -1056,7 +1078,7 @@ void SettingsModalComponent::setupSoundTab()
     bodyContent.addChildComponent(micGainSlider);
 
     micDuckLabel.setText(juce::String::fromUTF8("Profundidad del Duck (bajada de música al hablar):"), juce::dontSendNotification);
-    micDuckLabel.setFont(juce::FontOptions(11.0f, juce::Font::plain));
+    micDuckLabel.setFont(juce::FontOptions(UiType::body, juce::Font::plain));
     micDuckLabel.setColour(juce::Label::textColourId, juce::Colour::fromRGB(160, 165, 180));
     bodyContent.addChildComponent(micDuckLabel);
 
@@ -1078,12 +1100,12 @@ void SettingsModalComponent::setupSoundTab()
 
     // Section 4: Monitoreo & Auriculares (CUE)
     soundSectionPhones.setText(juce::String::fromUTF8("Monitoreo y Auriculares (Preescucha CUE)"), juce::dontSendNotification);
-    soundSectionPhones.setFont(juce::FontOptions(11.5f, juce::Font::bold));
+    soundSectionPhones.setFont(juce::FontOptions(UiType::section, juce::Font::bold));
     soundSectionPhones.setColour(juce::Label::textColourId, juce::Colour::fromRGB(0, 180, 216));
     bodyContent.addChildComponent(soundSectionPhones);
 
     cueMixLabel.setText(juce::String::fromUTF8("Mezcla Auriculares (CUE a la izquierda / MASTER a la derecha):"), juce::dontSendNotification);
-    cueMixLabel.setFont(juce::FontOptions(11.0f, juce::Font::plain));
+    cueMixLabel.setFont(juce::FontOptions(UiType::body, juce::Font::plain));
     cueMixLabel.setColour(juce::Label::textColourId, juce::Colour::fromRGB(160, 165, 180));
     bodyContent.addChildComponent(cueMixLabel);
 
@@ -1096,7 +1118,7 @@ void SettingsModalComponent::setupSoundTab()
     bodyContent.addChildComponent(cueMixSlider);
 
     cueVolumeLabel.setText(juce::String::fromUTF8("Volumen Master de Auriculares:"), juce::dontSendNotification);
-    cueVolumeLabel.setFont(juce::FontOptions(11.0f, juce::Font::plain));
+    cueVolumeLabel.setFont(juce::FontOptions(UiType::body, juce::Font::plain));
     cueVolumeLabel.setColour(juce::Label::textColourId, juce::Colour::fromRGB(160, 165, 180));
     bodyContent.addChildComponent(cueVolumeLabel);
 
@@ -1112,17 +1134,17 @@ void SettingsModalComponent::setupSoundTab()
 void SettingsModalComponent::setupMidiTab()
 {
     midiTitleLabel.setText(juce::String::fromUTF8("Controladores USB MIDI"), juce::dontSendNotification);
-    midiTitleLabel.setFont(juce::FontOptions(12.5f, juce::Font::bold));
+    midiTitleLabel.setFont(juce::FontOptions(UiType::section, juce::Font::bold));
     midiTitleLabel.setColour(juce::Label::textColourId, juce::Colour::fromRGB(46, 196, 182));
     bodyContent.addChildComponent(midiTitleLabel);
 
     midiDescLabel.setText(juce::String::fromUTF8("DiscNativePro detecta automáticamente cualquier controladora DJ física conectada por USB (Pioneer DDJ, Hercules, Numark, Native Instruments). Mapea jog wheels, perillas de EQ, faders y pads."),
                           juce::dontSendNotification);
-    midiDescLabel.setFont(juce::FontOptions(11.0f));
+    midiDescLabel.setFont(juce::FontOptions(UiType::body));
     midiDescLabel.setColour(juce::Label::textColourId, juce::Colour::fromRGB(142, 149, 165));
     bodyContent.addChildComponent(midiDescLabel);
 
-    midiDevicesHeader.setFont(juce::FontOptions(10.5f, juce::Font::bold));
+    midiDevicesHeader.setFont(juce::FontOptions(UiType::caption, juce::Font::bold));
     midiDevicesHeader.setColour(juce::Label::textColourId, juce::Colours::white);
     bodyContent.addChildComponent(midiDevicesHeader);
 
@@ -1148,12 +1170,12 @@ void SettingsModalComponent::setupMidiTab()
     bodyContent.addChildComponent(midiImportVdjBtn);
 
     midiMonitorHeader.setText(juce::String::fromUTF8("MONITOR DE SEÑALES MIDI EN VIVO"), juce::dontSendNotification);
-    midiMonitorHeader.setFont(juce::FontOptions(9.5f, juce::Font::bold));
+    midiMonitorHeader.setFont(juce::FontOptions(UiType::micro, juce::Font::bold));
     midiMonitorHeader.setColour(juce::Label::textColourId, juce::Colour::fromRGB(100, 108, 125));
     bodyContent.addChildComponent(midiMonitorHeader);
 
     midiMonitorText.setText(juce::String::fromUTF8("Esperando movimiento de fader, jog o pad..."), juce::dontSendNotification);
-    midiMonitorText.setFont(juce::FontOptions("Menlo", 11.5f, juce::Font::plain));
+    midiMonitorText.setFont(juce::FontOptions("Menlo", UiType::body, juce::Font::plain));
     midiMonitorText.setColour(juce::Label::textColourId, juce::Colour::fromRGB(0, 229, 255));
     bodyContent.addChildComponent(midiMonitorText);
 
@@ -1162,7 +1184,7 @@ void SettingsModalComponent::setupMidiTab()
     };
 
     midiMappingHeader.setText(juce::String::fromUTF8("MAPEO PERSONALIZADO (MIDI LEARN)"), juce::dontSendNotification);
-    midiMappingHeader.setFont(juce::FontOptions(10.5f, juce::Font::bold));
+    midiMappingHeader.setFont(juce::FontOptions(UiType::caption, juce::Font::bold));
     midiMappingHeader.setColour(juce::Label::textColourId, juce::Colour::fromRGB(46, 196, 182));
     bodyContent.addChildComponent(midiMappingHeader);
 
@@ -1175,17 +1197,17 @@ void SettingsModalComponent::setupMidiTab()
 void SettingsModalComponent::setupStreamingTab()
 {
     streamingSectionTitle.setText(juce::String::fromUTF8("Integración de YouTube Streaming"), juce::dontSendNotification);
-    streamingSectionTitle.setFont(juce::FontOptions(13.0f, juce::Font::bold));
+    streamingSectionTitle.setFont(juce::FontOptions(UiType::heading, juce::Font::bold));
     streamingSectionTitle.setColour(juce::Label::textColourId, juce::Colour::fromRGB(0, 180, 216));
     bodyContent.addChildComponent(streamingSectionTitle);
 
     streamingDescLabel.setText(juce::String::fromUTF8("DiscNativePro permite buscar, mezclar y reproducir videos de YouTube en vivo directamente en las bandejas.\nPor defecto se utiliza Scraping Público para buscar sin necesidad de API Key."), juce::dontSendNotification);
-    streamingDescLabel.setFont(juce::FontOptions(10.5f));
+    streamingDescLabel.setFont(juce::FontOptions(UiType::caption));
     streamingDescLabel.setColour(juce::Label::textColourId, juce::Colour::fromRGB(160, 165, 180));
     bodyContent.addChildComponent(streamingDescLabel);
 
     apiKeyLabel.setText(juce::String::fromUTF8("YouTube Data API v3 Key (Opcional - Para búsqueda oficial sin restricciones):"), juce::dontSendNotification);
-    apiKeyLabel.setFont(juce::FontOptions(11.0f, juce::Font::plain));
+    apiKeyLabel.setFont(juce::FontOptions(UiType::body, juce::Font::plain));
     apiKeyLabel.setColour(juce::Label::textColourId, juce::Colour::fromRGB(180, 185, 200));
     bodyContent.addChildComponent(apiKeyLabel);
 
@@ -1198,7 +1220,7 @@ void SettingsModalComponent::setupStreamingTab()
     bodyContent.addChildComponent(apiKeyEditor);
 
     clearApiKeyBtn.setText("Borrar Key");
-    clearApiKeyBtn.setFontSize(10.5f);
+    clearApiKeyBtn.setFontSize(UiType::caption);
     clearApiKeyBtn.setCornerRadius(5.0f);
     clearApiKeyBtn.setCustomColours(juce::Colour::fromRGB(32, 35, 48),
                                    juce::Colour::fromRGB(244, 63, 94),
@@ -1211,11 +1233,11 @@ void SettingsModalComponent::setupStreamingTab()
     };
     bodyContent.addChildComponent(clearApiKeyBtn);
 
-    apiStatusBadge.setFont(juce::FontOptions(11.0f, juce::Font::bold));
+    apiStatusBadge.setFont(juce::FontOptions(UiType::body, juce::Font::bold));
     bodyContent.addChildComponent(apiStatusBadge);
 
     apiInfoCard.setText(juce::String::fromUTF8("Modo Video en Bandejas:\n• Al soltar un video de YouTube en el Deck 1 o Deck 2, el Jog Wheel se transforma en reproductor de video de alta definición (WebKit).\n• Los faders de volumen y el Crossfader central mezclan fluidamente el audio y video entre bandejas.\n• Iniciar sesión en YouTube en Safari comparte tu sesión con WKWebView para reproducción Premium sin publicidad."), juce::dontSendNotification);
-    apiInfoCard.setFont(juce::FontOptions(10.0f));
+    apiInfoCard.setFont(juce::FontOptions(UiType::micro));
     apiInfoCard.setColour(juce::Label::textColourId, juce::Colour::fromRGB(140, 145, 160));
     apiInfoCard.setJustificationType(juce::Justification::topLeft);
     bodyContent.addChildComponent(apiInfoCard);
@@ -1225,24 +1247,24 @@ void SettingsModalComponent::setupStreamingTab()
 void SettingsModalComponent::setupTransmitTab()
 {
     auto styleEditor = [](juce::TextEditor& ed) {
-        ed.setFont(juce::FontOptions(11.5f));
+        ed.setFont(juce::FontOptions(UiType::body));
         ed.setColour(juce::TextEditor::backgroundColourId, juce::Colour::fromRGB(17, 19, 26));
         ed.setColour(juce::TextEditor::textColourId, juce::Colours::white);
         ed.setColour(juce::TextEditor::outlineColourId, juce::Colour::fromRGB(38, 43, 58));
     };
     auto styleLabel = [](juce::Label& lb) {
-        lb.setFont(juce::FontOptions(11.0f, juce::Font::plain));
+        lb.setFont(juce::FontOptions(UiType::body, juce::Font::plain));
         lb.setColour(juce::Label::textColourId, juce::Colour::fromRGB(180, 185, 200));
         lb.setJustificationType(juce::Justification::centredLeft);
     };
 
     transmitTitleLabel.setText(juce::String::fromUTF8("Transmitir — Emisiones en vivo y podcasts"), juce::dontSendNotification);
-    transmitTitleLabel.setFont(juce::FontOptions(13.0f, juce::Font::bold));
+    transmitTitleLabel.setFont(juce::FontOptions(UiType::heading, juce::Font::bold));
     transmitTitleLabel.setColour(juce::Label::textColourId, juce::Colour::fromRGB(0, 180, 216));
     bodyContent.addChildComponent(transmitTitleLabel);
 
     transmitDescLabel.setText(juce::String::fromUTF8("Emite la mezcla master en vivo a tu radio propia o a tus redes (YouTube, Facebook, Twitch). Los oyentes se conectan a la plataforma, no a tu app."), juce::dontSendNotification);
-    transmitDescLabel.setFont(juce::FontOptions(10.5f));
+    transmitDescLabel.setFont(juce::FontOptions(UiType::caption));
     transmitDescLabel.setColour(juce::Label::textColourId, juce::Colour::fromRGB(160, 165, 180));
     bodyContent.addChildComponent(transmitDescLabel);
 
@@ -1282,12 +1304,12 @@ void SettingsModalComponent::setupTransmitTab()
 
     // --- Radio propia (Icecast) ---
     broadcastSectionTitle.setText(juce::String::fromUTF8("Servidor de radio (Icecast/Shoutcast)"), juce::dontSendNotification);
-    broadcastSectionTitle.setFont(juce::FontOptions(12.0f, juce::Font::bold));
+    broadcastSectionTitle.setFont(juce::FontOptions(UiType::section, juce::Font::bold));
     broadcastSectionTitle.setColour(juce::Label::textColourId, juce::Colour::fromRGB(0, 180, 216));
     bodyContent.addChildComponent(broadcastSectionTitle);
 
     broadcastDescLabel.setText(juce::String::fromUTF8("Datos de tu servidor propio de streaming."), juce::dontSendNotification);
-    broadcastDescLabel.setFont(juce::FontOptions(10.5f));
+    broadcastDescLabel.setFont(juce::FontOptions(UiType::caption));
     broadcastDescLabel.setColour(juce::Label::textColourId, juce::Colour::fromRGB(160, 165, 180));
     bodyContent.addChildComponent(broadcastDescLabel);
 
@@ -1362,7 +1384,7 @@ void SettingsModalComponent::setupTransmitTab()
     bodyContent.addChildComponent(rtmpBitrateCombo);
 
     installFfmpegBtn.setText("Instalar ffmpeg");
-    installFfmpegBtn.setFontSize(10.5f);
+    installFfmpegBtn.setFontSize(UiType::caption);
     installFfmpegBtn.setCornerRadius(5.0f);
     installFfmpegBtn.setCustomColours(juce::Colour::fromRGB(32, 35, 48),
                                       juce::Colour::fromRGB(0, 180, 216),
@@ -1384,7 +1406,7 @@ void SettingsModalComponent::setupTransmitTab()
     };
     bodyContent.addChildComponent(installFfmpegBtn);
 
-    ffmpegStatusBadge.setFont(juce::FontOptions(10.0f));
+    ffmpegStatusBadge.setFont(juce::FontOptions(UiType::micro));
     ffmpegStatusBadge.setColour(juce::Label::textColourId, juce::Colour::fromRGB(140, 145, 160));
     bodyContent.addChildComponent(ffmpegStatusBadge);
 
@@ -1394,17 +1416,17 @@ void SettingsModalComponent::setupTransmitTab()
     broadcastEnabledToggle.onClick = [this]() { updateBroadcastRuntime(); };
     bodyContent.addChildComponent(broadcastEnabledToggle);
 
-    broadcastStatusBadge.setFont(juce::FontOptions(11.0f, juce::Font::bold));
+    broadcastStatusBadge.setFont(juce::FontOptions(UiType::body, juce::Font::bold));
     bodyContent.addChildComponent(broadcastStatusBadge);
 
     // --- Podcast: exportar grabación a MP3 ---
     podcastSectionLabel.setText(juce::String::fromUTF8("Podcast (exportar grabación a MP3)"), juce::dontSendNotification);
-    podcastSectionLabel.setFont(juce::FontOptions(12.0f, juce::Font::bold));
+    podcastSectionLabel.setFont(juce::FontOptions(UiType::section, juce::Font::bold));
     podcastSectionLabel.setColour(juce::Label::textColourId, juce::Colour::fromRGB(0, 180, 216));
     bodyContent.addChildComponent(podcastSectionLabel);
 
     podcastDescLabel.setText(juce::String::fromUTF8("Convierte una grabación de sesión (WAV) a MP3 listo para publicar."), juce::dontSendNotification);
-    podcastDescLabel.setFont(juce::FontOptions(10.5f));
+    podcastDescLabel.setFont(juce::FontOptions(UiType::caption));
     podcastDescLabel.setColour(juce::Label::textColourId, juce::Colour::fromRGB(160, 165, 180));
     bodyContent.addChildComponent(podcastDescLabel);
 
@@ -1413,7 +1435,7 @@ void SettingsModalComponent::setupTransmitTab()
     bodyContent.addChildComponent(podcastRecCombo);
 
     podcastRefreshBtn.setText("Refrescar");
-    podcastRefreshBtn.setFontSize(10.5f);
+    podcastRefreshBtn.setFontSize(UiType::caption);
     podcastRefreshBtn.setCornerRadius(5.0f);
     podcastRefreshBtn.setCustomColours(juce::Colour::fromRGB(32, 35, 48),
                                        juce::Colour::fromRGB(0, 180, 216),
@@ -1433,7 +1455,7 @@ void SettingsModalComponent::setupTransmitTab()
     bodyContent.addChildComponent(podcastBitrateCombo);
 
     podcastExportBtn.setText("Exportar a MP3");
-    podcastExportBtn.setFontSize(10.5f);
+    podcastExportBtn.setFontSize(UiType::caption);
     podcastExportBtn.setCornerRadius(5.0f);
     podcastExportBtn.setCustomColours(juce::Colour::fromRGB(37, 99, 235),
                                       juce::Colours::white,
@@ -1442,7 +1464,7 @@ void SettingsModalComponent::setupTransmitTab()
     podcastExportBtn.onClick = [this]() { exportPodcastMp3(); };
     bodyContent.addChildComponent(podcastExportBtn);
 
-    podcastStatusBadge.setFont(juce::FontOptions(10.5f));
+    podcastStatusBadge.setFont(juce::FontOptions(UiType::caption));
     podcastStatusBadge.setColour(juce::Label::textColourId, juce::Colour::fromRGB(140, 145, 160));
     bodyContent.addChildComponent(podcastStatusBadge);
 
@@ -1735,12 +1757,12 @@ int comboIdFromProvider(AIProvider p)
 void SettingsModalComponent::setupAITab()
 {
     aiSectionTitle.setText(juce::String::fromUTF8("Inteligencia Artificial (AI Smart Match)"), juce::dontSendNotification);
-    aiSectionTitle.setFont(juce::FontOptions(13.0f, juce::Font::bold));
+    aiSectionTitle.setFont(juce::FontOptions(UiType::heading, juce::Font::bold));
     aiSectionTitle.setColour(juce::Label::textColourId, juce::Colour::fromRGB(192, 132, 252));
     bodyContent.addChildComponent(aiSectionTitle);
 
     aiDescLabel.setText(juce::String::fromUTF8("Analiza la pista en reproducción (local o YouTube) y sugiere mezclas armónicas por género, tempo y Camelot Key.\nElige tu proveedor preferido e ingresa tu clave API personal."), juce::dontSendNotification);
-    aiDescLabel.setFont(juce::FontOptions(10.5f));
+    aiDescLabel.setFont(juce::FontOptions(UiType::caption));
     aiDescLabel.setColour(juce::Label::textColourId, juce::Colour::fromRGB(160, 165, 180));
     bodyContent.addChildComponent(aiDescLabel);
 
@@ -1752,7 +1774,7 @@ void SettingsModalComponent::setupAITab()
     bodyContent.addChildComponent(aiEnabledToggle);
 
     aiProviderLabel.setText("Proveedor de Inteligencia Artificial:", juce::dontSendNotification);
-    aiProviderLabel.setFont(juce::FontOptions(11.0f, juce::Font::plain));
+    aiProviderLabel.setFont(juce::FontOptions(UiType::body, juce::Font::plain));
     aiProviderLabel.setColour(juce::Label::textColourId, juce::Colour::fromRGB(180, 185, 200));
     bodyContent.addChildComponent(aiProviderLabel);
 
@@ -1775,7 +1797,7 @@ void SettingsModalComponent::setupAITab()
 
     // Modelo configurable por proveedor: ComboBox editable = presets + texto libre.
     // ponytail: un solo control cubre selector y campo custom; evita un TextEditor extra.
-    aiModelLabel.setFont(juce::FontOptions(11.0f, juce::Font::plain));
+    aiModelLabel.setFont(juce::FontOptions(UiType::body, juce::Font::plain));
     aiModelLabel.setColour(juce::Label::textColourId, juce::Colour::fromRGB(180, 185, 200));
     bodyContent.addChildComponent(aiModelLabel);
 
@@ -1785,7 +1807,7 @@ void SettingsModalComponent::setupAITab()
     bodyContent.addChildComponent(aiModelCombo);
 
     aiApiKeyLabel.setText("Clave API (API Key) del Proveedor Seleccionado:", juce::dontSendNotification);
-    aiApiKeyLabel.setFont(juce::FontOptions(11.0f, juce::Font::plain));
+    aiApiKeyLabel.setFont(juce::FontOptions(UiType::body, juce::Font::plain));
     aiApiKeyLabel.setColour(juce::Label::textColourId, juce::Colour::fromRGB(180, 185, 200));
     bodyContent.addChildComponent(aiApiKeyLabel);
 
@@ -1799,7 +1821,7 @@ void SettingsModalComponent::setupAITab()
     bodyContent.addChildComponent(aiApiKeyEditor);
 
     clearAiApiKeyBtn.setText("Borrar Key");
-    clearAiApiKeyBtn.setFontSize(10.5f);
+    clearAiApiKeyBtn.setFontSize(UiType::caption);
     clearAiApiKeyBtn.setCornerRadius(5.0f);
     clearAiApiKeyBtn.setCustomColours(juce::Colour::fromRGB(32, 35, 48),
                                       juce::Colour::fromRGB(244, 63, 94),
@@ -1813,11 +1835,11 @@ void SettingsModalComponent::setupAITab()
     };
     bodyContent.addChildComponent(clearAiApiKeyBtn);
 
-    aiStatusBadge.setFont(juce::FontOptions(11.0f, juce::Font::bold));
+    aiStatusBadge.setFont(juce::FontOptions(UiType::body, juce::Font::bold));
     bodyContent.addChildComponent(aiStatusBadge);
 
     aiInfoCard.setText(juce::String::fromUTF8("Obtén tu API Key gratuita:\n• Google Gemini: aistudio.google.com (15 req/min sin costo)\n• OpenAI: platform.openai.com\n• Anthropic: console.anthropic.com\n• DeepSeek: platform.deepseek.com\n• OpenRouter: openrouter.ai (una key, 200+ modelos)"), juce::dontSendNotification);
-    aiInfoCard.setFont(juce::FontOptions(10.5f));
+    aiInfoCard.setFont(juce::FontOptions(UiType::caption));
     aiInfoCard.setColour(juce::Label::textColourId, juce::Colour::fromRGB(140, 145, 160));
     aiInfoCard.setJustificationType(juce::Justification::topLeft);
     bodyContent.addChildComponent(aiInfoCard);
@@ -1826,19 +1848,19 @@ void SettingsModalComponent::setupAITab()
 void SettingsModalComponent::setupDonateTab()
 {
     donateTitleLabel.setText(juce::String::fromUTF8("Apoya DiscNativePro"), juce::dontSendNotification);
-    donateTitleLabel.setFont(juce::FontOptions(13.0f, juce::Font::bold));
+    donateTitleLabel.setFont(juce::FontOptions(UiType::heading, juce::Font::bold));
     donateTitleLabel.setColour(juce::Label::textColourId, juce::Colour::fromRGB(251, 191, 36));
     bodyContent.addChildComponent(donateTitleLabel);
 
     donateDescLabel.setText(juce::String::fromUTF8("¿Estás disfrutando de DiscNativePro? Puedes apoyar el desarrollo y las futuras funcionalidades regalándome un café."), juce::dontSendNotification);
-    donateDescLabel.setFont(juce::FontOptions(11.0f));
+    donateDescLabel.setFont(juce::FontOptions(UiType::body));
     donateDescLabel.setColour(juce::Label::textColourId, juce::Colour::fromRGB(200, 205, 215));
     donateDescLabel.setJustificationType(juce::Justification::topLeft);
     bodyContent.addChildComponent(donateDescLabel);
 
     donateBtn.setIcon(LucideIcons::IconType::Coffee, 15.0f);
     donateBtn.setText(juce::String::fromUTF8("Donar un café en Cafecito"));
-    donateBtn.setFontSize(12.0f);
+    donateBtn.setFontSize(UiType::section);
     donateBtn.setCornerRadius(8.0f);
     donateBtn.setCustomColours(juce::Colour::fromRGB(120, 53, 15),
                                juce::Colours::white,
@@ -1849,12 +1871,12 @@ void SettingsModalComponent::setupDonateTab()
     };
     bodyContent.addChildComponent(donateBtn);
 
-    donateHintLabel.setFont(juce::FontOptions(10.0f));
+    donateHintLabel.setFont(juce::FontOptions(UiType::micro));
     donateHintLabel.setColour(juce::Label::textColourId, juce::Colour::fromRGB(140, 145, 160));
     donateHintLabel.setJustificationType(juce::Justification::centred);
     bodyContent.addChildComponent(donateHintLabel);
 
-    donateInfoCard.setFont(juce::FontOptions(10.5f));
+    donateInfoCard.setFont(juce::FontOptions(UiType::caption));
     donateInfoCard.setColour(juce::Label::textColourId, juce::Colour::fromRGB(140, 145, 160));
     donateInfoCard.setJustificationType(juce::Justification::topLeft);
     bodyContent.addChildComponent(donateInfoCard);
@@ -1863,24 +1885,24 @@ void SettingsModalComponent::setupDonateTab()
 void SettingsModalComponent::setupDesignTab()
 {
     designTitleLabel.setText(juce::String::fromUTF8("Personalización de Waveforms"), juce::dontSendNotification);
-    designTitleLabel.setFont(juce::FontOptions(13.0f, juce::Font::bold));
+    designTitleLabel.setFont(juce::FontOptions(UiType::heading, juce::Font::bold));
     designTitleLabel.setColour(juce::Label::textColourId, juce::Colour::fromRGB(0, 180, 216));
     bodyContent.addChildComponent(designTitleLabel);
 
     designDescLabel.setText(juce::String::fromUTF8("Elige los colores de Graves, Medios y Agudos. Se aplican en vivo al wave de la bandeja seleccionada y se guardan automáticamente."), juce::dontSendNotification);
-    designDescLabel.setFont(juce::FontOptions(10.5f));
+    designDescLabel.setFont(juce::FontOptions(UiType::caption));
     designDescLabel.setColour(juce::Label::textColourId, juce::Colour::fromRGB(160, 165, 180));
     designDescLabel.setJustificationType(juce::Justification::topLeft);
     bodyContent.addChildComponent(designDescLabel);
 
     // Selector de bandeja (Deck 1 / Deck 2): cada bandeja tiene su propio tema
     deckThemeLabel.setText(juce::String::fromUTF8("Bandeja:"), juce::dontSendNotification);
-    deckThemeLabel.setFont(juce::FontOptions(11.0f, juce::Font::plain));
+    deckThemeLabel.setFont(juce::FontOptions(UiType::body, juce::Font::plain));
     deckThemeLabel.setColour(juce::Label::textColourId, juce::Colour::fromRGB(180, 185, 200));
     bodyContent.addChildComponent(deckThemeLabel);
 
     auto setupDeckToggle = [this](DjButton& btn, int deck) {
-        btn.setFontSize(10.5f);
+        btn.setFontSize(UiType::caption);
         btn.setCornerRadius(6.0f);
         btn.onClick = [this, deck]() {
             designDeckIndex = deck;
@@ -1896,11 +1918,11 @@ void SettingsModalComponent::setupDesignTab()
 
     auto setupRow = [this](juce::Label& label, DjButton& swatch, const char* text, int band) {
         label.setText(juce::String::fromUTF8(text), juce::dontSendNotification);
-        label.setFont(juce::FontOptions(11.0f, juce::Font::plain));
+        label.setFont(juce::FontOptions(UiType::body, juce::Font::plain));
         label.setColour(juce::Label::textColourId, juce::Colour::fromRGB(180, 185, 200));
         bodyContent.addChildComponent(label);
 
-        swatch.setFontSize(10.5f);
+        swatch.setFontSize(UiType::caption);
         swatch.setCornerRadius(6.0f);
         swatch.onClick = [this, band]() { openColourPicker(band); };
         bodyContent.addChildComponent(swatch);
@@ -1910,12 +1932,12 @@ void SettingsModalComponent::setupDesignTab()
     setupRow(waveMidLabel, waveMidSwatch, "Medios (Mid):", 1);
     setupRow(waveHighLabel, waveHighSwatch, "Agudos (High):", 2);
 
-    designPresetLabel.setFont(juce::FontOptions(11.0f, juce::Font::plain));
+    designPresetLabel.setFont(juce::FontOptions(UiType::body, juce::Font::plain));
     designPresetLabel.setColour(juce::Label::textColourId, juce::Colour::fromRGB(180, 185, 200));
     bodyContent.addChildComponent(designPresetLabel);
 
     auto setupPreset = [this](DjButton& btn, int preset) {
-        btn.setFontSize(10.5f);
+        btn.setFontSize(UiType::caption);
         btn.setCornerRadius(6.0f);
         btn.setCustomColours(juce::Colour::fromRGB(32, 35, 48),
                              juce::Colour::fromRGB(200, 205, 220),
@@ -1939,19 +1961,19 @@ void SettingsModalComponent::setupVersionTab()
 {
     // Section: Versión
     versionSectionTitle.setText(LanguageManager::trUtf8("Versión", "Version"), juce::dontSendNotification);
-    versionSectionTitle.setFont(juce::FontOptions(11.5f, juce::Font::bold));
+    versionSectionTitle.setFont(juce::FontOptions(UiType::section, juce::Font::bold));
     versionSectionTitle.setColour(juce::Label::textColourId, juce::Colour::fromRGB(142, 149, 165));
     bodyContent.addChildComponent(versionSectionTitle);
 
     versionAppTitle.setText("DiscNativePro " + UpdateService::getCurrentVersion(), juce::dontSendNotification);
-    versionAppTitle.setFont(juce::FontOptions(18.0f, juce::Font::bold));
+    versionAppTitle.setFont(juce::FontOptions(UiType::title, juce::Font::bold));
     versionAppTitle.setColour(juce::Label::textColourId, juce::Colours::white);
     bodyContent.addChildComponent(versionAppTitle);
 
     versionStatusLabel.setText("DiscNativePro " + UpdateService::getCurrentVersion() +
                                LanguageManager::trUtf8(" es la última versión.", " is the latest version."),
                                juce::dontSendNotification);
-    versionStatusLabel.setFont(juce::FontOptions(11.5f));
+    versionStatusLabel.setFont(juce::FontOptions(UiType::body));
     versionStatusLabel.setColour(juce::Label::textColourId, juce::Colour::fromRGB(148, 163, 184));
     bodyContent.addChildComponent(versionStatusLabel);
 
@@ -1973,7 +1995,7 @@ void SettingsModalComponent::setupVersionTab()
     }
 
     checkUpdatesBtn.setText(LanguageManager::trUtf8("Buscar actualizaciones", "Check for updates"));
-    checkUpdatesBtn.setFontSize(11.0f);
+    checkUpdatesBtn.setFontSize(UiType::body);
     checkUpdatesBtn.setCornerRadius(6.0f);
     checkUpdatesBtn.setCustomColours(juce::Colour::fromRGB(32, 35, 48),
                                     juce::Colours::white,
@@ -1991,12 +2013,12 @@ void SettingsModalComponent::setupVersionTab()
 
     // Section: Cambiar de versión
     versionChangeTitle.setText(LanguageManager::trUtf8("Cambiar de versión", "Change version"), juce::dontSendNotification);
-    versionChangeTitle.setFont(juce::FontOptions(13.0f, juce::Font::bold));
+    versionChangeTitle.setFont(juce::FontOptions(UiType::heading, juce::Font::bold));
     versionChangeTitle.setColour(juce::Label::textColourId, juce::Colours::white);
     bodyContent.addChildComponent(versionChangeTitle);
 
     versionHelpIcon.setText("(?)", juce::dontSendNotification);
-    versionHelpIcon.setFont(juce::FontOptions(11.0f));
+    versionHelpIcon.setFont(juce::FontOptions(UiType::body));
     versionHelpIcon.setColour(juce::Label::textColourId, juce::Colour::fromRGB(140, 145, 160));
     versionHelpIcon.setTooltip(LanguageManager::trUtf8(
         "Selecciona cualquier versión oficial disponible en GitHub Releases para instalarla o cambiar de versión.",
@@ -2011,7 +2033,7 @@ void SettingsModalComponent::setupVersionTab()
 
     installVersionBtn.setIcon(LucideIcons::IconType::Download, 13.0f);
     installVersionBtn.setText(LanguageManager::trUtf8("Instalar", "Install"));
-    installVersionBtn.setFontSize(11.5f);
+    installVersionBtn.setFontSize(UiType::section);
     installVersionBtn.setCornerRadius(6.0f);
     installVersionBtn.setCustomColours(juce::Colour::fromRGB(14, 165, 233),
                                        juce::Colours::white,
@@ -2094,7 +2116,7 @@ void SettingsModalComponent::setupVersionTab()
     };
     bodyContent.addChildComponent(installVersionBtn);
 
-    downloadStatusLabel.setFont(juce::FontOptions(11.0f));
+    downloadStatusLabel.setFont(juce::FontOptions(UiType::body));
     downloadStatusLabel.setColour(juce::Label::textColourId, juce::Colour::fromRGB(56, 189, 248));
     bodyContent.addChildComponent(downloadStatusLabel);
 
@@ -2435,6 +2457,9 @@ void SettingsModalComponent::updateTabVisibility()
     downloadsOpenBtn.setVisible(isGeneral);
     downloadsResetBtn.setVisible(isGeneral);
 
+    showWelcomeBtn.setVisible(isGeneral);
+    appInfoLabel.setVisible(isGeneral);
+
     if (isGeneral)
     {
         updateRecordingFolderUI();
@@ -2753,12 +2778,12 @@ void SettingsModalComponent::paint(juce::Graphics& g)
             g.drawRoundedRectangle(devBox, 8.0f, 1.0f);
 
             g.setColour(juce::Colour::fromRGB(255, 159, 28));
-            g.setFont(juce::FontOptions(12.0f, juce::Font::bold));
+            g.setFont(juce::FontOptions(UiType::section, juce::Font::bold));
             g.drawText(LanguageManager::trUtf8("No se detectó ningún controlador", "No controller detected"),
                        devBox.removeFromTop(75.0f), juce::Justification::centred, false);
 
             g.setColour(juce::Colour::fromRGB(120, 125, 140));
-            g.setFont(juce::FontOptions(10.5f, juce::Font::plain));
+            g.setFont(juce::FontOptions(UiType::caption, juce::Font::plain));
             g.drawText(LanguageManager::trUtf8("Conecta un dispositivo USB DJ y pulsa 'Escanear Puertos'", "Connect a USB DJ device and click 'Scan Ports'"),
                        devBox, juce::Justification::centred, false);
         }
@@ -2778,7 +2803,7 @@ void SettingsModalComponent::paint(juce::Graphics& g)
                                   juce::Rectangle<float>(row.getX(), row.getY() + 4.0f, 12.0f, 12.0f),
                                   juce::Colour::fromRGB(46, 196, 182), 1.6f);
                 g.setColour(juce::Colours::white);
-                g.setFont(juce::FontOptions(11.5f, juce::Font::bold));
+                g.setFont(juce::FontOptions(UiType::section, juce::Font::bold));
                 g.drawText(midiConnectedDevices[i], row.removeFromRight(row.getWidth() - 20.0f),
                            juce::Justification::centredLeft, false);
             }
@@ -2795,7 +2820,7 @@ void SettingsModalComponent::paint(juce::Graphics& g)
         contentArea.reduce(20, 10);
 
         g.setColour(juce::Colours::white);
-        g.setFont(juce::FontOptions(13.0f, juce::Font::bold));
+        g.setFont(juce::FontOptions(UiType::heading, juce::Font::bold));
         g.drawText(LanguageManager::trUtf8("Atajos de Teclado Principales de DiscNativePro:", "DiscNativePro Primary Keyboard Shortcuts:"),
                    contentArea.removeFromTop(24), juce::Justification::centredLeft, false);
 
@@ -2818,11 +2843,11 @@ void SettingsModalComponent::paint(juce::Graphics& g)
 
             auto inner = r.reduced(10, 8);
             g.setColour(col);
-            g.setFont(juce::FontOptions(12.0f, juce::Font::bold));
+            g.setFont(juce::FontOptions(UiType::section, juce::Font::bold));
             g.drawText(title, inner.removeFromTop(18), juce::Justification::centredLeft, false);
             inner.removeFromTop(4);
 
-            g.setFont(juce::FontOptions(11.0f, juce::Font::plain));
+            g.setFont(juce::FontOptions(UiType::body, juce::Font::plain));
             for (const auto& item : keys)
             {
                 auto row = inner.removeFromTop(22);
@@ -2964,7 +2989,9 @@ void SettingsModalComponent::resized()
         gArea.removeFromTop(4);
 
         auto row2 = gArea.removeFromTop(24);
-        pitchRangeLabel.setBounds(row2.removeFromLeft(160));
+        // 182 px = ancho medido de "Rango de Pitch por defecto:" con Sora 12.5 px (177 px).
+        // Con 160 px JUCE lo comprimía al 0.90 (drawFittedText, no recorta).
+        pitchRangeLabel.setBounds(row2.removeFromLeft(182));
         pitchRangeCombo.setBounds(row2);
         gArea.removeFromTop(4);
 
@@ -2978,7 +3005,8 @@ void SettingsModalComponent::resized()
         gArea.removeFromTop(4);
 
         auto row3 = gArea.removeFromTop(24);
-        waveformFpsLabel.setBounds(row3.removeFromLeft(220));
+        // 232 px = ancho medido de "Tasa de refresco de formas de onda:" con Sora 12.5 px (227 px).
+        waveformFpsLabel.setBounds(row3.removeFromLeft(232));
         waveformFpsCombo.setBounds(row3);
         gArea.removeFromTop(8);
 
@@ -3006,7 +3034,9 @@ void SettingsModalComponent::resized()
 
         auto stemsModeRow = gArea.removeFromTop(24);
         stemsModeRow.removeFromRight(8);
-        stemsModeCombo.setBounds(stemsModeRow.removeFromRight(280));
+        // 370 px = ancho medido de "Rápido — 2 stems en vivo (voz/instrumental)" con Sora 15 px
+        // (333 px) + flecha. Con 280 px el texto iba comprimido al 0.77.
+        stemsModeCombo.setBounds(stemsModeRow.removeFromRight(370));
         stemsModeLabel.setBounds(stemsModeRow);
         gArea.removeFromTop(6);
         stemsPrecalcBtn.setBounds(gArea.removeFromTop(24).removeFromLeft(230));
@@ -3033,6 +3063,8 @@ void SettingsModalComponent::resized()
         gArea.removeFromTop(12);
 
         appInfoLabel.setBounds(gArea.removeFromTop(18));
+        gArea.removeFromTop(6);
+        showWelcomeBtn.setBounds(gArea.removeFromTop(26).removeFromLeft(230));
     }
 
     // --- Tab 1: Devices Layout (Unconditionally set bounds) ---
@@ -3070,7 +3102,8 @@ void SettingsModalComponent::resized()
         sArea.removeFromTop(4);
 
         auto bRow = sArea.removeFromTop(22);
-        bufferSizeLabel.setBounds(bRow.removeFromLeft(220));
+        // 242 px = ancho medido de "Tamaño de Buffer de Audio / Latencia:" con Sora 12.5 px (238 px).
+        bufferSizeLabel.setBounds(bRow.removeFromLeft(242));
         bufferSizeCombo.setBounds(bRow);
         sArea.removeFromTop(8);
 
@@ -3235,10 +3268,15 @@ void SettingsModalComponent::resized()
             broadcastPasswordLabel.setBounds(r3.removeFromLeft(170));
             r3.removeFromLeft(8);
             broadcastPasswordEditor.setBounds(r3.removeFromLeft(200));
-            r3.removeFromLeft(16);
-            broadcastNameLabel.setBounds(r3.removeFromLeft(120));
-            r3.removeFromLeft(8);
-            broadcastNameEditor.setBounds(r3);
+            tArea.removeFromTop(6);
+
+            // El nombre de emisión va en fila propia: antes compartía fila con la contraseña
+            // y su editor se quedaba en 82 px, mientras la etiqueta (142 px con Sora 12.5)
+            // no cabía en sus 120 px y salía comprimida al 0.84.
+            auto r3b = tArea.removeFromTop(28);
+            broadcastNameLabel.setBounds(r3b.removeFromLeft(150));
+            r3b.removeFromLeft(8);
+            broadcastNameEditor.setBounds(r3b);
             tArea.removeFromTop(6);
 
             auto r4 = tArea.removeFromTop(24);
@@ -3311,7 +3349,8 @@ void SettingsModalComponent::resized()
         aiArea.removeFromTop(8);
 
         auto provRow = aiArea.removeFromTop(26);
-        aiProviderLabel.setBounds(provRow.removeFromLeft(210));
+        // 230 px = ancho medido de "Proveedor de Inteligencia Artificial:" con Sora 12.5 px (224 px).
+        aiProviderLabel.setBounds(provRow.removeFromLeft(230));
         aiProviderCombo.setBounds(provRow);
         aiArea.removeFromTop(8);
 
@@ -3332,7 +3371,8 @@ void SettingsModalComponent::resized()
         aiStatusBadge.setBounds(aiArea.removeFromTop(20));
         aiArea.removeFromTop(12);
 
-        aiInfoCardBox = aiArea.removeFromTop(84);
+        // 6 líneas de texto a 11.5 px necesitan ~90 px; con 64 px la última se recortaba.
+        aiInfoCardBox = aiArea.removeFromTop(116);
         aiInfoCard.setBounds(aiInfoCardBox.reduced(12, 10));
     }
 

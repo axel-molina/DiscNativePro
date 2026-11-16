@@ -1,5 +1,7 @@
 #include <juce_gui_extra/juce_gui_extra.h>
 #include "ui/MainComponent.h"
+#include "ui/AppFonts.h"
+#include "ui/AppLookAndFeel.h"
 #include "services/StemSeparationService.h"
 #include "services/UpdateService.h"
 
@@ -61,6 +63,11 @@ public:
         // puesto aquí y no dentro del componente.
         configureWebKitForLinux();
        #endif
+
+        // P37: las caras embebidas deben existir antes del primer Font, y el
+        // LookAndFeel global antes de crear cualquier componente.
+        AppFonts::initialise();
+        juce::LookAndFeel::setDefaultLookAndFeel (&appLookAndFeel);
 
         mainWindow.reset(new MainWindow(getApplicationName()));
 
@@ -171,6 +178,9 @@ public:
     };
 
 private:
+    // Declarado antes que mainWindow: los componentes se destruyen primero y
+    // el LookAndFeel global sigue vivo mientras alguien lo referencia.
+    AppLookAndFeel appLookAndFeel;
     std::unique_ptr<MainWindow> mainWindow;
 };
 

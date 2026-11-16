@@ -2236,3 +2236,183 @@ La app compila y arranca, pero **el fix no está validado contra el MC2000 real*
 - Si algún control no coincide, el **monitor MIDI en vivo** del modal muestra el mensaje crudo (canal/CC/nota) → se ajusta la tabla Denon con ese dato.
 
 El ticket Notion #13 queda **"En curso"** con Validación "No iniciada" hasta que el usuario confirme en su hardware.
+
+---
+
+# Walkthrough — P35 + P36: escala tipográfica en Ajustes + mensaje de bienvenida
+
+> Tickets Notion: **DNP-TK-6** (tipografía) y **DNP-TK-12** (aviso de bienvenida).
+> Plan aprobado: `implementation_plan.md` (sección «P35 + P36»).
+
+## 1. Objetivo
+
+- **P35**: subir el tamaño de letra de Preferencias/Ajustes para que las etiquetas y textos se lean sin esfuerzo (base de 9.5–11.5 px → 10.5–19 px según rol), sin recortes ni solapamientos y con el layout íntegro a 1280 px de ancho.
+- **P36**: mostrar en el **primer arranque** un aviso de que el proyecto está en desarrollo (una sola persona, posibles errores/inestabilidad, uso bajo propio riesgo) con enlace al canal de YouTube y al repo de GitHub, opción de «no mostrar de nuevo» y versión en español e inglés, sin bloquear el uso de la app.
+
+## 2. Cambios
+
+### `[NEW]` `src/ui/UiTypeScale.h`
+Escala tipográfica compartida por toda la UI de Ajustes (píxeles, no puntos):
+
+| token | px | uso |
+|---|---|---|
+| `micro` | 10.5 | texto terciario: badges, estados |
+| `caption` | 11.5 | botones secundarios, descripciones |
+| `body` | 12.5 | etiquetas de opciones y valores |
+| `section` | 13.5 | títulos de sección |
+| `heading` | 14.5 | títulos de bloque / tarjeta |
+| `title` | 19.0 | título de la app |
+
+### `[MODIFY]` `src/ui/SettingsModalComponent.cpp` (≈99 substitutions)
+- Todos los `setFontSize(...)` de Ajustes pasan a usar `UiType::*` (antes cada control fijaba su propio literal).
+- Iconos Lucide de las etiquetas con texto se pasan a 15 px para acompañar el cuerpo de texto mayor.
+- Botón **«★ Ver mensaje de bienvenida»** (`showWelcomeBtn`) añadido al final de la pestaña General, con `onShowWelcome` (std::function) para reabrir el aviso.
+- `appInfoLabel` (línea de versión) se añade al árbol de componentes (`bodyContent.addChildComponent`) **y** se hace visible desde `updateTabVisibility()` → `appInfoLabel.setVisible(isGeneral)`. Sin esto no se veía: en esta versión de JUCE los componentes nacen invisibles (`ComponentFlags` a 0) y `addChildComponent` no activa `visibleFlag`.
+- **Fix de recorte en la tarjeta de IA Match**: la caja de texto pasa de 84 a **116 px** (`aiInfoCardBox = aiArea.removeFromTop(116)`) porque las 6 líneas del bloque «Sin Clave API» a 11.5 px necesitan ~90 px y la última se recortaba.
+
+### `[NEW]` `src/ui/WelcomeModalComponent.h` / `.cpp`
+- Diálogo propio de 560×410 px (`juce::DialogWindow` con `launchAsync`, **no modal bloqueante**: la app se puede seguir usando con el aviso abierto).
+- Contenido: título, subtítulo en ámbar «Proyecto en desarrollo · úsalo bajo tu propio riesgo», 3 líneas de cuerpo, botón **Canal de YouTube (@AxelCodeDev)** (`https://www.youtube.com/@AxelCodeDev`), botón **Código en GitHub (deja una estrella)** (`https://github.com/axel-molina/DiscNativePro`), línea de apoyo, casilla «No mostrar de nuevo» y botón «Entendido».
+- Persistencia en `~/Library/DiscNativePro/settings.json` → clave **`welcome.suppress`** (`readSuppressFlag` / `writeSuppressFlag`). La clave se escribe al cambiar la casilla, así que el disco siempre refleja lo elegido por el usuario.
+- Estado inicial de la casilla: **marcada** si el aviso nunca se mostró (`!found`) o si ya fue descartado; **desmarcada** solo si el usuario la desmarcó explícitamente.
+- Idiomas: `LanguageManager::trUtf8(es, en)` + listener de `languageChanged()` → el aviso se re-traduce en caliente al cambiar el idioma de la app.
+
+### `[MODIFY]` `src/ui/MainComponent.cpp` / `.h`
+- `juce::Timer::callAfterDelay(900, ...)` → al arrancar, si `WelcomeModalComponent::shouldShowOnStartup()`, se abre el aviso.
+- `showWelcomeDialog()` crea la ventana (`launchAsync`, `SafePointer<juce::DialogWindow>`) y conecta `modal->onDismiss` → `welcomeWindow->closeButtonPressed()`.
+- `openSettings()`: `modal->onShowWelcome = [this]() { showWelcomeDialog(); }` → el botón de Ajustes reabre el aviso sin cerrar Preferencias.
+
+### `[MODIFY]` `src/ui/LucideIcons.h` / `.cpp`
+- Nuevo icono `Star` (ruta Lucide) para el botón de Ajustes y el botón de GitHub del aviso.
+
+### `[MODIFY]` `src/ui/MidiMappingTableComponent.cpp`
+- Tabla de mapeo MIDI: etiquetas y celdas alineadas con la nueva escala tipográfica.
+
+### `[MODIFY]` `CMakeLists.txt`
+- `src/ui/UiTypeScale.h`, `src/ui/WelcomeModalComponent.h` y `src/ui/WelcomeModalComponent.cpp` añadidos a la lista explícita de fuentes.
+
+## 3. Verificación (real, con capturas)
+
+- `cmake --build build` → **0 errores, 0 warnings**: `[100%] Built target DiscNativePro`.
+- Recorrido visual de las **11 pestañas** de Preferencias a escala 1:1 → Dispositivos, Sonido, MIDI, Shortcuts, Streaming, Donar, Diseño, Versión, Transmitir: sin recortes ni solapamientos. **General**: tipografía claramente mayor, línea de versión visible y botón «Ver mensaje de bienvenida» correcto. **IA Match**: las 6 líneas de la tarjeta se ven completas tras el fix de altura.
+- Layout a **1280 px** de ancho de ventana: app y Preferencias sin recortes.
+- P36, verificado punto por punto:
+  - primer arranque (sin `welcome.suppress` en el JSON) → el aviso aparece con la casilla **marcada**;
+  - «Entendido» con la casilla marcada → `welcome.suppress = true` en el JSON y el aviso **no** vuelve en el siguiente arranque;
+  - casilla desmarcada → se persiste `false` y el aviso **sí** reaparece en el siguiente arranque;
+  - Preferencias → General → «★ Ver mensaje de bienvenida» → el aviso se reabre **sin** cerrar Preferencias;
+  - botón de YouTube → abre `youtube.com/@AxelCodeDev` en el navegador por defecto (título de ventana «AxelCode - YouTube»);
+  - botón de GitHub → abre `github.com/axel-molina/DiscNativePro` (título «axel-molina/DiscNativePro»);
+  - con el idioma de la app en inglés el aviso se muestra íntegramente traducido («Welcome to DiscNativePro» / «Work in progress · use at your own risk» / «Do not show again» / «Got it»);
+  - el aviso es **no modal**: la app queda operativa detrás (capturas con la mesa de mezcla visible y en uso).
+- Relanzamiento (regla del repo): `pkill -f DiscNativePro` → `open build/DiscNativePro_artefacts/Release/DiscNativePro.app` → `pgrep -fl DiscNativePro` → PID activo.
+
+### Nota de entorno (no es un fallo del cambio)
+Al arrancar, macOS pide la clave del llavero (`com.discpro.discnativepro.api-key`, servicio de `SecretStore`). Ese panel del sistema es **modal de la app**: bloquea el bucle de mensajes de JUCE, por lo que el aviso de bienvenida (que se dispara a los 900 ms) **no aparece hasta responder** al panel. Se resolvió con «Denegar» durante la verificación. Es un comportamiento preexistente de `SecretStore`, ajeno a P36.
+
+---
+
+# Walkthrough — P35b: anchos de columna corregidos para Sora (cierre de DNP-TK-6)
+
+> Ticket Notion: **DNP-TK-6** «Settings: tipografía más grande (legibilidad)» · rama `axel-molina/v1.4.2`.
+> Plan: `implementation_plan.md` (sección «P35b»). Aprobado por el usuario antes de tocar código.
+
+## 1. Qué faltaba
+
+P35 subió el cuerpo de las etiquetas de 11.0 a 12.5 px y P37 cambió la sans del sistema por **Sora**, que es un **18–24 % más ancha**. Los anchos de columna del panel (120/160/210/220 px) estaban calibrados con la fuente antigua, así que 6 textos dejaron de caber.
+
+El detalle que lo escondía: en JUCE un `Label`/`ComboBox` cuyo texto no cabe **no se recorta con puntos suspensivos** — `LookAndFeel_V2` usa `drawFittedText`, que **comprime horizontalmente** (o reduce el cuerpo), porque `Label::minimumHorizontalScale = 0` por defecto. Una compresión del 0.90 es casi invisible en una captura, y el barrido visual del ticket la dio por buena.
+
+## 2. Medición (no estimación)
+
+Auditoría con las métricas reales de `assets/fonts/Sora-Regular.ttf` (fontTools) y el modelo de render de JUCE 8:
+
+- `Label` → `LookAndFeel_V2::drawLabel` → `drawFittedText(..., maxLines = max(1, alto/cuerpo), minHorizontalScale = 0)`.
+- `ToggleButton` → cuerpo `min(15, alto·0.75)`, área de texto = ancho − tickWidth − 7, `maxLines = 10`.
+- `TextButton` → `drawFittedText(..., maxLines = 2)`.
+- `ComboBox` → cuerpo `min(15, alto·0.85)`, área de texto = ancho − alto (flecha) − 4.
+
+Ancho útil: el modal es fijo **740×540** (`resizable = false`) → **604 px** de contenido, o **589 px** con scrollbar (caso de General).
+
+| Widget | Pestaña | Caja | Necesita | Escala | Corrección |
+|---|---|---|---|---|---|
+| `stemsModeCombo` | General | 280 | 333 | **0.77** | → 370 |
+| `broadcastNameLabel` | Transmitir (solo *Servidor propio*) | 120 | 142 | **0.84** | fila propia: 150 + editor 446 |
+| `pitchRangeLabel` | General | 160 | 177 | 0.90 | → 182 |
+| `bufferSizeLabel` | Sonido | 220 | 238 | 0.92 | → 242 |
+| `aiProviderLabel` | IA Match | 210 | 224 | 0.93 | → 230 |
+| `waveformFpsLabel` | General | 220 | 227 | 0.96 | → 232 |
+
+## 3. Cambios
+
+### `[MODIFY]` `src/ui/SettingsModalComponent.cpp` (`layoutTabs()`)
+1. `pitchRangeLabel` 160 → **182** (el combo pasa a 407; su ítem más largo necesita 295).
+2. `waveformFpsLabel` 220 → **232** (combo 357; ítem más largo 332).
+3. `stemsModeCombo` 280 → **370** («Modo de Stems:» conserva 211 px; el sobrante queda a la derecha porque el texto es left-aligned).
+4. `bufferSizeLabel` 220 → **242** (combo 362; el ítem seleccionado por defecto pasa de 0.94 a 0.99 de escala).
+5. `aiProviderLabel` 210 → **230** (combo 374; el ítem más largo «Google Gemini (Flash - Gratuito en AI Studio)» necesita 343).
+6. **Fila del nombre de emisión separada**: antes compartía fila con la contraseña (`170 + 200 + 16 + 120 + 8`), lo que dejaba el editor del nombre en **82 px** y la etiqueta (142 px) comprimida al 0.84. Ahora la contraseña conserva su fila y el nombre pasa a fila propia (**150 + 446**). El bloque `if (radioVisible)` es condicional → no queda hueco con destino Twitch/YouTube.
+
+**Sin cambios deliberados**: ningún texto de la interfaz (el copy es del usuario), `UiTypeScale.h` (el problema era el ancho, no el cuerpo) y los tokens de toggles/combos (dibujan con el tamaño por defecto del LookAndFeel, no con `UiType`).
+
+## 4. Verificación
+
+- `cmake --build build` → **0 errores, 0 warnings**; app relanzada (`pkill` + `open build/DiscNativePro_artefacts/Release/DiscNativePro.app`, PID confirmado).
+- Auditoría re-ejecutada sobre el código nuevo → **0 deformaciones** en los anchos de 604 px y de 589 px.
+- Verificación visual real en pantalla (capturas 1:1) de las 4 pestañas afectadas: General, Sonido, IA Match y Transmitir con destino «Servidor de radio propio». Las 6 etiquetas salen con proporciones naturales y los combos con el texto completo.
+- Configuración del usuario intacta: el destino de emisión se volvió a dejar en Twitch (`broadcastDest = "4"`) tras la prueba; `welcome.suppress` sigue en `false`.
+
+**Residual conocido**: el ítem más largo del combo de buffer («128 muestras (2.9 ms • Ultra baja latencia interactiva)», 398 px) queda al 0.88 si el usuario lo selecciona; el resto de ítems y el seleccionado por defecto caben. No se acorta el copy del ítem porque es del usuario.
+
+## 5. Pendiente
+
+- Revisión visual del usuario (criterio de aceptación explícito del ticket) → Validación sigue en «Revisión humana».
+- Verificación en Windows/Linux: no compilables en esta máquina; queda para la CI al hacer push.
+- Push de la rama: lo hace el usuario.
+
+---
+
+# Walkthrough — P37: tipografía unificada embebida (Sora + JetBrains Mono)
+
+> Objetivo: dar una familia propia a la app, idéntica en macOS, Windows y Linux, sin depender de fuentes instaladas en cada máquina.
+> Decisión del usuario: **Sora** para toda la UI + **JetBrains Mono** para números, rutas y monitores (ambas SIL OFL, distribuibles en Microsoft Store y releases sin royalties).
+> Plan aprobado en `implementation_plan.md` (sección P37).
+
+## 1. Qué había antes
+
+Todo el texto usaba el sans por defecto de JUCE (Lucida Grande en macOS, Verdana en Windows, DejaVu Sans en Linux) y había usos explícitos de `"Menlo"` —una fuente que **solo existe en macOS**— en el reloj y la RAM de la barra superior, rutas de carpetas, monitor MIDI, árbol de carpetas, códigos de SoundCloud y tabla de mapping MIDI. La apariencia era distinta en cada sistema operativo.
+
+## 2. Cambios
+
+### `[NEW]` `assets/fonts/` (4 TTF estáticos + 2 licencias)
+- `Sora-Regular.ttf`, `Sora-Bold.ttf`: instancias estáticas (wght 400/700) generadas con fonttools a partir de la fuente variable oficial → charset completo (latin, latin-ext, vietnamese).
+- `JetBrainsMono-Regular.ttf`, `JetBrainsMono-Bold.ttf`: TTF estáticos del release oficial (charset completo, cirílico y griego).
+- `OFL-Sora.txt`, `OFL-JetBrainsMono.txt`: licencia SIL OFL de cada familia (requisito de redistribución).
+- Pesos **estáticos**, no variables: la selección de estilos de fuentes variables no es fiable entre los backends de JUCE.
+
+### `[NEW]` `src/ui/AppFonts.{h,cpp}`
+- `AppFonts::initialise()`: crea una sola vez (hilo de mensajes, al arranque) los cuatro `Typeface::Ptr` desde `BinaryData` con `juce::Typeface::createSystemTypefaceFor()`, que acepta bytes TTF/OTF en los tres backends (CoreText, DirectWrite, FreeType).
+- Accesores `sansRegular()`, `sansBold()`, `monoRegular()`, `monoBold()`. Si una cara no cargara devuelve `nullptr` y el override cae al comportamiento base (degradación elegante, nunca crash).
+
+### `[NEW]` `src/ui/AppLookAndFeel.h`
+- `class AppLookAndFeel : public juce::LookAndFeel_V4` con un único override de `getTypefaceForFont()`:
+  - sans del sistema o `"Sora"` → `sansBold()` si el texto es bold, si no `sansRegular()`;
+  - `"Menlo"`, monoespaciada del sistema o `"JetBrains Mono"` → `monoBold()` / `monoRegular()`;
+  - cualquier otro nombre → `LookAndFeel_V4::getTypefaceForFont()`.
+- Se implementa como override (y no con `setDefaultSansSerifTypeface`) porque esa llamada **ignora el bold**: devolvería la misma cara para todos los estilos.
+
+### `[MODIFY]`
+- `src/Main.cpp`: `AppFonts::initialise()` + `juce::LookAndFeel::setDefaultLookAndFeel(&appLookAndFeel)` **antes** de crear la ventana (las caras deben existir antes del primer `Font`, y el LookAndFeel global antes del primer componente). `appLookAndFeel` se declara antes de `mainWindow` para que los componentes se destruyan primero.
+- `src/ui/DjLookAndFeel.h`: `DjLookAndFeel` pasa a heredar de `AppLookAndFeel` (era un LookAndFeel por componente, no el global: ahora hereda la familia por las dos vías).
+- `src/ui/YouTubeVideoComponent_win.cpp`: el overlay de YouTube en Windows deja de pedir `"Segoe UI"` explícito y usa la familia por defecto.
+- `CMakeLists.txt`: `juce_add_binary_data(DiscNativeProFonts SOURCES ...)` + `target_link_libraries(DiscNativePro PRIVATE DiscNativeProFonts)` + `src/ui/AppFonts.cpp` en la lista de fuentes.
+
+## 3. Verificación
+
+- `cmake --build build` → **0 errores, 0 warnings**; la app arranca con la tipografía embebida.
+- Verificado en pantalla en macOS durante la revisión de DNP-TK-6: las capturas 1:1 de Ajustes muestran ya la familia embebida (y esa misma fuente es la que destapó los 6 anchos de columna cortos corregidos en P35b).
+- **Pendiente**: Windows y Linux no son compilables en esta máquina → la verificación de las tres plataformas queda para la CI al hacer push.
+
+## 4. Nota de alcance
+
+Sora no publica itálica: el único italic de la app (`AIMatchView.cpp:158`) pasa a renderizarse en regular. Si se quiere cursiva real, hay que añadir una tercera cara o usar la variante del sistema solo para ese caso.

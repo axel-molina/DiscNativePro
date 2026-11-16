@@ -1,4 +1,5 @@
 #include "MidiMappingTableComponent.h"
+#include "UiTypeScale.h"
 
 namespace
 {
@@ -8,13 +9,13 @@ public:
     ActionButtonsCell(std::function<void()> onLearn, std::function<void()> onClear)
         : learnCallback(std::move(onLearn)), clearCallback(std::move(onClear))
     {
-        learnBtn.setFontSize(10.5f);
+        learnBtn.setFontSize(UiType::caption);
         learnBtn.setCornerRadius(4.0f);
         learnBtn.onClick = [this]() { if (learnCallback) learnCallback(); };
         addAndMakeVisible(learnBtn);
 
         clearBtn.setText(juce::String::fromUTF8("✕"));
-        clearBtn.setFontSize(10.0f);
+        clearBtn.setFontSize(UiType::micro);
         clearBtn.setCornerRadius(4.0f);
         clearBtn.setCustomColours(juce::Colour::fromRGB(24, 27, 36),
                                  juce::Colour::fromRGB(239, 68, 68),
@@ -88,7 +89,7 @@ MidiMappingTableComponent::MidiMappingTableComponent(MidiManager& midiMgr)
     // 2. Botón Restablecer
     resetDefaultsBtn.setText(LanguageManager::trUtf8("Restablecer Fábrica", "Reset to Default"));
     resetDefaultsBtn.setIcon(LucideIcons::IconType::Repeat, 11.0f);
-    resetDefaultsBtn.setFontSize(10.5f);
+    resetDefaultsBtn.setFontSize(UiType::caption);
     resetDefaultsBtn.setCornerRadius(5.0f);
     resetDefaultsBtn.setCustomColours(juce::Colour::fromRGB(24, 27, 36),
                                      juce::Colour::fromRGB(148, 163, 184),
@@ -100,7 +101,7 @@ MidiMappingTableComponent::MidiMappingTableComponent(MidiManager& midiMgr)
     // 3. Botón Exportar
     exportBtn.setText(LanguageManager::trUtf8("Exportar...", "Export..."));
     exportBtn.setIcon(LucideIcons::IconType::Download, 11.0f);
-    exportBtn.setFontSize(10.5f);
+    exportBtn.setFontSize(UiType::caption);
     exportBtn.setCornerRadius(5.0f);
     exportBtn.setCustomColours(juce::Colour::fromRGB(24, 27, 36),
                               juce::Colour::fromRGB(0, 180, 216),
@@ -112,7 +113,7 @@ MidiMappingTableComponent::MidiMappingTableComponent(MidiManager& midiMgr)
     // 4. Botón Importar
     importBtn.setText(LanguageManager::trUtf8("Importar...", "Import..."));
     importBtn.setIcon(LucideIcons::IconType::Folder, 11.0f);
-    importBtn.setFontSize(10.5f);
+    importBtn.setFontSize(UiType::caption);
     importBtn.setCornerRadius(5.0f);
     importBtn.setCustomColours(juce::Colour::fromRGB(24, 27, 36),
                               juce::Colour::fromRGB(52, 211, 153),
@@ -122,7 +123,7 @@ MidiMappingTableComponent::MidiMappingTableComponent(MidiManager& midiMgr)
     addAndMakeVisible(importBtn);
 
     // 5. Contador de conflictos de mapeo
-    conflictBtn.setFontSize(10.0f);
+    conflictBtn.setFontSize(UiType::micro);
     conflictBtn.setCornerRadius(5.0f);
     conflictBtn.setCustomColours(juce::Colour::fromRGB(24, 27, 36),
                                  juce::Colour::fromRGB(248, 113, 113),
@@ -325,7 +326,7 @@ void MidiMappingTableComponent::paintCell(juce::Graphics& g, int rowNumber, int 
             g.drawRoundedRectangle(pill, 4.0f, 1.0f);
 
             g.setColour(groupCol);
-            g.setFont(juce::FontOptions(10.0f, juce::Font::bold));
+            g.setFont(juce::FontOptions(UiType::micro, juce::Font::bold));
             g.drawText(groupName, pill, juce::Justification::centred, false);
             break;
         }
@@ -333,7 +334,7 @@ void MidiMappingTableComponent::paintCell(juce::Graphics& g, int rowNumber, int 
         case 2: // Función
         {
             g.setColour(juce::Colours::white);
-            g.setFont(juce::FontOptions(11.5f, juce::Font::plain));
+            g.setFont(juce::FontOptions(UiType::body, juce::Font::plain));
             juce::String name = LanguageManager::getInstance().isEnglish()
                                 ? action.nameEn : action.nameEs;
             g.drawText(name, cellBounds, juce::Justification::centredLeft, true);
@@ -353,7 +354,7 @@ void MidiMappingTableComponent::paintCell(juce::Graphics& g, int rowNumber, int 
                 g.setColour(juce::Colour::fromRGB(245, 158, 11));
                 g.drawRoundedRectangle(pill, 4.0f, 1.2f);
 
-                g.setFont(juce::FontOptions(10.5f, juce::Font::bold));
+                g.setFont(juce::FontOptions(UiType::micro, juce::Font::bold));
                 g.drawText(LanguageManager::trUtf8("Mueve un botón o fader...", "Move a knob or fader..."), pill, juce::Justification::centred, false);
             }
             else
@@ -372,13 +373,13 @@ void MidiMappingTableComponent::paintCell(juce::Graphics& g, int rowNumber, int 
                     textArea.removeFromRight(18.0f);
 
                 g.setColour(textCol);
-                g.setFont(juce::FontOptions("Menlo", 10.5f, juce::Font::bold));
+                g.setFont(juce::FontOptions("Menlo", UiType::caption, juce::Font::bold));
                 g.drawText(action.binding.getDisplayText(), textArea, juce::Justification::centred, false);
 
                 if (conflicts > 0)
                 {
                     g.setColour(juce::Colour::fromRGB(239, 68, 68));
-                    g.setFont(juce::FontOptions(11.0f, juce::Font::bold));
+                    g.setFont(juce::FontOptions(UiType::body, juce::Font::bold));
                     g.drawText(juce::String::fromUTF8("\xE2\x9A\xA0"),
                                juce::Rectangle<float>(pill.getRight() - 17.0f, pill.getY(), 16.0f, pill.getHeight()),
                                juce::Justification::centred, false);

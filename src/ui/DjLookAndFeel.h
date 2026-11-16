@@ -1,8 +1,9 @@
 #pragma once
 
 #include <juce_gui_basics/juce_gui_basics.h>
+#include "AppLookAndFeel.h"
 
-class DjLookAndFeel : public juce::LookAndFeel_V4
+class DjLookAndFeel : public AppLookAndFeel
 {
 public:
     DjLookAndFeel();

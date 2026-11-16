@@ -194,6 +194,9 @@ target_sources(DiscNativePro
         src/ui/MidiMappingTableComponent.cpp
         src/ui/SettingsModalComponent.h
         src/ui/SettingsModalComponent.cpp
+        src/ui/UiTypeScale.h
+        src/ui/WelcomeModalComponent.h
+        src/ui/WelcomeModalComponent.cpp
         src/ui/FxSlotComponent.h
         src/ui/FxSlotComponent.cpp
         src/ui/FxPanelComponent.h
@@ -206,9 +209,22 @@ target_sources(DiscNativePro
         src/ui/CoverArtGenerator.cpp
         src/ui/DjLookAndFeel.h
         src/ui/DjLookAndFeel.cpp
+        src/ui/AppFonts.h
+        src/ui/AppFonts.cpp
+        src/ui/AppLookAndFeel.h
         src/ui/LucideIcons.h
         src/ui/LucideIcons.cpp
         src/ui/DjButton.h
+)
+
+# P37: tipografía unificada embebida en el binario (SIL OFL). Pesos estáticos:
+# la selección de estilos de fuentes variables no es fiable entre backends.
+juce_add_binary_data(DiscNativeProFonts
+    SOURCES
+        assets/fonts/Sora-Regular.ttf
+        assets/fonts/Sora-Bold.ttf
+        assets/fonts/JetBrainsMono-Regular.ttf
+        assets/fonts/JetBrainsMono-Bold.ttf
 )
 
 target_include_directories(DiscNativePro
@@ -244,6 +260,7 @@ target_link_libraries(DiscNativePro
         juce::juce_recommended_config_flags
         juce::juce_recommended_warning_flags
         mp3lame
+        DiscNativeProFonts
 )
 
 # -----------------------------------------------------------------------------

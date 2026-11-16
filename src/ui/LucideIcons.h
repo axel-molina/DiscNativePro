@@ -45,7 +45,8 @@ public:
         Video,
         Tag,
         Radio,
-        Mic
+        Mic,
+        Star
     };
 
     // Draw the icon vector scaled into the destination rectangle

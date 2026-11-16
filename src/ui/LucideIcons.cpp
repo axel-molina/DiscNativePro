@@ -578,6 +578,23 @@ juce::Path LucideIcons::getPath(IconType icon)
             p.lineTo(16.0f, 22.0f);
             break;
         }
+
+        case IconType::Star:
+        {
+            // Estrella de 5 puntas (accion "star" de GitHub)
+            p.startNewSubPath(12.0f, 2.0f);
+            p.lineTo(15.09f, 8.26f);
+            p.lineTo(22.0f, 9.27f);
+            p.lineTo(17.0f, 14.14f);
+            p.lineTo(18.18f, 21.02f);
+            p.lineTo(12.0f, 17.77f);
+            p.lineTo(5.82f, 21.02f);
+            p.lineTo(6.91f, 14.14f);
+            p.lineTo(2.0f, 9.27f);
+            p.lineTo(8.91f, 8.26f);
+            p.closeSubPath();
+            break;
+        }
     }
 
     return p;
