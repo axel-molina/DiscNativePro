@@ -188,9 +188,11 @@ DeckComponent::DeckComponent(int deckNum, DeckPlayer& player, AudioEngine& audio
                                          juce::Colour::fromRGB(142, 149, 165),
                                          juce::Colour::fromRGB(142, 149, 165),
                                          juce::Colour::fromRGB(38, 43, 56));
-    pitchBendDownButton.onClick = [this]() {
-        deck.setPitchBend(-0.04f);
-        juce::Timer::callAfterDelay(150, [this]() { deck.setPitchBend(0.0f); });
+    // P32b: pitch bend al mantener pulsado (estandar CDJ/rekordbox/Serato/Traktor).
+    // onStateChange se dispara al pulsar (isDown) y al soltar/salir; con Key Lock
+    // ON solo nudgeo de tempo. El fader sigue siendo el unico control de pitch fijo.
+    pitchBendDownButton.onStateChange = [this]() {
+        deck.setPitchBend(pitchBendDownButton.isDown() ? -0.04f : 0.0f);
     };
     addAndMakeVisible(pitchBendDownButton);
 
@@ -200,9 +202,8 @@ DeckComponent::DeckComponent(int deckNum, DeckPlayer& player, AudioEngine& audio
                                        juce::Colour::fromRGB(142, 149, 165),
                                        juce::Colour::fromRGB(142, 149, 165),
                                        juce::Colour::fromRGB(38, 43, 56));
-    pitchBendUpButton.onClick = [this]() {
-        deck.setPitchBend(0.04f);
-        juce::Timer::callAfterDelay(150, [this]() { deck.setPitchBend(0.0f); });
+    pitchBendUpButton.onStateChange = [this]() {
+        deck.setPitchBend(pitchBendUpButton.isDown() ? 0.04f : 0.0f);
     };
     addAndMakeVisible(pitchBendUpButton);
 
