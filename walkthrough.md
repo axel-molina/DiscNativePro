@@ -2310,6 +2310,11 @@ Escala tipográfica compartida por toda la UI de Ajustes (píxeles, no puntos):
 ### Nota de entorno (no es un fallo del cambio)
 Al arrancar, macOS pide la clave del llavero (`com.discpro.discnativepro.api-key`, servicio de `SecretStore`). Ese panel del sistema es **modal de la app**: bloquea el bucle de mensajes de JUCE, por lo que el aviso de bienvenida (que se dispara a los 900 ms) **no aparece hasta responder** al panel. Se resolvió con «Denegar» durante la verificación. Es un comportamiento preexistente de `SecretStore`, ajeno a P36.
 
+### Validación humana (2026-11-16)
+El usuario revisó el cartel en pantalla y lo aprobó: **«el cartel de bienvenida ya está bien así»** (texto final, URLs de YouTube y GitHub y comportamiento del aviso). Ticket Notion #12 cerrado como **Finalizado / Validación Aprobada**.
+
+Residual documentado: la verificación visual en Windows/Linux queda pendiente porque no hay build de esas plataformas para este cambio (el código del diálogo es el mismo y la versión inglesa se verificó en macOS). Es una comprobación de humo para el próximo build de Windows/Linux, no trabajo abierto del ticket.
+
 ---
 
 # Walkthrough — P35b: anchos de columna corregidos para Sora (cierre de DNP-TK-6)
