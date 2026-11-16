@@ -2483,6 +2483,7 @@ Contraste que confirma el diagnóstico: **Linux sí copia el runtime** (`release
 
 ## 5. Pendiente
 
-- **Publicar el release**: hasta que corra el CI con estos cambios, el release v1.4.0 sigue roto para Windows. Hace falta `push` + tag (decisión del usuario; la rama `axel-molina/v1.4.2` aún no tiene remoto).
-- **Validación final con el usuario**: que la app arranque en sus dos portátiles Windows (criterio de aceptación explícito del ticket). Si tras el fix persistiera el `0xc000007b`, la causa pasaría a ser el antivirus/antimalware o un binario corrupto — el dato a mirar es el log del Event Viewer.
+- **Publicación agrupada (decisión del usuario, 2026-11-16)**: **no hay push parcial**. El fix sale junto con P35, P35b, P36 y P37 en la release **v1.4.2**. `CMakeLists.txt` quedó en `project(DiscNativePro VERSION 1.4.2)` para que el build local ya reporte 1.4.2 (verificado en el `Info.plist` y en el define `DISCNATIVEPRO_VERSION`) y el fallback de versión coincida con el tag.
+- **Lo que falta para la v1.4.2**: `push` de la rama `axel-molina/v1.4.2` (hoy sin remoto) + tag `v1.4.2` → corren los 3 jobs del `release.yml` y el `build-windows` valida el paquete de verdad. Hasta entonces, el release v1.4.0/v1.4.1 sigue roto en Windows.
+- **Validación final con el usuario**: que la app arranque en sus dos portátiles Windows con el artefacto de la v1.4.2 (criterio de aceptación del ticket). Si tras el fix persistiera el `0xc000007b`, la causa pasaría a ser el antivirus/antimalware o un binario corrupto — el dato a mirar es el log del Event Viewer.
 - **Verificación de la hipótesis**: el error `0xc000007b` también aparece con binario truncado o bloqueado por antivirus (una DLL faltante suele dar `0xc0000135`), por eso la confirmación final es del usuario y no del código.

@@ -8,7 +8,7 @@ if(APPLE AND NOT DEFINED CMAKE_OSX_DEPLOYMENT_TARGET)
     set(CMAKE_OSX_DEPLOYMENT_TARGET "14.0")
 endif()
 
-project(DiscNativePro VERSION 1.4.1 LANGUAGES C CXX)
+project(DiscNativePro VERSION 1.4.2 LANGUAGES C CXX)
 
 if(APPLE)
     enable_language(OBJCXX)
