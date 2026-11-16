@@ -2,6 +2,7 @@
 
 #include <juce_gui_basics/juce_gui_basics.h>
 #include "../audio/DeckPlayer.h"
+#include <cmath>
 
 class VerticalWaveform : public juce::Component,
                          public juce::Timer
@@ -43,6 +44,27 @@ private:
     float pixelsPerSecond { 70.0f }; // zoom de la vista (20..300)
     double lastPos1 { -1.0 };
     double lastPos2 { -1.0 };
+
+    // Estado del loop de cada deck. Se compara con el del DeckPlayer para
+    // repintar al activarlo o desactivarlo aunque el transporte este parado
+    // (P40): si no, la region del loop no aparecia hasta que volvia a sonar.
+    struct LoopState
+    {
+        bool   active { false };
+        double start  { -1.0 };
+        double length { -1.0 };
+
+        bool differsFrom (const DeckPlayer& d) const
+        {
+            // Tolerancia en vez de == (regla del repo: 0 warnings).
+            return active != d.isLooping()
+                || std::abs (start  - d.getLoopStart())  > 1e-6
+                || std::abs (length - d.getLoopLength()) > 1e-6;
+        }
+    };
+
+    LoopState lastLoop1;
+    LoopState lastLoop2;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(VerticalWaveform)
 };

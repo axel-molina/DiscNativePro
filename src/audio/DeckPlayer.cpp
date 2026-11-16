@@ -158,6 +158,10 @@ bool DeckPlayer::loadFile(const juce::File& audioFile)
             }
         }
         loopActive.store(false);
+        // La region de loop pertenece a la pista: se limpia al cargar otra,
+        // si no la onda podria mostrar el loop de la pista anterior (P40).
+        loopStartSeconds.store(0.0);
+        loopLengthSeconds.store(0.0);
 
         // Build the streaming audio pipeline
         // 1. AudioFormatReaderSource takes ownership of reader

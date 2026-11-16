@@ -2535,3 +2535,58 @@ El análisis correcto es **a nivel de componente**: un componente cuenta como de
 
 - **Higiene del backlog** (sin código): cerrar **#1, #2 y #3**, que llevan `[DESCARTADO]` en el título pero siguen con Estado «Nuevo».
 - Revisión de los tickets que ficaram *Finalizado* con Validación «Pendiente» (contradicción con la regla de no cerrar sin validación).
+
+---
+
+# Walkthrough — P40: la región de loop en la onda de la bandeja (Notion #11)
+
+> Ticket: Notion **#11** «Marcar la sección de loop en la onda de la bandeja» · Prioridad Media · Esfuerzo S.
+> Aprobado por el usuario el 2026-11-16 (elección entre las 6 opciones del backlog).
+
+## 1. Qué pasaba
+
+Con un loop activo, la onda grande de la bandeja no mostraba **qué tramo se iba a repetir**. Solo la *overview* (la onda pequeña de cada deck) marcaba la región.
+
+## 2. Estado real del código (verificado, no supuesto)
+
+- La onda visible de la bandeja es **`src/ui/VerticalWaveform.cpp`**: columna central, Deck 1 a la izquierda y Deck 2 a la derecha, con el **tiempo creciendo hacia arriba**. La instancia `CenterColumnComponent` (`CenterColumnComponent.cpp:28`, `:240`).
+- `src/ui/ScrollingWaveform.cpp` **no se instancia en ningún sitio** (código muerto, solo compilado) → no se toca.
+- `src/ui/OverviewWaveform.cpp:120-130` **ya dibujaba la región**: `fillRect` `RGB(37,99,235) @0.35` + `drawRect` `RGB(96,165,250)`. Ese es el criterio que se replica (el criterio de aceptación pide que el resaltado de la overview se mantenga igual).
+- `DeckPlayer`: `isLooping()`, `getLoopStart()`, `getLoopLength()` (`:145-147`). `exitLoop()` (`:1516`) desactiva el loop **conservando** la región → se puede distinguir «loop definido» de «loop activo». Al cargar otra pista solo se limpiaba `loopActive` (`DeckPlayer.cpp:160`): la región vieja podía quedar de la pista anterior.
+- El botón LOOP (`DeckComponent.cpp:304-323`) alterna `setLoop(pos, beats*beatSec, true)` / `exitLoop()`.
+
+## 3. Cambios
+
+### `[MODIFY]` `src/ui/VerticalWaveform.cpp` — `renderDeckHalf()`
+Región de loop proyectada al eje vertical (`y = centerY - (t - currentTime) * pixelsPerSecond`), recortada a la ventana visible y a la mitad del deck:
+- **loop activo**: relleno `RGB(37,99,235) @0.35` + bordes horizontales `RGB(96,165,250)` (misma paleta que el overview);
+- **loop definido pero inactivo**: relleno `@0.10` + bordes `@0.40` → se distingue activo de inactivo.
+
+Se dibuja **encima de las barras** y **debajo** del sombreado de lo ya reproducido: mismo orden que el overview.
+
+### `[MODIFY]` `src/ui/VerticalWaveform.{h,cpp}` — repintado al cambiar el loop
+`timerCallback()` repinta además cuando cambia el estado del loop de un deck (`LoopState::differsFrom`, con tolerancia de 1e-6). Sin esto, activar el loop **en pausa** no mostraba la región hasta que volvía a sonar.
+
+### `[MODIFY]` `src/audio/DeckPlayer.cpp` — carga de pista
+Junto al `loopActive.store(false)` (`:160`) se limpian `loopStartSeconds` y `loopLengthSeconds`: la región de loop pertenece a la pista (evita un loop fantasma de la pista anterior).
+
+### Sin cambios (deliberado)
+- `OverviewWaveform`: ya marca la región.
+- `ScrollingWaveform`: código muerto.
+- `DeckComponent`: el botón de loop ya gestiona la región.
+
+## 4. Verificación
+
+1. **Build**: `cmake --build build` → **0 errores y 0 warnings** (hubo que corregir 2 avisos de `-Wfloat-equal` introducidos por la comparación de `double` del estado del loop: se resolvió con tolerancia `1e-6` vía `std::abs`).
+2. **Aritmética del recorte comprobada con una simulación** (7 casos, todos OK): loop dentro de la ventana · loop parcialmente fuera · loop pasado fuera (no se dibuja) · loop futuro fuera (no se dibuja) · loop pasado visible (abajo del centro) · loop cruzando la aguja · sin loop definido. El alto de la región es exactamente `duración × pixelsPerSecond` (2 s × 70 px/s = 140 px).
+3. **Relanzamiento**: `pkill -f DiscNativePro` → `open build/DiscNativePro_artefacts/Release/DiscNativePro.app` → `pgrep -fl DiscNativePro` → proceso vivo; la captura de pantalla confirma que la app levanta y dibuja la columna central sin artefactos (sin loop activo no hay marcador, como corresponde).
+4. **Visual con loop activo**: pendiente de revisión del usuario (no se pudo automatizar el clic: macOS no concede a `osascript` el permiso de accesibilidad, error -25211).
+
+## 5. Pendiente
+
+- **Revisión visual del usuario**: cargar una pista → pulsar **LOOP** → la región azul tiene que aparecer en la columna central, alineada con la aguja y sincronizada con la reproducción; al volver a pulsar LOOP (loop inactivo) queda solo el borde tenue.
+- **Publicación**: entra en el mismo grupo de la **v1.4.2** (sin push parcial).
+
+## 6. Nota
+
+La automatización por clic no se pudo usar en esta máquina (`osascript` → error -25211, sin permiso de accesibilidad), así que la prueba de la región marcada la hace el usuario. La aritmética sí quedó verificada de forma aislada (punto 2 de la verificación).

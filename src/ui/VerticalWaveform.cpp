@@ -20,12 +20,18 @@ void VerticalWaveform::timerCallback()
     const double p2 = deck2.getPosition();
     // Tambien repinta con el transporte parado: un seek en pausa mueve la
     // aguja sin que ningun deck este sonando.
+    // P40: tambien repinta si cambia el loop de un deck (activarlo en pausa
+    // tiene que mostrar la region al instante, no al siguiente beat).
     if (deck1.isPlaying() || deck2.isPlaying()
         || std::abs(p1 - lastPos1) > 1e-4
-        || std::abs(p2 - lastPos2) > 1e-4)
+        || std::abs(p2 - lastPos2) > 1e-4
+        || lastLoop1.differsFrom(deck1)
+        || lastLoop2.differsFrom(deck2))
     {
         lastPos1 = p1;
         lastPos2 = p2;
+        lastLoop1 = { deck1.isLooping(), deck1.getLoopStart(), deck1.getLoopLength() };
+        lastLoop2 = { deck2.isLooping(), deck2.getLoopStart(), deck2.getLoopLength() };
         repaint();
     }
 }
@@ -171,6 +177,34 @@ void VerticalWaveform::renderDeckHalf(juce::Graphics& g,
         // 3. High frequency transients (tema de esta bandeja)
         g.setColour(WaveformTheme::high(deckIndex));
         g.fillRect(deckCenterX - highW, y, highW * 2.0f, barHeight);
+    }
+
+    // Region de loop (P40): mismo criterio de color que el overview
+    // (OverviewWaveform.cpp:120-130), proyectado al eje temporal vertical
+    // (el tiempo crece hacia arriba). Loop activo = relleno + bordes claros;
+    // loop definido pero inactivo = solo bordes tenues.
+    const double loopLength = player.getLoopLength();
+    if (loopLength > 0.0)
+    {
+        const double loopStart = player.getLoopStart();
+        const double loopEnd = loopStart + loopLength;
+
+        const float yStart = centerY - (float) ((loopStart - currentTime) * (double) pixelsPerSecond);
+        const float yEnd   = centerY - (float) ((loopEnd   - currentTime) * (double) pixelsPerSecond);
+
+        // Recorte a la ventana visible (el loop puede quedar fuera).
+        const float top    = juce::jmax(0.0f, juce::jmin(yStart, yEnd));
+        const float bottom = juce::jmin(totalHeight, juce::jmax(yStart, yEnd));
+
+        if (bottom > top)
+        {
+            const bool active = player.isLooping();
+            g.setColour(juce::Colour::fromRGB(37, 99, 235).withAlpha(active ? 0.35f : 0.10f));
+            g.fillRect(startX, top, deckWidth, bottom - top);
+            g.setColour(juce::Colour::fromRGB(96, 165, 250).withAlpha(active ? 1.0f : 0.40f));
+            g.drawHorizontalLine((int) top,    startX, startX + deckWidth);
+            g.drawHorizontalLine((int) bottom, startX, startX + deckWidth);
+        }
     }
 
     // Región ya reproducida (debajo de la aguja): sombreado como el overview
