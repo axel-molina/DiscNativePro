@@ -1009,7 +1009,12 @@ void DeckPlayer::updatePlaybackSpeed()
         // La transposición la aplica el stretcher (no altera el tempo).
         stretcher->setTempoRate((double)totalSpeed);
         stretcher->setInputRateFactor(rateFactor.load()); // P26
-        stretcher->setTransposeSemitones((double)st);
+        // P31: el stretcher corre al rate del dispositivo pero recibe muestras
+        // al rate del archivo; inputRateFactor corrige el tempo, no el tono. El
+        // tono queda desplazado deviceRate/fileRate y se cancela con un transpose
+        // de 12*log2(fileRate/deviceRate) semitonos (= 12*log2(rateFactor)).
+        const double ratePitchCorrection = 12.0 * std::log2(rateFactor.load());
+        stretcher->setTransposeSemitones((double)st + ratePitchCorrection);
         if (resamplingSource != nullptr)
             resamplingSource->setResamplingRatio(1.0);
     }
