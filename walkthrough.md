@@ -2020,3 +2020,151 @@ Objetivo del usuario: la descarga de actualización no debe abrir carpetas ni pe
   1. `Sparkle.framework` (nueva en P30) trae `com.apple.FinderInfo` en sus directorios → añadido `xattr -cr` en POST_BUILD y como red de seguridad sobre el bundle antes de firmar en `release.yml`.
   2. Con eso destapado un segundo problema: `cmake -E copy_directory` desreferencia los symlinks raíz del framework (Resources -> Versions/...) y codesign lo rechaza como "bundle format is ambiguous" → reemplazado por `cp -R` (preserva symlinks) + `rm -rf` previo del destino.
 - Verificación local completa: bundle en /tmp (sin FileProvider que re-estampa xattrs) → `xattr -cr` → `codesign --force --deep --sign -` → `--verify --deep --strict` OK ("satisfies its Designated Requirement") y la app abre.
+
+# Walkthrough — P31: detune de tono en la bandeja con Key Lock ON (2026-11-14, rama axel-molina/v1.4.2)
+
+**Reporte del usuario**: canciones descargadas de YouTube suenan "en otro tono" al cargarlas en la bandeja.
+
+**Evidencia empírica**: los m4a de YouTube en caché son **44100 Hz** (`afinfo`); la salida por defecto de este Mac corre a **48000 Hz** (`system_profiler SPAudioDataType`).
+
+**Causa raíz**: con Key Lock / Master Tempo ON (default, `DeckPlayer.h:243`), `getNextAudioBlock` alimenta el stretcher directo desde `bufferingSource` (muestras al rate del archivo) y se salta el `resamplingSource` ([DeckPlayer.cpp:573](src/audio/DeckPlayer.cpp)). El stretcher se configura al rate del **dispositivo** (`StretchAdapter::prepare`, [StretchAdapter.cpp:17](src/audio/StretchAdapter.cpp)), así que preserva el tono relativo a 48 kHz mientras recibe contenido a 44.1 kHz. El `inputRateFactor` de P26.2 (= fileRate/deviceRate) corrige el **tempo** (cuántas muestras consume, [StretchAdapter.cpp:83](src/audio/StretchAdapter.cpp)), no el **tono**. Resultado: tono desplazado `deviceRate/fileRate` = 48000/44100 = 1.0884 → **+1.47 semitonos** (más agudo). P26.2 había corregido el tempo/BPM (~8.8 % rápido) pero quedó este residuo de tono en keylock. Archivos locales a 48 kHz → rateFactor 1, sin bug; por eso solo se notaba con YouTube (44.1 kHz). La ruta Key Lock OFF ya era correcta (el resampler convierte el rate preservando el tono).
+
+**Fix** ([DeckPlayer.cpp](src/audio/DeckPlayer.cpp), `updatePlaybackSpeed()`, rama keylock): el detune es un offset de tono puro, y el stretcher ya tiene un transpose persistente que sobrevive a seeks y scratch (el keyshift del usuario ya depende de esa persistencia). Se compensa sumando `12·log2(rateFactor)` semitonos al transpose:
+
+```cpp
+const double ratePitchCorrection = 12.0 * std::log2(rateFactor.load());
+stretcher->setTransposeSemitones((double)st + ratePitchCorrection);
+```
+
+Para 44.1k/48k: corrección = −1.47 st, cancela el +1.47 del bug → tono exacto. `rateFactor = 1` → corrección 0 (caso común intacto). El keyshift del usuario se suma linealmente. Cambio quirúrgico: no toca enrutamiento, posición, seeks, scratch, stems ni latencia (la opción de enrutar el stretcher por el resampler se descartó por alto riesgo de regresión en sync/fase). `updatePlaybackSpeed` corre fuera del callback de audio; el valor viaja al `render()` por el atómico `transposeSemitones` → realtime-safe, sin allocs. El scratch hacia adelante con keylock comparte el mismo stretcher, así que hereda la corrección.
+
+**Verificación**:
+- `cmake --build build` (Release): **0 errores, 0 warnings** (solo recompiló DeckPlayer.cpp).
+- Razonamiento estático: file 44100 / device 48000 → rateFactor 0.91875 → 12·log2(0.91875) = −1.47 st; bug +1.47 → neto 0 ✓. file = device → corrección 0 ✓.
+- Regla de relanzamiento cumplida: `pkill` → `open` Release → `pgrep` (PID 75113 vivo).
+- **Pendiente del usuario** (no puedo oír audio): cargar un m4a de YouTube (44.1k) con Key Lock ON → debe sonar en el tono correcto; comparar con Key Lock OFF (ya correcto) → mismo tono; probar pitch fader ±8 % y keyshift para confirmar que el tono se mantiene.
+
+---
+
+# Walkthrough — P32b: los botones + / − de la bandeja hacen pitch bend al mantener pulsado (2026-11-14, rama axel-molina/v1.4.2)
+
+**Reporte del usuario**: "el botón más y el menos para mover los pitch de la bandeja no funcionan".
+
+**Causa raíz**: no estaban rotos; hacían otra cosa. `pitchBendDownButton` / `pitchBendUpButton` estaban cableados como **pitch bend momentáneo de 150 ms** ([DeckComponent.cpp:191](src/ui/DeckComponent.cpp) y [:203](src/ui/DeckComponent.cpp)): `onClick` → `deck.setPitchBend(±0.04f)` + `Timer::callAfterDelay(150, ... setPitchBend(0.0f))`. Un blip brevísimo que se resetea solo al hacer click; con Key Lock ON solo nudgeo de tempo. No movían el fader ni el % → parecía que no hacían nada.
+
+**Evolución de la decisión**:
+- **P32 (superado)**: primero se cambió a paso permanente del fader (±0.1 % por pulsación, reutilizando `pitchSlider.onValueChange`). El usuario preguntó si ese comportamiento era el correcto y cómo lo hacen los software profesionales.
+- **Investigación**: el estándar de la industria (Pioneer CDJ/rekordbox, Serato, Traktor) para los + / − junto al fader es **pitch bend TEMPORAL al mantener pulsado**, no un cambio permanente del fader; el pitch permanente se ajusta con el propio fader. Con Key Lock ON el bend solo afecta al tempo (tono preservado).
+- **P32b (vigente)**: se alinea al estándar → hold-to-bend.
+
+**Fix** ([DeckComponent.cpp](src/ui/DeckComponent.cpp)): se sustituyen los `onClick` por `onStateChange`, que JUCE dispara al pulsar (`isDown()==true`) y al soltar/salir (`false`) (`juce_Button.cpp:326,436-451,470-484`):
+
+```cpp
+pitchBendDownButton.onStateChange = [this]() {
+    deck.setPitchBend(pitchBendDownButton.isDown() ? -0.04f : 0.0f);
+};
+pitchBendUpButton.onStateChange = [this]() {
+    deck.setPitchBend(pitchBendUpButton.isDown() ? 0.04f : 0.0f);
+};
+```
+
+Mantener **+** acelera el tempo (+4 %), mantener **−** lo frena (−4 %), al soltar vuelve a 0. El fader NO se mueve (sigue siendo el único control de pitch permanente). Con Key Lock ON solo tempo; OFF pitch+tempo. No requiere `addListener` ni tocar `buttonStateChanged` (el patrón del rollPad está incompleto — le falta `addListener`, es código muerto — no se reutiliza). `stretcher` se crea en el ctor ([DeckPlayer.cpp:41](src/audio/DeckPlayer.cpp)), siempre no-null → `updatePlaybackSpeed` seguro incluso en hover (`onStateChange` también se dispara al entrar/salir el ratón con `isDown` false → `setPitchBend(0)`, inocuo). Realtime-safe: message thread + atómicos. Con sync de fase activo el controlador anula el bend manual ([AudioEngine.cpp:760](src/audio/AudioEngine.cpp)), igual que antes; el bend se usa sin sync (beatmatching de oído), como en el software pro.
+
+**Verificación**:
+- `cmake --build build` (Release): **0 errores, 0 warnings** (solo recompiló DeckComponent.cpp).
+- Razonamiento estático: mantener + → `isDown` true → `setPitchBend(+0.04)` → `tempoRate` 1.04 sostenido; soltar/salir → `isDown` false → `setPitchBend(0)` → vuelve a 1.0.
+- Regla de relanzamiento cumplida: `pkill` (solo coincidía el binario de la app) → `open` Release → `pgrep` (PID 99775 vivo).
+- **Pendiente del usuario**: mantener + / − → el tempo se acelera/frena mientras se sostiene y vuelve al soltar; el fader no se mueve; con Key Lock ON el tono se mantiene.
+
+---
+
+# Walkthrough — Integración Notion MCP (2026-11-16, rama axel-molina/v1.4.2)
+
+**Objetivo**: conectar el servidor oficial de Notion MCP como contexto y gestión de backlog. Deshabilitados por decisión: servidores propios, webhooks, n8n, cron y APIs de IA externas. Ámbito elegido: **local** (privado de esta máquina, no versionado).
+
+**Configuración creada** — `[NEW]` `~/.commandcode/projects/users-axelivanmolina-documents-documentos-mac-book-air-de-axel-github-disc-native-pro/mcp.json`:
+```json
+{ "mcpServers": { "notion": { "transport": "http", "enabled": true, "url": "https://mcp.notion.com/mcp" } } }
+```
+No se tocó `~/.commandcode/mcp.json` (server existentes intactos) ni ningún archivo del repo con config. Sin secretos en el repo.
+
+**Diagnóstico (verificado contra el harness)**:
+- El validador nativo acepta solo `transport: 'stdio' | 'http'`; no obstante `inferTransport()` tolera valores desconocidos → si hay `url` y no `command`, resuelve `http`. Se dejó `"http"` canónico.
+- La ruta local la calcula `slugifyProjectPath(projectPath)` (= `sindresorhusSlugify`). Para este repo coincide exactamente con el directorio usado (confirmado ejecutando el propio `getLocalMcpConfigPath`/`loadMcpServers` del harness: descubre 9 servidores incl. `notion`).
+- Los logs de `~/Library/Logs/Command Code/mcp/` son solo de servidores **stdio**; los `http` (context7, github, notion) no escriben log → su ausencia no implica fallo.
+
+**Auth OAuth**: la UI `/mcp` mostraba `notion` como 401 sin acción de autenticación utilizable. Se ejecutó el flujo OAuth del propio harness (`discoverAndAuthenticateMcpServer`) que: sondea (401) → lee metadata (`registration_endpoint: https://mcp.notion.com/register`, DCR soportado) → registra cliente → abre navegador (loopback `127.0.0.1:8085/callback`) → intercambia código. **Resultado: success**. Token guardado por el harness en `~/.commandcode/mcp-tokens.json` (modo 0600, fuera del repo; no se imprimió ni copió).
+
+**Verificación (lecturas reales, sin escrituras)**:
+- Conexión OK → **77 herramientas** MCP (`notion-search`, `notion-fetch`, `notion-create-pages`, `notion-update-page`, …).
+- `notion-search("Product Backlog")` → devuelve la base y páginas del workspace (p. ej. "DiscNativePro — Centro de desarrollo", "Guía de trabajo con agentes — DiscNativePro").
+- `notion-fetch` de una página → contenido real (9 411 chars) leído.
+- Esquema real de **Product Backlog** (`collection://418800c3-6a0b-8147-a3c2-000b4ce6a9a9`): Tarea[title], Ticket ID[auto_increment_id], Tipo[Bug|Fix|Feature|Mejora UX|Refactor|Deuda técnica|Investigación], Estado[status], Prioridad[Crítica|Alta|Media|Baja], Agente[Command Code|Quoder|Otro|Sin asignar], Impacto, Dificultad, Esfuerzo estimado, Confianza de estimación, Validación[No iniciada|Pendiente|En pruebas|Aprobada|Fallida|Revisión humana], Progreso[number], Horas estimadas[number], Criterios de aceptación[text], Plan de implementación[text], Resultado / notas técnicas[text], Bloqueo[text], Branch / PR / Commit[url], Feedback relacionado[relation], Fecha de inicio/finalización[date], Creado[created_time], Última edición[last_edited_time].
+- Esquema real de **Feedback Inbox** (`collection://418800c3-6a0b-81c9-b01d-000b5b334a8b`): Comentario[title], Feedback ID[auto_increment_id], Estado de análisis[Sin analizar|Analizado|Convertido en tarea|Duplicado|Descartado], Origen[Usuario|Testing|Interno|GitHub|Otro], Tipo[Bug|Feature request|UX|Rendimiento|Compatibilidad|Idea|Otro], Impacto reportado[Bajo|Medio|Alto|Crítico|Desconocido], Plataforma[multi_select], Pasos para reproducir[text], Resultado esperado/actual[text], Notas del análisis[text], Entorno / Hardware[text], Versión de la app[text], URL de origen[url], Tareas relacionadas[relation], Fecha recibido[date], Creado[created_time], Última edición[last_edited_time].
+
+**Notas**: no se creó ni modificó ningún contenido en Notion (solo lecturas); no se crearon tickets de prueba. Para que la **sesión del agente** reciba las tools de Notion hace falta releer los MCP (reiniciar la app o reconectar; el token ya está en el vault). Limitación: el flujo OAuth abre la web con navegador del sistema; no puede completarse sin intervención del usuario.
+
+---
+
+# Walkthrough — P33: distribución Linux como AppImage + memoria compartida Engram (2026-11-16, rama axel-molina/v1.4.2)
+
+## Parte 1 — AppImage (alcance A: audio + GUI autocontenido)
+
+**Objetivo**: entregar Linux como un único archivo ejecutable, sin depender de que el usuario instale dependencias del sistema. El `.deb` y el `.tar.gz` que ya existían siguen igual: esta vía es **aditiva**, no reemplaza ninguna distribución.
+
+**Qué NO cambia (riesgo cero)**: no se toca `CMakeLists.txt`, ni el código C++, ni el `.deb` (CPack), ni los flujos de macOS/Windows. `installer/linux/build-appimage.sh` es un script aislado que solo arma un `AppDir` y llama a `linuxdeploy`.
+
+**`[NEW]` `installer/linux/build-appimage.sh`** (chmod +x, validado con `bash -n`):
+1. Arma el `AppDir`: `usr/bin/`, `usr/share/applications/`, `usr/share/icons/hicolor/256x256/apps/`.
+2. Copia el binario `DiscNativePro` de `build/` y el runtime ONNX.
+3. Crea el enlace `libonnxruntime.so.1` (ver bug latente más abajo).
+4. Copia `install/linux/discnativepro.desktop` y `assets/icon.png` (el `Icon=discnativepro` del .desktop coincide con el nombre del PNG).
+5. Descarga `linuxdeploy-x86_64.AppImage` + `linuxdeploy-plugin-gtk-x86_64.AppImage` y empaqueta con `--plugin gtk`.
+6. Renombra a `DiscNativePro-Linux-x86_64.AppImage` y borra el `AppDir` y los AppImages descargados.
+
+Variables de entorno: `APPIMAGE_EXTRACT_AND_RUN=1` (los runners de GitHub no tienen FUSE → el AppImage se autoextrae) y `ARCH=x86_64`.
+
+**Bug latente encontrado (y corregido a nivel de empaquetado)**: el `POST_BUILD` de CMake copia solo el archivo versionado `libonnxruntime.so.1.31.1`, pero el loader de ELF resuelve `DT_NEEDED` por **SONAME**, que en ONNX Runtime es `libonnxruntime.so.1`. Sin un archivo llamado exactamente `libonnxruntime.so.1` al lado del binario (rpath `$ORIGIN`), la app no arranca. El `.deb` no suffers el problema porque CPack renombra el archivo al nombre del SONAME; el **tar.gz sí lo sufría** (solo subía el `.so.1.31.1`). Fix aplicado en los tres puntos de empaquetado:
+- `installer/linux/build-appimage.sh`: copia el `.so` real y crea `ln -sf libonnxruntime.so.1.31.1 libonnxruntime.so.1`.
+- `.github/workflows/build-linux.yml` y `.github/workflows/release.yml` (paso del tar.gz): mismo enlace simbólico en `dist/`.
+- `CMakeLists.txt` **no se modificó** (queda fuera del alcance aprobado); si se quiere arreglar de raíz, el cambio natural es que el `POST_BUILD` renombre el `.so` al SONAME.
+
+**Workflows** (`[MODIFY]`):
+- `build-linux.yml`: paquetes apt para el plugin gtk (`librsvg2-dev`, `libgdk-pixbuf-2.0-dev`, `file`; `libgirepository-2.0-dev` con fallback a `libgirepository1.0-dev` porque el nombre del paquete cambió en Ubuntu 24.04), pasos nuevos "Package Linux AppImage" + "Upload Linux AppImage Artifact" (`DiscNativePro-Linux-AppImage`).
+- `release.yml`: mismos paquetes, mismo fix del SONAME, "Package Linux AppImage" + artifact `linux-appimage-artifact`, "Download Linux AppImage Artifact" en `publish-release` y `DiscNativePro-Linux-x86_64.AppImage` agregado a la lista `files:` del release.
+
+**Verificación**:
+- `bash -n installer/linux/build-appimage.sh` → OK; ambos YAML parsean con PyYAML (`build-linux` → job `build-linux`; `release` → `build-windows`, `build-linux`, `build-macos`, `publish-release`).
+- Rutas confirmadas en disco: `install/linux/discnativepro.desktop`, `assets/icon.png`.
+- `cmake --build build` (Release) → **0 errores, 0 warnings** (el árbol incluye los cambios P31/P32b sin commitear de otros agentes).
+- Regla de relanzamiento cumplida: `pkill` → `open build/DiscNativePro_artefacts/Release/DiscNativePro.app` → `pgrep` (PID 30928 vivo).
+- **No se puede generar el AppImage en esta máquina**: es Linux-only. La verificación real ocurre en el primer run de CI en Linux (puede requerir 1-2 iteraciones).
+
+**Limitaciones conocidas (alcance A)**:
+- **Video de YouTube puede no funcionar**: depende de WebKitGTK. `linuxdeploy` empaqueta lo que detecta, pero los procesos auxiliares (`WebKitWebProcess`, `WebKitNetworkProcess`) y los plugins de GStreamer no se empaquetan. No se excluyó WebKitGTK a propósito: excluirlo dejaría `DT_NEEDED` sin resolver y la app no arrancaría.
+- **glibc mínimo**: se compila en `ubuntu-latest` (glibc 2.39) → el AppImage no corre en distribuciones muy viejas (Debian 11, Ubuntu 20.04).
+- **Modelos de stems**: no se empaquetan (están gitignored); sin ellos la separación degrada al modo completo.
+- `yt-dlp`/`ffmpeg` se descargan en runtime, no van dentro del AppImage.
+
+## Parte 2 — Memoria compartida entre agentes (Engram)
+
+**Problema**: con varios agentes de IA trabajando sobre el mismo repo, cada uno arranca sin contexto y el usuario termina copiando/pegueando chats para transferirlos.
+
+**Solución**: [Engram](https://github.com/Gentleman-Programming/engram) — store local SQLite (`~/.engram/engram.db`) que los agentes leen/escriben vía MCP stdio. Proyecto fijado como `discnativepro` en los 5 agentes: **Qoder, Codex, OpenCode, Antigravity** y **Command Code** (este último configurado por el usuario).
+
+**Configuración clave (el gotcha que costó tiempo)**: Qoder lanza los servidores MCP stdio con `cwd=/`, no con la carpeta del workspace → la detección de proyecto por directorio falla y todo caía en `project: "unknown"`. Por eso el proyecto va **fijado explícitamente** con `--project=discnativepro` en cada config (el flag y la variable `ENGRAM_PROJECT` son el mismo mecanismo; gana el flag). Verificado: `project_source: "process_override"` incluso con `cwd=/`.
+
+**Binding al repo**: `[NEW]` `.engram/config.json` con `{"project_name": "DiscNativePro"}` (engram lo normaliza a `discnativepro`). Se agregó `.engram/` a `.gitignore` porque es estado local de la máquina.
+
+**Verificación real** (no declarativa):
+- `engram doctor` → **10/10 checks OK**.
+- Handshake stdio real desde `cwd=/` → `{"project":"discnativepro","project_source":"process_override"}`.
+- `mem_list_projects` → 1 proyecto vinculado al repo.
+- 2 observaciones guardadas (setup + pinning del proyecto) con el conflicto resuelto vía `mem_judge` (relation "related", confianza 0.9).
+- En Qoder, el server `engram` figura registrado (user-scope, status "ready") con las 23 tools `mem_*` disponibles.
+
+**`[MODIFY]` `AGENTS.md`**: se agregó la sección "## 5. Memoria Compartida entre Agentes (Engram)" con el store, el proyecto fijado, el binding del repo y 5 reglas de uso (consultar `mem_current_project`/`mem_context` al arrancar; guardar decisiones/fixes proactivamente con `mem_save`; `mem_session_summary` tras compactaciones; no pedir chats al usuario; la memoria es bookkeeping interno, nunca reemplaza la respuesta final).
+
+**Nota**: los archivos de config de cada agente viven en su home (`~/.codex/config.toml`, `~/.config/opencode/opencode.json`, `~/.gemini/config/mcp_config.json`, `~/.commandcode/mcp.json`) y quedan fuera del repo. No se copiaron ni imprimieron tokens/secretos de terceros que ya estaban en esos archivos.
+
+**Pendiente del usuario**: verificar en la próxima sesión de cada agente que `mem_context` devuelve el contexto del proyecto; la primera corrida de CI del AppImage puede necesitar iteración (ajustes de paquetes del plugin gtk o del nombre del AppImage generado).
