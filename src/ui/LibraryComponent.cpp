@@ -1838,9 +1838,14 @@ void LibraryComponent::showTrackContextMenu(int rowNumber)
     const auto& store = PlaylistStore::getInstance();
     auto playlists = store.getPlaylists();
 
-    enum { idRemove = 1, idNew = 2, idFirstPlaylist = 100 };
+    enum { idEditGrid = 3, idRemove = 1, idNew = 2, idFirstPlaylist = 100 };
 
     juce::PopupMenu m;
+    // P45 (Notion #21): edición de BPM/beat grid estilo Virtual DJ — aplica
+    // sobre la fila clicada (editor mono-pista), sin cargar la bandeja.
+    m.addItem(idEditGrid,
+              LanguageManager::trUtf8("Editar BPM / beat grid", "Edit BPM / beat grid"),
+              true, false);
     if (inPlaylistView)
         m.addItem(idRemove,
                   LanguageManager::trUtf8("Quitar de esta playlist", "Remove from this playlist"),
@@ -1862,7 +1867,14 @@ void LibraryComponent::showTrackContextMenu(int rowNumber)
     m.addSubMenu(LanguageManager::trUtf8("Añadir a playlist", "Add to playlist"), plMenu);
 
     m.showMenuAsync(juce::PopupMenu::Options().withTargetComponent(this).withMousePosition(),
-        [this, inPlaylistView, itemToPlaylist, tracks](int result) {
+        [this, inPlaylistView, itemToPlaylist, tracks, clickedFile = filteredTracks[static_cast<size_t>(rowNumber)].file](int result) {
+            // P45 (Notion #21): editar BPM/beat grid de la fila clicada.
+            if (result == idEditGrid && onEditTrackGrid)
+            {
+                onEditTrackGrid(clickedFile);
+                return;
+            }
+
             auto& plStore = PlaylistStore::getInstance();
 
             if (result == idRemove && inPlaylistView)

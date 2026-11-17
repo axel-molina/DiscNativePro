@@ -106,6 +106,8 @@ public:
     void updateActiveTrackContext(const CurrentTrackContext& ctx);
 
     std::function<void(int deckIndex, const juce::File& file)> onLoadTrack;
+    // P45 (Notion #21): clic derecho → editar BPM/beat grid sin cargar bandeja.
+    std::function<void(const juce::File& file)> onEditTrackGrid;
     std::function<void(int deckIndex, const struct YouTubeSearchResult& video)> onLoadYouTubeTrack;
     std::function<void(const std::vector<TrackItem>&)> onStartAutomix;
     std::function<void()> onStopAutomix;

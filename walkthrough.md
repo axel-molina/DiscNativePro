@@ -2725,3 +2725,50 @@ El usuario probó en su MacBook Air M1: **«funciona perfecto, ambas bandejas, t
 - Binario principal: `otool` → **minos 13.3** (antes 14.0). Info.plist → **LSMinimumSystemVersion 13.3**.
 - Relanzamiento obligatorio: pkill + open Release → proceso activo (pgrep OK).
 - Nota: la validación real «arranca en Ventura 13» queda cubierta por el piso binario declarado (13.3); ninguna máquina de prueba con Ventura disponible en esta etapa — el criterio de aceptación del ticket se cierra por decisión documentada del usuario (opción b), igual que #13 se cerró por asunción.
+
+---
+
+# DNP-TK-18: Marquesina al estilo pro en el título y artista sobre las bandejas
+
+> Ticket: Notion DNP-TK-18 «Título de canción largo sobre las bandejas: marquesina al estilo software pro» · Origen FB-15 (UX, usuario) · rama `axel-molina/v1.4.2`.
+
+## Decisiones confirmadas (2026-11-17, ask_user_question)
+1. Comportamiento: **deslizar siempre si no cabe** (no solo hover; automatizado).
+2. Alcance: **título y artista** (mismos 2 labels del header).
+3. Estilo: **scroll continuo, pausa corta entre pasadas** (~700 ms en extremos).
+4. Bucle: **loop con retorno a inicio** (el original vuelve a quedar visible al recomenzar).
+5. Bilingüe ES/EN (los textos ya pasan por setText actual); consistente en Deck 1 y Deck 2.
+
+## Cambios
+- [NEW] `src/ui/MarqueeLabel.h/.cpp`: Component propio tipo Label mínimo. API: setText/getText, setFont(Font|FontOptions), setJustificationType/getJustificationType, setColour(textColourId). Pintado: si el texto no excede el ancho → estático; si excede → dos copias del texto (separadas por 48 px) desplazándose en loop con clip; ~38 px/s, pausa 700 ms en extremos, timer propio a ~30 Hz solo cuando hay overflow y el componente está visible (visibilityChanged detiene/arranca el timer).
+- [MODIFY] `src/ui/DeckComponent.h/.cpp`: `titleLabel` y `artistLabel` pasan de `juce::Label` a `MarqueeLabel` (mismas llamadas existentes: setText/setFont(FontOptions)/setColour(textColourId); los puntos de setText no cambian). CMake: fuentes agregadas al target.
+- Sin cambios: el resto de labels (timeRemaining, keyBadge, bpm, pitchDelta, keyShiftLabel), `jogWheel.setTrackInfo` (usa getText(), igual), timerCallback del deck.
+
+## Verificación
+- `cmake --build build` → **0 errores, 0 warnings** en código propio (solo el aviso preexistente de ld: dylib ONNX 1.27.0 minos 14.0 vs deployment target; el código compila en la rama OK).
+- Instalado: `open build/.../Release/DiscNativePro.app` → PID 74449 vivo (sin pkill global; filtro por ruta del worktree).
+- **Pendiente de validación humana del usuario** (no automatizable desde acá):
+  1. Cargar una pista con título largo (p.ej. "Artist - Song Title (Remix Long Version Official Audio)"): comprobar que se desliza en loop con pausa en extremos y que el original vuelve a quedar visible al recomenzar.
+  2. Título corto ("Tema"): estático, sin movimiento.
+  3. Artista largo (para pistas cuyos metadatos den artista extenso): igual.
+  4. Cambiar idioma en Ajustes → comprobar que textos e idioma son correctos y la marquesina sigue funcionando (el copy completo vía setText actual se actualiza).
+
+
+## Validación humana (2026-11-17)
+El usuario confirmó visualmente en la app: «funciona perfecto». Se cumplen los criterios de aceptación (título/artista largos se deslizan en loop con pausa corta en extremos y retorno al inicio; corto estático; bilingüe; consistente entre bandejas). Ticket DNP-TK-18 → Finalizado / Progreso 100 / Validación Aprobada / Fecha de finalización 2026-11-17.
+---
+
+# P45: clic derecho → «Editar BPM / beat grid» sin pasar por la bandeja (Notion #21)
+
+> Ticket: Notion **#21** (FB-16, estilo Virtual DJ) · decisión del usuario: la edición se aplica sobre el archivo, sin carga en bandeja.
+
+## Cambios
+- `src/audio/AudioEngine.h/.cpp`: tercer `DeckPlayer previewDeck` (miembro por valor, como deck1/deck2 — sin punteros cruzando hilos) + `previewBuffer` preasignado + flag atómico `previewActive`. En el callback RT (4b): si activo, `getNextAudioBlock` del preview sumado al par master del output físico (`FloatVectorOperations::add`) — fuera de recorder/broadcast/crossfader/EQ. RT-safe: sin allocs ni locks (patrón §3 AGENTS.md). `prepareToPlay`/`releaseResources` del preview junto a deck1/deck2.
+- `src/ui/LibraryComponent.h/.cpp`: callback `onEditTrackGrid(file)` + primer ítem del menú contextual «Editar BPM / beat grid» (bilingüe, siempre habilitado; actúa sobre la fila clicada).
+- `src/ui/MainComponent.h/.cpp`: `openGridEditorWindow(DeckPlayer&, int, extraCleanup)` generaliza el DialogWindow (título sin número de deck para el preview, deckNumber -1 — WaveformTheme ya hace clamp, seguro); regla: pista ya cargada en Deck 1/2 → editor de esa bandeja sin recargar; si no → preview deck + PLAY audible; al cerrar, `stop()` + flag off.
+- `src/ui/DeckComponent.h`: getter `getCurrentFile()` para la comparación.
+
+## Verificación
+- `cmake --build build` → 0 errores; sin warnings de nuestro código (los de harfbuzz/JUCE son vendorizados, preexistentes).
+- Relanzamiento obligatorio: pkill + open Release → proceso activo (pgrep OK).
+- **Pendiente de validación humana (usuario)**: clic derecho sobre canción sin cargar → editor abre sin tocar bandejas y el PLAY del editor suena; los ajustes persisten por archivo (reabrir muestra el grid guardado). Con la pista ya en un deck → editor de esa bandeja. Probar en inglés.

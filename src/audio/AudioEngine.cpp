@@ -119,7 +119,8 @@ namespace
 
 AudioEngine::AudioEngine()
     : deck1(formatManager, diskReaderThread),
-      deck2(formatManager, diskReaderThread)
+      deck2(formatManager, diskReaderThread),
+      previewDeck(formatManager, diskReaderThread) // P45: preview para GridEditor
 {
     // Register audio formats (WAV, AIFF, FLAC, OGG, and CoreAudio MP3/AAC/M4A on macOS are all in basic formats)
     formatManager.registerBasicFormats();
@@ -329,9 +330,11 @@ void AudioEngine::audioDeviceAboutToStart(juce::AudioIODevice* device)
     deck2Buffer.setSize(2, currentBlockSize, false, true, true);
     masterBuffer.setSize(2, currentBlockSize, false, true, true);
     cueBuffer.setSize(2, currentBlockSize, false, true, true);
+    previewBuffer.setSize(2, currentBlockSize, false, true, true); // P45
 
     deck1.prepareToPlay(currentBlockSize, currentSampleRate);
     deck2.prepareToPlay(currentBlockSize, currentSampleRate);
+    previewDeck.prepareToPlay(currentBlockSize, currentSampleRate); // P45
     djMixer.prepare(currentSampleRate, currentBlockSize);
 }
 
@@ -340,6 +343,7 @@ void AudioEngine::audioDeviceStopped()
     audioRecorder.stopRecording();
     deck1.releaseResources();
     deck2.releaseResources();
+    previewDeck.releaseResources(); // P45
     djMixer.reset();
 
     // Si el dispositivo se detuvo inesperadamente (ej. WebKit o CoreAudio),
@@ -509,6 +513,24 @@ void AudioEngine::audioDeviceIOCallbackWithContext(const float* const* inputChan
             {
                 std::memset(outputChannelData[ch], 0, sizeof(float) * (size_t)numSamples);
             }
+        }
+    }
+
+    // 4b. P45 (Notion #21): deck de previsualización (GridEditor sin bandeja).
+    // Monitoreo directo al par master del output físico; no entra al
+    // recorder/broadcast ni al crossfader/EQ. RT-safe: buffer preasignado y
+    // flag atómico (sin allocs ni locks en el callback).
+    if (previewActive.load(std::memory_order_relaxed))
+    {
+        previewBuffer.clear(0, numSamples);
+        juce::AudioSourceChannelInfo pvInfo(&previewBuffer, 0, numSamples);
+        previewDeck.getNextAudioBlock(pvInfo);
+        for (int ch = 0; ch < 2; ++ch)
+        {
+            if (masterPair * 2 + ch < numOutputChannels)
+                juce::FloatVectorOperations::add(outputChannelData[masterPair * 2 + ch],
+                                                 previewBuffer.getReadPointer(ch),
+                                                 numSamples);
         }
     }
 }

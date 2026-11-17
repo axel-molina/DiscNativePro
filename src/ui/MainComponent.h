@@ -65,6 +65,10 @@ private:
     void startSmartAutomix();
     void openSettings(int targetTab = 0);
     void openGridEditor(int deckIndex);
+    // P45 (Notion #21): editor de beat grid sobre cualquier DeckPlayer
+    // (bandeja real o deck de previsualización del motor).
+    void openGridEditorWindow(DeckPlayer& deck, int deckNumber,
+                              std::function<void()> extraCleanup);
     void showWelcomeDialog();
 
     // Update notification (GitHub Releases, once per launch)

@@ -133,6 +133,31 @@ MainComponent::MainComponent()
     deck1.onEditGrid = [this](int deckIndex) { openGridEditor(deckIndex); };
     deck2.onEditGrid = [this](int deckIndex) { openGridEditor(deckIndex); };
 
+    // P45 (Notion #21): clic derecho en biblioteca → editar BPM/beat grid
+    // sin pasar por la bandeja (deck de previsualización del motor).
+    library.onEditTrackGrid = [this](const juce::File& file) {
+        // Ya cargada en una bandeja: editor de esa bandeja, sin recargar.
+        if (deck1.getCurrentFile() == file)
+        {
+            openGridEditor(0);
+            return;
+        }
+        if (deck2.getCurrentFile() == file)
+        {
+            openGridEditor(1);
+            return;
+        }
+        // Sin cargar: deck de previsualización (no toca bandejas visibles).
+        auto& pv = audioEngine.getPreviewDeck();
+        if (!pv.loadFile(file))
+            return; // loadFile ya reporta su propio error de formato/lectura
+        audioEngine.setPreviewActive(true);
+        openGridEditorWindow(pv, -1, [this]() {
+            audioEngine.getPreviewDeck().stop();
+            audioEngine.setPreviewActive(false);
+        });
+    };
+
     library.onLoadYouTubeTrack = [this](int deckIndex, const YouTubeSearchResult& video) {
         if (deckIndex == 0)
             deck1.loadYouTubeVideo(video);
@@ -997,18 +1022,28 @@ void MainComponent::showWelcomeDialog()
 
 void MainComponent::openGridEditor(int deckIndex)
 {
+    openGridEditorWindow(audioEngine.getDeck(deckIndex), deckIndex, {});
+}
+
+// P45 (Notion #21): editor de beat grid sobre cualquier DeckPlayer — bandeja
+// real (deckNumber 0/1) o deck de previsualización (deckNumber -1, título sin
+// número). extraCleanup libera recursos del preview al cerrar la ventana.
+void MainComponent::openGridEditorWindow(DeckPlayer& deck, int deckNumber,
+                                         std::function<void()> extraCleanup)
+{
     if (gridWindow != nullptr)
     {
         gridWindow->toFront(true);
         return;
     }
 
-    auto& deck = audioEngine.getDeck(deckIndex);
-    auto* modal = new GridEditorComponent(deck, audioEngine, deckIndex);
+    auto* modal = new GridEditorComponent(deck, audioEngine, deckNumber);
     modal->setSize(720, 440);
     juce::DialogWindow::LaunchOptions opt;
-    opt.dialogTitle = LanguageManager::trUtf8("Editor de Beat Grid — Deck ", "Beat Grid Editor — Deck ")
-                    + juce::String(deckIndex + 1);
+    opt.dialogTitle = deckNumber >= 0
+        ? LanguageManager::trUtf8("Editor de Beat Grid — Deck ", "Beat Grid Editor — Deck ")
+          + juce::String(deckNumber + 1)
+        : LanguageManager::trUtf8("Editor de Beat Grid", "Beat Grid Editor");
     opt.dialogBackgroundColour = juce::Colour::fromRGB(20, 22, 30);
     opt.content.setOwned(modal);
     opt.resizable = false;
@@ -1016,7 +1051,9 @@ void MainComponent::openGridEditor(int deckIndex)
     opt.escapeKeyTriggersCloseButton = true;
     gridWindow = opt.launchAsync();
 
-    modal->onClosed = [this]() {
+    modal->onClosed = [this, cleanup = std::move(extraCleanup)]() {
+        if (cleanup)
+            cleanup();
         if (gridWindow != nullptr)
             gridWindow->closeButtonPressed();
     };

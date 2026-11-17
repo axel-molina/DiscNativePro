@@ -5,6 +5,7 @@
 #include "../audio/DeckPlayer.h"
 #include "JogWheel.h"
 #include "OverviewWaveform.h"
+#include "MarqueeLabel.h"
 #include "DjLookAndFeel.h"
 #include "CoverArtGenerator.h"
 #include "DjButton.h"
@@ -77,6 +78,9 @@ public:
     juce::String getTrackKey() const { return keyBadge.getText(); }
     juce::String getVideoId() const { return loadedVideoId; }
     bool isLoaded() const { return deck.isLoaded() || isVideoMode; }
+    // P45 (Notion #21): archivo cargado en esta bandeja (comparación para el
+    // clic derecho → editar grid de una pista ya cargada).
+    const juce::File& getCurrentFile() const { return deck.getCurrentFile(); }
 
     static juce::String sanitizeTrackString(const juce::String& text);
     static juce::String stripTrackNumberPrefix(const juce::String& filename);
@@ -126,8 +130,8 @@ private:
     juce::uint32 videoLastTickMs { 0 };
 
     // Header elements (Matching DiscPro DeckHeader.tsx)
-    juce::Label titleLabel;
-    juce::Label artistLabel;
+    MarqueeLabel titleLabel;
+    MarqueeLabel artistLabel;
     juce::Label timeRemainingLabel;
     juce::Label keyBadge;
     juce::Label bpmLabel;

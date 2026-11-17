@@ -40,6 +40,9 @@ public:
 
     // Deck & Mixer access
     DeckPlayer& getDeck(int deckIndex) { return deckIndex == 0 ? deck1 : deck2; }
+    // P45 (Notion #21): previsualización para el GridEditor sin bandeja.
+    DeckPlayer& getPreviewDeck()      { return previewDeck; }
+    void setPreviewActive(bool active) { previewActive.store(active); }
     DjMixer& getMixer()                { return djMixer; }
     SamplerBank& getSampler()          { return samplerBank; }
     juce::AudioDeviceManager& getDeviceManager() { return deviceManager; }
@@ -127,6 +130,11 @@ private:
 
     DeckPlayer deck1;
     DeckPlayer deck2;
+    // P45 (Notion #21): deck de previsualización para editar el beat grid sin
+    // cargar la pista en una bandeja. Miembro por valor como deck1/deck2: el
+    // callback de audio lo consulta por flag atómico, sin punteros cruzando
+    // hilos. No pasa por crossfader/EQ/recorder: monitoreo directo al master.
+    DeckPlayer previewDeck;
     DjMixer djMixer;
     SamplerBank samplerBank;
     AudioRecorder audioRecorder;
@@ -140,6 +148,7 @@ private:
     juce::AudioBuffer<float> deck2Buffer;
     juce::AudioBuffer<float> masterBuffer;
     juce::AudioBuffer<float> cueBuffer;
+    juce::AudioBuffer<float> previewBuffer;
 
     double currentSampleRate { 44100.0 };
     int currentBlockSize { 512 };
@@ -148,6 +157,7 @@ private:
     std::atomic<int> cueChannelPair { 1 };    // Pair 1 = Ch 3-4 (Headphones on DDJ-SB2)
 
     std::atomic<bool> tempoBlendActive { false };
+    std::atomic<bool> previewActive { false }; // P45: deck de previsualización
     std::atomic<bool> loadLockEnabled { false };
     std::atomic<bool> autoplayOnLoadEnabled { true };
     std::atomic<float> currentCrossfaderVal { 0.0f };
