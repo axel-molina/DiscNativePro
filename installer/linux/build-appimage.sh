@@ -73,6 +73,9 @@ chmod +x "$LINUXDEPLOY" "$GTK_PLUGIN"
 # Los runners de GitHub no tienen FUSE: el AppImage se ejecuta desempaquetado.
 export APPIMAGE_EXTRACT_AND_RUN=1
 export ARCH=x86_64
+# JUCE carga GTK en runtime (no lo declara como DT_NEEDED), así que el plugin
+# no puede autodetectar la versión desde ldd. La app usa GTK 3.
+export DEPLOY_GTK_VERSION="${DEPLOY_GTK_VERSION:-3}"
 
 echo "==> Generando AppImage"
 "./${LINUXDEPLOY}" \

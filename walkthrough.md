@@ -2962,3 +2962,6 @@ El job Linux x64 **sí compiló** (CMake, build, .tar.gz y .deb pasaron); falló
 ## Publicación
 - Commit del fix pusheado a `axel-molina/v1.4.2`.
 - Como el tag v1.4.2 apuntaba al commit anterior y **no se había publicado ningún GitHub Release** (`gh release view v1.4.2` → not found; el job publish nunca se alcanzó porque Linux falló), se reubica el tag sobre el commit del fix y se relanza el release. Notion #4 (AppImage, Quoder) queda con esta nota.
+
+## Fix CI v1.4.2 (2ª iteración): GTK version auto-detect
+El nuevo run 44175657436 volvió a fallar solo en AppImage: `linuxdeploy-plugin-gtk.sh: failed to auto-detect GTK version — Please set DEPLOY_GTK_VERSION`. Causa: JUCE carga GTK en runtime (no es DT_NEEDED), así que el `ldd` del plugin no detecta `libgtk-3.so`. Fix en `installer/linux/build-appimage.sh`: `export DEPLOY_GTK_VERSION="${DEPLOY_GTK_VERSION:-3}"` antes de linuxdeploy. Windows volvió a dar success.
