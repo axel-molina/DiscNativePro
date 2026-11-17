@@ -2801,3 +2801,7 @@ El usuario confirmó: **«funciona bien»** (clic derecho sin cargar → editor 
 - Relanzamiento obligatorio: pkill + open Release → proceso activo (pgrep OK).
 - **Pendiente de validación humana (usuario)**: revisión visual global — todo
   cuadrado (botones, cards, tablas, badges, LEDs, barras), iconos intactos.
+
+## Iteración y validación humana (2026-11-17)
+- Iteración 2 (commit 13e362a): radio uniforme **3 px** en toda la UI — feedback del usuario: el radio 0 «pareece demasiado filoso». Mismo script con valor 3.0f + DjButton default 3.0f + `float corner` de DjLookAndFeel.
+- El usuario confirmó **«Mucho mejor»** con radio 3. Ticket Notion #7 → Finalizado / Progreso 100 / Validación Aprobada / Fecha de finalización 2026-11-17.
