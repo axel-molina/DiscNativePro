@@ -2904,3 +2904,6 @@ El usuario describió el problema: «el icono del círculo está muy pegado a la
 
 ## P48 (fix 3): reduce separación logo Disc ↔ título
 El usuario indicó que con 12 px de gap el logo quedaba «demasiado lejos». Se reduce la separación a 4 px en `TopBarComponent::resized()` (mantiene el conjunto logo+texto centrado, sin solape). Build 0 errores / sin warnings propios; app relanzada. Pendiente validación visual.
+
+## Validación humana (2026-11-17) — P48
+El usuario confirmó: **«perfecto»** tras el ajuste final de 4 px. P48 validado: badge «2 Bandejas» en el cluster izquierdo, título centrado y logo Disc con separación cómoda. Sin ticket de Notion asociado (pedido directo tras desestimar #9).
