@@ -2948,3 +2948,17 @@ El usuario confirmó: **«funciona»**. Verificado el cambio de idioma en cal de
 - `git tag -a v1.4.2 -m "DiscNativePro v1.4.2"` + `git push origin v1.4.2` → tag publicado sobre `c2b79b3`.
 - CI: `Release Binaries` run **44167769685** disparado por el tag (compila Windows/Linux/macOS y publica el GitHub Release solo si las 3 pasan). Estado inicial: queued.
 - Notion #14 actualizado: bloqueo de publicación levantado; pendiente el resultado del CI y la validación en las dos portátiles Windows del usuario.
+
+---
+
+# Fix CI v1.4.2: AppImage (run 44167769685)
+
+## Diagnóstico
+El job Linux x64 **sí compiló** (CMake, build, .tar.gz y .deb pasaron); falló el paso `Package Linux AppImage` con `curl: (22) The requested URL returned error: 404`. Causa: `installer/linux/build-appimage.sh` descargaba `linuxdeploy-plugin-gtk-x86_64.AppImage` desde `github.com/linuxdeploy/linuxdeploy-plugin-gtk/releases/download/continuous/...`, pero ese repo ya no publica releases (verificado: `gh api repos/linuxdeploy/linuxdeploy-plugin-gtk/releases` → `[]`). El plugin se distribuye hoy como script `linuxdeploy-plugin-gtk.sh` en `raw.githubusercontent.com/.../master/` (verificado HTTP 200).
+
+## Fix
+- `installer/linux/build-appimage.sh`: `GTK_PLUGIN="linuxdeploy-plugin-gtk.sh"` y URL al raw del script. `bash -n` OK.
+
+## Publicación
+- Commit del fix pusheado a `axel-molina/v1.4.2`.
+- Como el tag v1.4.2 apuntaba al commit anterior y **no se había publicado ningún GitHub Release** (`gh release view v1.4.2` → not found; el job publish nunca se alcanzó porque Linux falló), se reubica el tag sobre el commit del fix y se relanza el release. Notion #4 (AppImage, Quoder) queda con esta nota.

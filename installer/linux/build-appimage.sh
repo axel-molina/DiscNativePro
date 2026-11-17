@@ -20,7 +20,9 @@ APP_NAME="DiscNativePro"
 APPDIR="$ROOT/AppDir"
 OUTPUT="$ROOT/${APP_NAME}-Linux-x86_64.AppImage"
 LINUXDEPLOY="linuxdeploy-x86_64.AppImage"
-GTK_PLUGIN="linuxdeploy-plugin-gtk-x86_64.AppImage"
+# El plugin gtk dejó de publicarse como AppImage: el release "continuous"
+# ya no existe (404). La fuente oficial es este script .sh del repositorio.
+GTK_PLUGIN="linuxdeploy-plugin-gtk.sh"
 
 echo "==> Armando AppDir"
 rm -rf "$APPDIR"
@@ -65,7 +67,7 @@ echo "==> Descargando linuxdeploy y el plugin gtk"
 curl -fsSL -o "$LINUXDEPLOY" \
   "https://github.com/linuxdeploy/linuxdeploy/releases/download/continuous/${LINUXDEPLOY}"
 curl -fsSL -o "$GTK_PLUGIN" \
-  "https://github.com/linuxdeploy/linuxdeploy-plugin-gtk/releases/download/continuous/${GTK_PLUGIN}"
+  "https://raw.githubusercontent.com/linuxdeploy/linuxdeploy-plugin-gtk/master/linuxdeploy-plugin-gtk.sh"
 chmod +x "$LINUXDEPLOY" "$GTK_PLUGIN"
 
 # Los runners de GitHub no tienen FUSE: el AppImage se ejecuta desempaquetado.
