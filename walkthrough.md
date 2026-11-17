@@ -2772,3 +2772,6 @@ El usuario confirmó visualmente en la app: «funciona perfecto». Se cumplen lo
 - `cmake --build build` → 0 errores; sin warnings de nuestro código (los de harfbuzz/JUCE son vendorizados, preexistentes).
 - Relanzamiento obligatorio: pkill + open Release → proceso activo (pgrep OK).
 - **Pendiente de validación humana (usuario)**: clic derecho sobre canción sin cargar → editor abre sin tocar bandejas y el PLAY del editor suena; los ajustes persisten por archivo (reabrir muestra el grid guardado). Con la pista ya en un deck → editor de esa bandeja. Probar en inglés.
+
+## Validación humana (2026-11-17)
+El usuario confirmó: **«funciona bien»** (clic derecho sin cargar → editor con audición y persistencia; con pista ya en bandeja → editor de esa bandeja). Ticket Notion #21 → Finalizado / Progreso 100 / Validación Aprobada / Fecha de finalización 2026-11-17.
