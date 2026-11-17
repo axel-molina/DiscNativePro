@@ -2657,4 +2657,8 @@ Las 11 pestañas de `SettingsModalComponent` se maquetan a mano con filas fijas 
 
 - `cmake --build build` → **0 errores, 0 warnings** (`[100%] Built target DiscNativePro`).
 - Relanzamiento: `pkill` + `open …Release/DiscNativePro.app` → proceso activo (PID verificado).
-- **Pendiente de validación humana (usuario)**: escribir «buffer», «carpeta», «bitrate», «midi», «color»; verificar salto + resaltado en español y en inglés, y el caso «Sin resultados» (p. ej. «xyz»).
+- **Pendiente de validación humana (usuario)**: escribir «buffer», «carpeta», «bitrate», «midi», «color», «bpm» y el caso «Sin resultados» («xyz»), en español e inglés.
+
+## 4. Validación humana (2026-11-17)
+
+El usuario probó el buscador y confirmó **«funciona excelente»**. El ticket #5 queda **Finalizado / Progreso 100 / Validación Aprobada** — sin ajustes pendientes.
