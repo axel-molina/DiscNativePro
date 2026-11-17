@@ -33,7 +33,7 @@ public:
 
     bool getTrack(const juce::File& file, CachedTrackMetadata& outMeta);
     void storeTrack(const juce::File& file, const CachedTrackMetadata& meta, bool autoSave = false);
-    void updateBpmAndKey(const juce::File& file, double bpm, const juce::String& key);
+    void updateBpmAndKey(const juce::File& file, double bpm, const juce::String& key, double duration = 0.0);
     void updateGrid(const juce::File& file, double gridBpm, double gridFirstBeatOffset);
     void updateHotCues(const juce::File& file, const std::array<double, 4>& hotCues);
     void updateStemsStatus(const juce::File& file, const juce::String& status, const juce::String& dir);

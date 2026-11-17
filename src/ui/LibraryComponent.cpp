@@ -15,6 +15,7 @@
 #include "../audio/KeyDetector.h"
 #include "CoverArtGenerator.h"
 #include <cstdio>
+#include "UiPalette.h"
 
 namespace
 {
@@ -39,14 +40,14 @@ namespace
             : onDeckLoad(onClickCallback)
         {
             btn1.setButtonText("1");
-            btn1.setColour(juce::TextButton::buttonColourId, juce::Colour::fromRGB(0, 180, 216).withAlpha(0.15f));
+            btn1.setColour(juce::TextButton::buttonColourId, UiPalette::accent.withAlpha(0.15f));
             btn1.setColour(juce::TextButton::textColourOffId, juce::Colour::fromRGB(0, 210, 255));
             btn1.onClick = [this]() { if (onDeckLoad) onDeckLoad(0); };
             addAndMakeVisible(btn1);
 
             btn2.setButtonText("2");
-            btn2.setColour(juce::TextButton::buttonColourId, juce::Colour::fromRGB(0, 229, 255).withAlpha(0.15f));
-            btn2.setColour(juce::TextButton::textColourOffId, juce::Colour::fromRGB(0, 229, 255));
+            btn2.setColour(juce::TextButton::buttonColourId, UiPalette::accent.withAlpha(0.15f));
+            btn2.setColour(juce::TextButton::textColourOffId, UiPalette::accentBright);
             btn2.onClick = [this]() { if (onDeckLoad) onDeckLoad(1); };
             addAndMakeVisible(btn2);
         }
@@ -155,21 +156,21 @@ public:
             // Highlight playing or next track
             if (playing)
             {
-                g.setColour(juce::Colour::fromRGB(96, 165, 250).withAlpha(0.18f));
+                g.setColour(UiPalette::accent.withAlpha(0.18f));
                 g.fillRoundedRectangle(itemRect.toFloat(), 3.0f);
-                g.setColour(juce::Colour::fromRGB(96, 165, 250).withAlpha(0.6f));
+                g.setColour(UiPalette::accent.withAlpha(0.6f));
                 g.drawRoundedRectangle(itemRect.toFloat().reduced(0.5f), 3.0f, 1.2f);
             }
             else if (next)
             {
-                g.setColour(juce::Colour::fromRGB(0, 229, 255).withAlpha(0.08f));
+                g.setColour(UiPalette::accent.withAlpha(0.08f));
                 g.fillRoundedRectangle(itemRect.toFloat(), 3.0f);
-                g.setColour(juce::Colour::fromRGB(0, 229, 255).withAlpha(0.35f));
+                g.setColour(UiPalette::accent.withAlpha(0.35f));
                 g.drawRoundedRectangle(itemRect.toFloat().reduced(0.5f), 3.0f, 1.0f);
             }
 
             // Track number
-            g.setColour(playing ? juce::Colour::fromRGB(96, 165, 250) : juce::Colour::fromRGB(100, 108, 125));
+            g.setColour(playing ? UiPalette::accentBright : juce::Colour::fromRGB(100, 108, 125));
             g.setFont(juce::FontOptions(9.5f, juce::Font::bold));
             auto numArea = itemRect;
             g.drawText(juce::String(rowIndex + 1), numArea.removeFromLeft(20).reduced(2, 0), juce::Justification::centred, false);
@@ -194,7 +195,7 @@ public:
             auto badgeArea = numArea.removeFromRight(36).reduced(1, 6);
             if (playing)
             {
-                g.setColour(juce::Colour::fromRGB(96, 165, 250).withAlpha(0.2f));
+                g.setColour(UiPalette::accent.withAlpha(0.2f));
                 g.fillRoundedRectangle(badgeArea.toFloat(), 3.0f);
                 g.setColour(juce::Colour::fromRGB(147, 197, 253));
                 g.setFont(juce::FontOptions(8.0f, juce::Font::bold));
@@ -202,17 +203,17 @@ public:
             }
             else if (next)
             {
-                g.setColour(juce::Colour::fromRGB(0, 229, 255).withAlpha(0.12f));
+                g.setColour(UiPalette::accent.withAlpha(0.12f));
                 g.fillRoundedRectangle(badgeArea.toFloat(), 3.0f);
-                g.setColour(juce::Colour::fromRGB(0, 229, 255));
+                g.setColour(UiPalette::accentBright);
                 g.setFont(juce::FontOptions(8.0f, juce::Font::bold));
                 g.drawText("NEXT", badgeArea, juce::Justification::centred, false);
             }
             else
             {
-                g.setColour(juce::Colour::fromRGB(0, 180, 216).withAlpha(0.1f));
+                g.setColour(UiPalette::accent.withAlpha(0.1f));
                 g.fillRoundedRectangle(badgeArea.toFloat(), 3.0f);
-                g.setColour(juce::Colour::fromRGB(0, 229, 255));
+                g.setColour(UiPalette::accentBright);
                 g.setFont(juce::FontOptions(9.0f, juce::Font::bold));
                 g.drawText(formatBpm(track.bpm), badgeArea, juce::Justification::centred, false);
             }
@@ -290,7 +291,7 @@ public:
             if (insertLineIndex >= 0 && insertLineIndex <= (int)rows.size())
             {
                 float y = (float)(insertLineIndex * 34);
-                g.setColour(juce::Colour::fromRGB(0, 229, 255));
+                g.setColour(UiPalette::accentBright);
                 g.drawLine(4.0f, y, (float)getWidth() - 4.0f, y, 2.0f);
                 g.fillEllipse(2.0f, y - 3.0f, 6.0f, 6.0f);
             }
@@ -352,7 +353,7 @@ public:
         g.setColour(isHover ? juce::Colour::fromRGB(37, 99, 235).withAlpha(0.12f) : juce::Colour::fromRGB(16, 18, 25));
         g.fillRoundedRectangle(bounds, 3.0f);
 
-        g.setColour(isHover ? juce::Colour::fromRGB(96, 165, 250).withAlpha(0.6f) : juce::Colour::fromRGB(36, 42, 56));
+        g.setColour(isHover ? UiPalette::accent.withAlpha(0.6f) : juce::Colour::fromRGB(36, 42, 56));
         g.drawRoundedRectangle(bounds, 3.0f, isHover ? 2.0f : 1.0f);
 
         if (owner.automixQueue.empty())
@@ -483,8 +484,8 @@ public:
             actionBtn.setIcon(LucideIcons::IconType::Settings, 13.0f);
             actionBtn.setText(LanguageManager::trUtf8("Abrir Configuración General", "Open General Settings"));
             actionBtn.setCustomColours(juce::Colour::fromRGB(22, 26, 35),
-                                       juce::Colour::fromRGB(0, 229, 255),
-                                       juce::Colour::fromRGB(0, 229, 255),
+                                       UiPalette::accentBright,
+                                       UiPalette::accentBright,
                                        juce::Colour::fromRGB(38, 43, 56));
             actionBtn.onClick = [this]() {
                 if (onOpenSettings) onOpenSettings();
@@ -521,11 +522,11 @@ public:
 
         if (!isSaveEnabled)
         {
-            g.setColour(juce::Colour::fromRGB(0, 180, 216).withAlpha(0.12f));
+            g.setColour(UiPalette::accent.withAlpha(0.12f));
             g.fillRoundedRectangle(badgeRect, 3.0f);
-            g.setColour(juce::Colour::fromRGB(0, 180, 216).withAlpha(0.35f));
+            g.setColour(UiPalette::accent.withAlpha(0.35f));
             g.drawRoundedRectangle(badgeRect, 3.0f, 1.2f);
-            LucideIcons::draw(g, LucideIcons::IconType::Download, badgeRect.reduced(13.0f), juce::Colour::fromRGB(0, 229, 255), 1.8f);
+            LucideIcons::draw(g, LucideIcons::IconType::Download, badgeRect.reduced(13.0f), UiPalette::accentBright, 1.8f);
         }
         else
         {
@@ -564,7 +565,7 @@ private:
 class LibraryComponent::BackgroundBpmScanner : public juce::Thread
 {
 public:
-    BackgroundBpmScanner(juce::AudioFormatManager& fm, std::function<void(const juce::File&, double, const juce::String&)> onAnalysisReady)
+    BackgroundBpmScanner(juce::AudioFormatManager& fm, std::function<void(const juce::File&, double, const juce::String&, double)> onAnalysisReady)
         : juce::Thread("AudioBackgroundScanner"), formatManager(fm), callback(std::move(onAnalysisReady))
     {
     }
@@ -617,6 +618,13 @@ public:
                 std::unique_ptr<juce::AudioFormatReader> reader(formatManager.createReaderFor(nextFile));
                 if (reader != nullptr && !threadShouldExit())
                 {
+                    // Fix duración (#22): el reader ya está abierto — medir la
+                    // duración acá y persistirla junto al BPM/key. Antes la
+                    // columna quedaba en «--:--» para siempre.
+                    const double duration = (reader->lengthInSamples > 0 && reader->sampleRate > 0)
+                                                ? (double) reader->lengthInSamples / reader->sampleRate
+                                                : 0.0;
+
                     auto beatRes = BeatDetector::analyze(reader.get());
                     juce::String detectedKey;
                     if (!threadShouldExit())
@@ -630,10 +638,10 @@ public:
                     if (callback && !threadShouldExit())
                     {
                         double detectedBpm = (beatRes.bpm >= 40.0 && beatRes.bpm <= 250.0) ? beatRes.bpm : 0.0;
-                        LibraryCacheManager::getInstance().updateBpmAndKey(nextFile, detectedBpm, detectedKey);
+                        LibraryCacheManager::getInstance().updateBpmAndKey(nextFile, detectedBpm, detectedKey, duration);
 
-                        juce::MessageManager::callAsync([cb = callback, f = nextFile, bpm = detectedBpm, key = detectedKey]() {
-                            cb(f, bpm, key);
+                        juce::MessageManager::callAsync([cb = callback, f = nextFile, bpm = detectedBpm, key = detectedKey, dur = duration]() {
+                            cb(f, bpm, key, dur);
                         });
                     }
                 }
@@ -645,7 +653,7 @@ public:
 
 private:
     juce::AudioFormatManager& formatManager;
-    std::function<void(const juce::File&, double, const juce::String&)> callback;
+    std::function<void(const juce::File&, double, const juce::String&, double)> callback;
     juce::CriticalSection queueLock;
     std::vector<juce::File> pendingFiles;
 };
@@ -653,8 +661,8 @@ private:
 LibraryComponent::LibraryComponent(juce::AudioFormatManager& fm)
     : formatManager(fm)
 {
-    bpmScanner = std::make_unique<BackgroundBpmScanner>(formatManager, [this](const juce::File& file, double bpm, const juce::String& key) {
-        updateTrackBpmAndKey(file, bpm, key);
+    bpmScanner = std::make_unique<BackgroundBpmScanner>(formatManager, [this](const juce::File& file, double bpm, const juce::String& key, double duration) {
+        updateTrackBpmAndKey(file, bpm, key, duration);
     });
 
     folderScanner = std::make_unique<AsyncFolderScanner>(formatManager);
@@ -697,13 +705,13 @@ LibraryComponent::LibraryComponent(juce::AudioFormatManager& fm)
     auto setupRailIcon = [this](DjButton& btn, LucideIcons::IconType iconType, juce::Colour col, bool active) {
         btn.setIcon(iconType, 16.0f);
         btn.setCornerRadius(3.0f);
-        btn.setCustomColours(active ? juce::Colour::fromRGB(0, 180, 216).withAlpha(0.2f) : juce::Colour::fromRGB(18, 20, 26),
+        btn.setCustomColours(active ? UiPalette::accent.withAlpha(0.2f) : juce::Colour::fromRGB(18, 20, 26),
                              col,
                              col,
-                             active ? juce::Colour::fromRGB(0, 180, 216).withAlpha(0.4f) : juce::Colour::fromRGB(30, 34, 44));
+                             active ? UiPalette::accent.withAlpha(0.4f) : juce::Colour::fromRGB(30, 34, 44));
         addAndMakeVisible(btn);
     };
-    setupRailIcon(railLocalBtn, LucideIcons::IconType::Music, juce::Colour::fromRGB(0, 229, 255), true); // Active music
+    setupRailIcon(railLocalBtn, LucideIcons::IconType::Music, UiPalette::accentBright, true); // Active music
     setupRailIcon(railUsbBtn, LucideIcons::IconType::Usb, juce::Colour::fromRGB(52, 211, 153), false); // USB Library
     setupRailIcon(railAiBtn, LucideIcons::IconType::Sparkles, juce::Colour::fromRGB(192, 132, 252), false); // AI Smart Match
     setupRailIcon(railYtBtn, LucideIcons::IconType::YouTube, juce::Colour::fromRGB(239, 68, 68), false); // YouTube
@@ -881,8 +889,8 @@ LibraryComponent::LibraryComponent(juce::AudioFormatManager& fm)
     addBtn.setFontSize(11.0f);
     addBtn.setCornerRadius(3.0f);
     addBtn.setCustomColours(juce::Colour::fromRGB(22, 26, 35),
-                            juce::Colour::fromRGB(0, 229, 255),
-                            juce::Colour::fromRGB(0, 229, 255),
+                            UiPalette::accentBright,
+                            UiPalette::accentBright,
                             juce::Colour::fromRGB(38, 43, 56));
     addBtn.onClick = [this]() { importFiles(); };
     addBtn.setTooltip(LanguageManager::trUtf8("Importa archivos o carpetas a la biblioteca", "Import files or folders into the library"));
@@ -924,8 +932,8 @@ LibraryComponent::LibraryComponent(juce::AudioFormatManager& fm)
     automixHeader.setFontSize(12.5f);
     automixHeader.setInterceptsMouseClicks(false, false);
     automixHeader.setCustomColours(juce::Colours::transparentBlack,
-                                   juce::Colour::fromRGB(96, 165, 250),
-                                   juce::Colour::fromRGB(96, 165, 250),
+                                   UiPalette::accentBright,
+                                   UiPalette::accentBright,
                                    juce::Colours::transparentBlack);
     addAndMakeVisible(automixHeader);
 
@@ -1058,7 +1066,7 @@ void LibraryComponent::updateSyncStatus(int count, bool isScanning, const juce::
 
     if (isScanning)
     {
-        tableHeaderTitle.setColour(juce::Label::textColourId, juce::Colour::fromRGB(0, 229, 255));
+        tableHeaderTitle.setColour(juce::Label::textColourId, UiPalette::accentBright);
         juce::String status = folderDisplay + "  " + LanguageManager::trUtf8("Sincronizando: ", "Syncing: ") + juce::String(count) + " " + LanguageManager::trUtf8("Canciones...", "Tracks...");
         if (currentFolder.isNotEmpty())
             status += " (" + currentFolder + ")";
@@ -1218,7 +1226,7 @@ void LibraryComponent::addTrack(const juce::File& file, const juce::String& fold
         item.key = cachedMeta.key;
         allTracks.push_back(item);
 
-        if ((item.bpm <= 0.0 || item.key == "--" || item.key.isEmpty()) && bpmScanner != nullptr)
+        if ((item.bpm <= 0.0 || item.key == "--" || item.key.isEmpty() || item.duration <= 0.0) && bpmScanner != nullptr)
             bpmScanner->queueTrack(file);
         return;
     }
@@ -1351,10 +1359,10 @@ void LibraryComponent::setLibraryMode(LibraryMode mode)
     bool isAi     = (currentMode == LibraryMode::AIMatch);
     bool isSc     = (currentMode == LibraryMode::SoundCloud);
 
-    railLocalBtn.setCustomColours(isLocal ? juce::Colour::fromRGB(0, 180, 216).withAlpha(0.2f) : juce::Colour::fromRGB(18, 20, 26),
-                               juce::Colour::fromRGB(0, 229, 255),
-                               juce::Colour::fromRGB(0, 229, 255),
-                               isLocal ? juce::Colour::fromRGB(0, 180, 216).withAlpha(0.4f) : juce::Colour::fromRGB(30, 34, 44));
+    railLocalBtn.setCustomColours(isLocal ? UiPalette::accent.withAlpha(0.2f) : juce::Colour::fromRGB(18, 20, 26),
+                               UiPalette::accentBright,
+                               UiPalette::accentBright,
+                               isLocal ? UiPalette::accent.withAlpha(0.4f) : juce::Colour::fromRGB(30, 34, 44));
 
     railUsbBtn.setCustomColours(isUsb ? juce::Colour::fromRGB(52, 211, 153).withAlpha(0.25f) : juce::Colour::fromRGB(18, 20, 26),
                                isUsb ? juce::Colour::fromRGB(110, 231, 183) : juce::Colour::fromRGB(148, 163, 184),
@@ -1606,7 +1614,7 @@ void LibraryComponent::paintRowBackground(juce::Graphics& g, int rowNumber, int 
     // P17: línea de inserción durante el drag de reordenación en playlists
     if (isPlaylistView() && rowNumber == playlistDropRow)
     {
-        g.setColour(juce::Colour::fromRGB(0, 229, 255));
+        g.setColour(UiPalette::accentBright);
         g.fillRect(0, 0, width, 2);
     }
 }
@@ -1627,7 +1635,7 @@ void LibraryComponent::paintCell(juce::Graphics& g, int rowNumber, int columnId,
         {
             if (rowNumber == 0 || rowNumber == 1)
             {
-                auto iconCol = (rowNumber == 0) ? juce::Colour::fromRGB(0, 180, 216) : juce::Colour::fromRGB(0, 229, 255);
+                auto iconCol = (rowNumber == 0) ? UiPalette::accentBright : UiPalette::accentBright;
                 g.setColour(iconCol);
 
                 float cx = cellBounds.toFloat().getCentreX();
@@ -2581,12 +2589,12 @@ void LibraryComponent::loadSelectedTrack(int deckIndex)
     }
 }
 
-void LibraryComponent::updateTrackBpmAndKey(const juce::File& file, double bpm, const juce::String& key)
+void LibraryComponent::updateTrackBpmAndKey(const juce::File& file, double bpm, const juce::String& key, double duration)
 {
-    if (bpm <= 0.0 && (key.isEmpty() || key == "--"))
+    if (bpm <= 0.0 && (key.isEmpty() || key == "--") && duration <= 0.0)
         return;
 
-    LibraryCacheManager::getInstance().updateBpmAndKey(file, bpm, key);
+    LibraryCacheManager::getInstance().updateBpmAndKey(file, bpm, key, duration);
 
     bool updated = false;
     for (auto& t : allTracks)
@@ -2595,6 +2603,7 @@ void LibraryComponent::updateTrackBpmAndKey(const juce::File& file, double bpm, 
         {
             if (bpm > 0.0) t.bpm = bpm;
             if (key.isNotEmpty() && key != "--") t.key = key;
+            if (duration > 0.0) t.duration = duration;
             updated = true;
             break;
         }
@@ -2606,6 +2615,7 @@ void LibraryComponent::updateTrackBpmAndKey(const juce::File& file, double bpm, 
         {
             if (bpm > 0.0) t.bpm = bpm;
             if (key.isNotEmpty() && key != "--") t.key = key;
+            if (duration > 0.0) t.duration = duration;
             updated = true;
             break;
         }
@@ -2617,6 +2627,7 @@ void LibraryComponent::updateTrackBpmAndKey(const juce::File& file, double bpm, 
         {
             if (bpm > 0.0) t.bpm = bpm;
             if (key.isNotEmpty() && key != "--") t.key = key;
+            if (duration > 0.0) t.duration = duration;
             updated = true;
             break;
         }

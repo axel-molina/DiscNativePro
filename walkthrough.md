@@ -2805,3 +2805,55 @@ El usuario confirmó: **«funciona bien»** (clic derecho sin cargar → editor 
 ## Iteración y validación humana (2026-11-17)
 - Iteración 2 (commit 13e362a): radio uniforme **3 px** en toda la UI — feedback del usuario: el radio 0 «pareece demasiado filoso». Mismo script con valor 3.0f + DjButton default 3.0f + `float corner` de DjLookAndFeel.
 - El usuario confirmó **«Mucho mejor»** con radio 3. Ticket Notion #7 → Finalizado / Progreso 100 / Validación Aprobada / Fecha de finalización 2026-11-17.
+
+---
+
+# DNP-TK-8: Paleta menos neón — sobriedad fría con acento azul profesional
+
+> Ticket: Notion DNP-TK-8 «Paleta menos neón: tonos más sobrios y profesionales» · Origen FB-6 (UX) · rama `axel-molina/v1.4.2`.
+
+## Decisiones confirmadas (2026-11-17, entrevista)
+1. Base: **sobriedad fría** (slate/gris azulado), coherente con Deck 2 y la estética pro DJ. Reversible: todo el cambio queda en un commit aislado.
+2. Acento: **azul profesional (slate/azul)** desaturado.
+3. Presets de onda: `NeonBlue` → **`BlueSteel`** (Azul Acero / Steel Blue); los defaults de Deck 1 salen de la familia cian saturada.
+4. Mecanismo: **tokens centralizados** en `src/ui/UiPalette.h` (namespace `UiPalette`, al estilo de `UiTypeScale.h`).
+5. Alcance: **pasada mínima con reversibilidad**. Fuera de alcance: `37,99,235` (azul funcional de botones/foco) y los colores **semánticos** (ámbar = emphasis, verde = éxito, rojo = error), que son señales y no decoración.
+
+## Paleta aplicada
+| Token | Hex | Rol |
+|---|---|---|
+| `accent` | `#5B8DB8` | acento principal: rellenos, bordes, degradados (con `.withAlpha()`) |
+| `accentBright` | `#8FB3D9` | texto/iconografía de acento sobre fondo oscuro (contraste ≈ 6.5:1) |
+| `accentDim` | `#33506B` | reservado para trazos de bajo énfasis |
+| `waveLow/Mid/HighDeckOne` | `#2E4B66` / `#4F7396` / `#8FAECB` | banda de Deck 1 |
+| `waveLow/Mid/HighDeckTwo` | `#475569` / `#94A3B8` / `#E2E8F0` | banda de Deck 2 (sin cambios) |
+
+## Cambios
+- [NEW] `src/ui/UiPalette.h` — tokens de la paleta (inline `juce::Colour`), registrado en `CMakeLists.txt`.
+- [MODIFY] **171 reemplazos en 20 archivos** de las 4 familias cian/azul saturadas (`0,229,255` · `0,180,216` · `56,189,248` · `96,165,250`) → `UiPalette::accentBright` (sólidos: texto/iconos) o `UiPalette::accent` (con `.withAlpha()`: rellenos). Archivos: `LibraryComponent`, `UsbLibraryView`, `YouTubeLibraryView`, `SettingsModalComponent`, `TopBarComponent`, `MidiMappingTableComponent`, `FolderTreeComponent`, `FxPanelComponent`, `FxSlotComponent`, `SamplerPanelComponent`, `AIMatchView`, `CoverArtGenerator`, `MainComponent`, `MixerComponent`, `MidiModalComponent`, `WelcomeModalComponent`, `VerticalWaveform`, `OverviewWaveform`, `WaveformTheme`, `KeyDetector`.
+- [MODIFY] `src/services/WaveformTheme.{h,cpp}` — enum `NeonBlue` → `BlueSteel` (mismo valor interno `1`, sin romper la persistencia); preset Azul Acero (`#1E3A5F` / `#3E5F8A` / `#7FA3CC`); `defaultsForDeck()` ahora usa los tokens de onda.
+- [MODIFY] `src/ui/SettingsModalComponent.cpp` — etiqueta del preset: «Azul Neón / Neon Blue» → «Azul Acero / Steel Blue», con tooltip y entrada del buscador de Ajustes actualizados (ES/EN).
+
+## Verificación
+- `cmake --build build` → **0 errores, 0 warnings** propios (solo el aviso preexistente de `ld` por el dylib ONNX 1.27.0 en macOS 14.0 vs deployment target 13.3).
+- App Release relanzada → PID 98222 vivo.
+- Captura de pantalla revisada: botones FX/SMP, rail de biblioteca y cabeceras de bandeja ahora en azul acero; el verde de «Descargas» y el rojo de REC siguen siendo semánticos.
+- `settings.json` no existía en este entorno → los defaults nuevos de onda aplican sin migración pendiente.
+- **Pendiente de validación humana del usuario**: si la paleta no convence, se ajusta en `UiPalette.h` + `WaveformTheme.cpp` (10–15 líneas) o se revierte el commit.
+---
+
+# Fix: duración faltante en descargas de YouTube (sin ticket — pedido directo 2026-11-17)
+
+## Causa raíz
+- `addTrack` (descargas de YouTube vía `onTrackSavedToDownloads` / `scanDownloadsFolder`) lee la duración con el decoder pero **nunca la persiste** en `LibraryCacheManager`.
+- El scanner de fondo solo guardaba BPM/key, y `updateBpmAndKey` creaba entradas nuevas con `duration = 0.0` — además descartaba el análisis de pistas aún no cacheadas.
+- En el próximo arranque, el cache-hit de `addTrack` retornaba `duration=0` → columna «--:--» para siempre. Las pistas de carpetas locales no se veían afectadas porque `AsyncFolderScanner` sí persiste la duración completa.
+
+## Cambios
+- `src/services/LibraryCacheManager.h/.cpp`: `updateBpmAndKey(file, bpm, key, duration=0)` persiste la duración cuando > 0 y crea la entrada mínima si no existe (antes se descartaba el análisis).
+- `src/ui/LibraryComponent.cpp`: `BackgroundBpmScanner` mide la duración del reader que ya tiene abierto y la reporta en el callback; `updateTrackBpmAndKey` actualiza la columna en vivo (allTracks/filteredTracks/automixQueue) y el cache; `addTrack` re-encola al scanner si `duration <= 0` → auto-repara entradas ya envenenadas al arrancar.
+- `src/ui/LibraryComponent.h`: firma actualizada del callback y del método.
+
+## Verificación
+- `cmake --build build` → 0 errores, sin warnings propios. App Release relanzada.
+- Cache real verificado: `~/Library/DiscNativePro/library_cache.json` — descargas de YouTube con duración y BPM persistidos correctamente. Los únicos 20 registros con duración 0 son `Placeholder.m4a` de 1 byte ya inexistentes (no son canciones).

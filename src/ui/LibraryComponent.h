@@ -86,7 +86,9 @@ public:
     std::vector<TrackItem> allLocalTrackItems() const;
     void updateTrackBpm(const juce::File& file, double bpm);
     void updateTrackKey(const juce::File& file, const juce::String& key);
-    void updateTrackBpmAndKey(const juce::File& file, double bpm, const juce::String& key);
+    // Fix duración (#22): el scanner de fondo también reporta la duración
+    // medida, para corregir entradas de cache envenenadas con 0.
+    void updateTrackBpmAndKey(const juce::File& file, double bpm, const juce::String& key, double duration = 0.0);
 
     // P17: playlists
     void refreshPlaylists();

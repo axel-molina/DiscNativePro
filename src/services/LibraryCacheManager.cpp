@@ -90,7 +90,7 @@ void LibraryCacheManager::storeTrack(const juce::File& file, const CachedTrackMe
     }
 }
 
-void LibraryCacheManager::updateBpmAndKey(const juce::File& file, double bpm, const juce::String& key)
+void LibraryCacheManager::updateBpmAndKey(const juce::File& file, double bpm, const juce::String& key, double duration)
 {
     auto path = file.getFullPathName();
     bool updated = false;
@@ -98,13 +98,27 @@ void LibraryCacheManager::updateBpmAndKey(const juce::File& file, double bpm, co
     {
         std::lock_guard<std::mutex> lock(cacheMutex);
         auto it = cache.find(path);
-        if (it != cache.end())
+        if (it == cache.end())
         {
-            if (bpm > 0.0) it->second.bpm = bpm;
-            if (key.isNotEmpty() && key != "--") it->second.key = key;
-            isDirty = true;
-            updated = true;
+            // Fix duración (#22): antes el análisis de una pista que aún no
+            // estaba en cache (p. ej. descargas de YouTube) se DESCARTABA en
+            // silencio. Crear la entrada mínima, misma firma de validez
+            // (modTime/size) que usa getTrack().
+            CachedTrackMetadata meta;
+            meta.title = file.getFileNameWithoutExtension();
+            meta.duration = 0.0;
+            meta.lastModifiedTime = file.getLastModificationTime().toMilliseconds();
+            meta.fileSizeBytes = file.getSize();
+            it = cache.emplace(path, std::move(meta)).first;
         }
+        if (bpm > 0.0) it->second.bpm = bpm;
+        if (key.isNotEmpty() && key != "--") it->second.key = key;
+        // Fix duración (#22): persistir la duración medida por el scanner.
+        // Antes la entrada quedaba con duration=0 y el cache-hit de addTrack
+        // mostraba «--:--» para siempre.
+        if (duration > 0.0) it->second.duration = duration;
+        isDirty = true;
+        updated = true;
     }
 
     if (updated)
