@@ -321,12 +321,14 @@ void TopBarComponent::resized()
     area.removeFromRight(6);
     ramLabel.setBounds(area.removeFromRight(95).reduced(0, 3));
 
-    // Center Brand Title — centrada en el hueco entre ambos clusters para
-    // que no se pise con el badge en ventanas angostas.
-    int leftEdge = layoutBadge.getRight();
-    int rightEdge = ramLabel.getX();
-    int freeWidth = juce::jmax(0, rightEdge - leftEdge);
-    int brandWidth = juce::jmin(220, freeWidth);
-    brandLabel.setBounds(leftEdge + (freeWidth - brandWidth) / 2,
-                         area.getY(), brandWidth, area.getHeight());
+    // Center Brand Title — SIEMPRE centrada en la ventana. El centro no debe
+    // depender de los clusters (UPDATE aparece/desaparece y movía el título).
+    // Si la ventana es angosta, se reduce el ancho de forma simétrica para
+    // no pisar el badge ni el cluster derecho.
+    int centerX = getWidth() / 2;
+    int leftLimit = layoutBadge.getRight() + 4;
+    int rightLimit = ramLabel.getX() - 4;
+    int half = juce::jmax(0, juce::jmin(centerX - leftLimit, rightLimit - centerX));
+    int brandWidth = juce::jmin(220, half * 2);
+    brandLabel.setBounds(centerX - brandWidth / 2, area.getY(), brandWidth, area.getHeight());
 }
