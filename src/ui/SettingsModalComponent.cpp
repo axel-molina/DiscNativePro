@@ -234,6 +234,40 @@ SettingsModalComponent::SettingsModalComponent(AudioEngine& engine, MidiManager&
     setupDesignTab();
     setupVersionTab();
 
+    // P42: cabecera de busqueda de configuraciones
+    addAndMakeVisible(settingsSearchBox);
+    settingsSearchBox.setFont(juce::FontOptions(13.0f));
+    settingsSearchBox.setColour(juce::TextEditor::textColourId, juce::Colour::fromRGB(230, 234, 244));
+    settingsSearchBox.setColour(juce::TextEditor::backgroundColourId, juce::Colour::fromRGB(24, 27, 36));
+    settingsSearchBox.setColour(juce::TextEditor::outlineColourId, juce::Colour::fromRGB(45, 50, 64));
+    settingsSearchBox.setColour(juce::TextEditor::focusedOutlineColourId, juce::Colour::fromRGB(37, 99, 235));
+    settingsSearchBox.setColour(juce::CaretComponent::caretColourId, juce::Colour::fromRGB(37, 99, 235));
+    settingsSearchBox.setIndents(8, 6);
+    settingsSearchBox.onTextChange = [this]() { searchDebounceTicks = 1; };
+    settingsSearchBox.onReturnKey = [this]() {
+        searchDebounceTicks = 0;
+        if (resultsList.isVisible() && !resultsList.noResults && !matchedIndices.empty())
+            jumpToSearchResult(0);
+        else
+            performSearch();
+    };
+    settingsSearchBox.onEscapeKey = [this]() {
+        searchDebounceTicks = 0;
+        settingsSearchBox.setText("", juce::dontSendNotification);
+        resultsList.setVisible(false);
+    };
+
+    resultsList.onPick = [this](int row) { jumpToSearchResult(row); };
+    addAndMakeVisible(resultsList);
+    resultsList.setVisible(false);
+
+    // Overlay de resaltado sobre bodyContent (arriba de los widgets por orden de adicion)
+    bodyContent.addChildComponent(highlightBox);
+    highlightBox.setVisible(false);
+    highlightBox.setInterceptsMouseClicks(false, false);
+
+    setupSearchIndex();
+
     // 4. Footer controls
     undoButton.setButtonText("Deshacer");
     undoButton.setColour(juce::TextButton::buttonColourId, juce::Colour::fromRGB(37, 41, 56));
@@ -687,6 +721,9 @@ void SettingsModalComponent::updateDownloadsFolderUI()
 
 void SettingsModalComponent::refreshLanguage()
 {
+    // P42: placeholder del buscador
+    settingsSearchBox.setTextToShowWhenEmpty(LanguageManager::trUtf8("Buscar ajustes…", "Search settings…"),
+                                             juce::Colour::fromRGB(110, 116, 133));
     tabGeneralBtn.setText(LanguageManager::trUtf8("General", "General"));
     tabGeneralBtn.setTooltip(LanguageManager::trUtf8("Preferencias generales e idioma", "General preferences and language"));
     tabDevicesBtn.setText(LanguageManager::trUtf8("Dispositivos", "Devices"));
@@ -1803,6 +1840,200 @@ void SettingsModalComponent::timerCallback()
 {
     if (activeTab == 10)
         refreshBroadcastStatus();
+
+    // P42: debounce del buscador (1 tick @ 2 Hz ≈ 500 ms tras la ultima tecla)
+    if (searchDebounceTicks > 0 && --searchDebounceTicks == 0)
+        performSearch();
+
+    // P42: apagar el resaltado del ajuste encontrado (~2.5 s = 5 ticks)
+    if (highlightTicksLeft > 0 && --highlightTicksLeft == 0)
+        highlightBox.setVisible(false);
+}
+
+// --- P42: buscador de configuraciones ----------------------------------------
+
+void SettingsModalComponent::setupSearchIndex()
+{
+    // Una entrada por ajuste buscable: (tab, titulo es, titulo en, widget).
+    // Mantenimiento: cada configuracion nueva agrega una linea aca.
+    // `widgetSource` es un juce::Component* directo o un lambda que lo devuelve (unique_ptr).
+    auto add = [this](int tab, const char* es, const char* en, auto widgetSource) {
+        using W = std::decay_t<decltype(widgetSource)>;
+        std::function<juce::Component*()> f;
+        if constexpr (std::is_pointer_v<W>)
+            f = [w = widgetSource] { return w; };
+        else
+            f = std::function<juce::Component*()>(widgetSource);
+        searchIndex.push_back({ tab, juce::String::fromUTF8(es), juce::String::fromUTF8(en), std::move(f) });
+    };
+
+    // Tab 0: General
+    add(0, "Idioma de la interfaz", "Interface language", &languageCombo);
+    add(0, "Protección de carga (Load Lock)", "Load Lock", &loadLockToggle);
+    add(0, "Reproducir al cargar (autoplay)", "Autoplay on load", &autoplayOnLoadToggle);
+    add(0, "Modo del jog wheel", "Jog wheel mode", &jogModeCombo);
+    add(0, "Rango de pitch por defecto", "Default pitch range", &pitchRangeCombo);
+    add(0, "Auto-CUE (primer beat al cargar)", "Auto-CUE (first beat on load)", &autoCueToggle);
+    add(0, "Autoplay de YouTube", "YouTube autoplay", &ytAutoplayToggle);
+    add(0, "Tasa de refresco de formas de onda", "Waveform refresh rate", &waveformFpsCombo);
+    add(0, "Carpeta de grabaciones de sesión", "Session recordings folder", &recFolderEditor);
+    add(0, "Modo de stems (separación de pistas)", "Stems mode (track separation)", &stemsModeCombo);
+    add(0, "Precalcular biblioteca en stems", "Precompute library stems", &stemsPrecalcBtn);
+    add(0, "Carpeta de descargas de YouTube", "YouTube downloads folder", &downloadsFolderEditor);
+    add(0, "Guardar descargas en disco", "Save downloads to disk", &saveDownloadsToggle);
+    add(0, "Cartel de bienvenida", "Welcome dialog", &showWelcomeBtn);
+
+    // Tab 1: Dispositivos
+    add(1, "Dispositivo de audio (entrada y salida)", "Audio device (input and output)",
+        [this]() { return audioDeviceSelector.get(); });
+    add(1, "Enrutamiento de la salida master", "Master output routing", &masterRoutingCombo);
+    add(1, "Enrutamiento de la salida cue", "Cue output routing", &cueRoutingCombo);
+    add(1, "Controladora MIDI detectada", "Detected MIDI controller", &controllerDetectedBadge);
+
+    // Tab 2: Sonido
+    add(2, "Tamaño de buffer", "Buffer size", &bufferSizeCombo);
+    add(2, "Frecuencia de muestreo", "Sample rate", &sampleRateInfoLabel);
+    add(2, "Modo del ecualizador", "EQ mode", &eqModeCombo);
+    add(2, "Curva del crossfader", "Crossfader curve", &crossfaderCurveCombo);
+    add(2, "Mezcla cue (auriculares)", "Cue mix (headphones)", &cueMixSlider);
+    add(2, "Volumen de cue", "Cue volume", &cueVolumeSlider);
+    add(2, "Headroom del master", "Master headroom", &headroomCombo);
+    add(2, "Limitador master", "Master limiter", &masterLimiterToggle);
+    add(2, "Techo del limitador (dB)", "Limiter ceiling (dB)", &ceilingSlider);
+    add(2, "Ganancia del micrófono", "Microphone gain", &micGainSlider);
+    add(2, "Habilitar micrófono", "Enable microphone", &micEnableToggle);
+    add(2, "Duck del micrófono", "Microphone ducking", &micDuckSlider);
+    add(2, "Duck automático del micrófono", "Automatic microphone ducking", &micDuckAutoToggle);
+
+    // Tab 3: MIDI
+    add(3, "Escanear puertos MIDI", "Scan MIDI ports", &midiScanBtn);
+    add(3, "Importar mapeo Mixxx", "Import Mixxx mapping", &midiImportMixxxBtn);
+    add(3, "Importar mapeo VDJ", "Import VDJ mapping", &midiImportVdjBtn);
+    add(3, "Tabla de mapeo MIDI", "MIDI mapping table",
+        [this]() { return midiMappingTable.get(); });
+    add(3, "Monitor MIDI en vivo", "Live MIDI monitor", &midiMonitorText);
+
+    // Tab 4: Shortcuts (dibujado en paint, sin widgets)
+    add(4, "Atajos de teclado", "Keyboard shortcuts", nullptr);
+
+    // Tab 5: Streaming
+    add(5, "API key de YouTube", "YouTube API key", &apiKeyEditor);
+    add(5, "Borrar API key", "Clear API key", &clearApiKeyBtn);
+
+    // Tab 10: Transmitir (radio + RTMP + podcasts)
+    add(10, "Emitir mezcla en vivo (Icecast)", "Broadcast mix live (Icecast)", &broadcastEnabledToggle);
+    add(10, "Servidor de broadcast (host)", "Broadcast server (host)", &broadcastHostEditor);
+    add(10, "Puerto de broadcast", "Broadcast port", &broadcastPortEditor);
+    add(10, "Mount point de broadcast", "Broadcast mount point", &broadcastMountEditor);
+    add(10, "Contraseña de broadcast", "Broadcast password", &broadcastPasswordEditor);
+    add(10, "Nombre de la emisión", "Broadcast name", &broadcastNameEditor);
+    add(10, "Bitrate de la emision", "Broadcast bitrate", &broadcastBitrateCombo);
+    add(10, "Destino de transmision", "Broadcast destination", &broadcastDestCombo);
+    add(10, "URL RTMP", "RTMP URL", &rtmpUrlEditor);
+    add(10, "Clave RTMP", "RTMP key", &rtmpKeyEditor);
+    add(10, "Bitrate RTMP", "RTMP bitrate", &rtmpBitrateCombo);
+    add(10, "Instalar ffmpeg", "Install ffmpeg", &installFfmpegBtn);
+    add(10, "Grabación para podcast", "Podcast recording", &podcastRecCombo);
+    add(10, "Refrescar grabaciones", "Refresh recordings", &podcastRefreshBtn);
+    add(10, "Bitrate de exportación a MP3", "MP3 export bitrate", &podcastBitrateCombo);
+    add(10, "Exportar a MP3", "Export to MP3", &podcastExportBtn);
+
+    // Tab 6: IA Match
+    add(6, "Recomendaciones con IA", "AI recommendations", &aiEnabledToggle);
+    add(6, "Proveedor de IA", "AI provider", &aiProviderCombo);
+    add(6, "Modelo de IA", "AI model", &aiModelCombo);
+    add(6, "API key de IA", "AI API key", &aiApiKeyEditor);
+    add(6, "Borrar API key de IA", "Clear AI API key", &clearAiApiKeyBtn);
+
+    // Tab 7: Donar
+    add(7, "Donar (Cafecito)", "Donate (Cafecito)", &donateBtn);
+
+    // Tab 8: Diseno
+    add(8, "Tema de color de la bandeja", "Deck color theme", &deckTheme1Btn);
+    add(8, "Color de los graves de la onda", "Waveform low color", &waveLowSwatch);
+    add(8, "Color de los medios de la onda", "Waveform mid color", &waveMidSwatch);
+    add(8, "Color de los agudos de la onda", "Waveform high color", &waveHighSwatch);
+    add(8, "Preset RGB multicolor", "RGB multicolor preset", &presetRgbBtn);
+    add(8, "Preset azul neon", "Neon blue preset", &presetNeonBtn);
+    add(8, "Preset plata mono", "Mono silver preset", &presetSilverBtn);
+
+    // Tab 9: Version
+    add(9, "Buscar actualizaciones", "Check for updates", &checkUpdatesBtn);
+    add(9, "Cambiar de version", "Switch version", &versionSelectCombo);
+    add(9, "Instalar version", "Install version", &installVersionBtn);
+}
+
+void SettingsModalComponent::performSearch()
+{
+    const auto q = settingsSearchBox.getText().trim();
+    if (q.length() < 2)
+    {
+        resultsList.setVisible(false);
+        return;
+    }
+
+    static const char* tabNamesEs[11] = { "General", "Dispositivos", "Sonido", "MIDI", "Shortcuts",
+                                          "Streaming", "IA Match", "Donar", "Diseño", "Versión", "Transmitir" };
+    static const char* tabNamesEn[11] = { "General", "Devices", "Sound", "MIDI", "Shortcuts",
+                                          "Streaming", "AI Match", "Donate", "Design", "Version", "Broadcast" };
+    const bool es = LanguageManager::getInstance().isSpanish();
+
+    matchedIndices.clear();
+    juce::StringArray rows;
+    for (int i = 0; i < (int) searchIndex.size() && (int) matchedIndices.size() < 8; ++i)
+    {
+        const auto& e = searchIndex[(size_t) i];
+        if (e.es.containsIgnoreCase(q) || e.en.containsIgnoreCase(q))
+        {
+            matchedIndices.push_back(i);
+            rows.add((es ? e.es : e.en) + juce::String("  —  ") + (es ? tabNamesEs[e.tab] : tabNamesEn[e.tab]));
+        }
+    }
+
+    if (matchedIndices.empty())
+    {
+        resultsList.rows.clear();
+        resultsList.rows.add(LanguageManager::trUtf8("Sin resultados", "No matches"));
+        resultsList.noResults = true;
+    }
+    else
+    {
+        resultsList.rows = rows;
+        resultsList.noResults = false;
+    }
+
+    auto r = settingsSearchBox.getBoundsInParent();
+    resultsList.setBounds(r.getX(), r.getBottom() + 4, r.getWidth(), resultsList.rows.size() * 26 + 10);
+    resultsList.setVisible(true);
+    resultsList.toFront(false);
+    resultsList.repaint();
+}
+
+void SettingsModalComponent::jumpToSearchResult(int matchedPos)
+{
+    if (matchedPos < 0 || matchedPos >= (int) matchedIndices.size())
+        return;
+    const auto& e = searchIndex[(size_t) matchedIndices[(size_t) matchedPos]];
+
+    // Mismo comportamiento que los botones de tab: cambia tab, visibilidad, resize y scroll a 0.
+    setActiveTab(e.tab);
+
+    if (auto* w = e.widget())
+    {
+        auto b = w->getBounds(); // coordenadas relativas a bodyContent, igual que el overlay
+        highlightBox.setBounds(b.expanded(6));
+        highlightBox.setVisible(true);
+        highlightBox.toFront(false);
+        highlightTicksLeft = 5;
+
+        // Si el ajuste quedo fuera del viewport, lo traemos a la vista.
+        const auto viewY = bodyViewport.getViewPositionY();
+        if (b.getY() < viewY || b.getBottom() > viewY + bodyViewport.getHeight())
+            bodyViewport.setViewPosition(0, juce::jmax(0, b.getY() - 80));
+    }
+
+    settingsSearchBox.setText("", juce::dontSendNotification);
+    resultsList.setVisible(false);
 }
 
 namespace
@@ -3039,7 +3270,14 @@ void SettingsModalComponent::resized()
     auto bodyRect = getLocalBounds();
     bodyRect.removeFromLeft(sidebarW);
     bodyRect.removeFromBottom(52);
+
+    // P42: cabecera de busqueda (siempre visible por encima de cualquier tab)
+    auto searchRect = bodyRect.removeFromTop(44);
+    searchRect.reduce(12, 8);
+    settingsSearchBox.setBounds(searchRect);
     bodyViewport.setBounds(bodyRect);
+    if (resultsList.isVisible())
+        performSearch();
 
     // Layout a un ancho dado. La altura necesaria no depende del ancho (filas fijas),
     // así que se mide una vez y se re-ejecuta solo si aparece la scrollbar.

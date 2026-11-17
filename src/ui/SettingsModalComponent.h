@@ -309,6 +309,86 @@ private:
     juce::Viewport bodyViewport;
     juce::Component bodyContent;
 
+    // --- P42: buscador de configuraciones ---
+    // Overlay de resaltado sobre el ajuste encontrado (borde azul, 2.5 s).
+    struct HighlightOverlay : juce::Component
+    {
+        void paint(juce::Graphics& g) override
+        {
+            g.setColour(juce::Colour::fromRGB(37, 99, 235).withAlpha(0.14f));
+            g.fillRoundedRectangle(getLocalBounds().toFloat().reduced(1.0f), 6.0f);
+            g.setColour(juce::Colour::fromRGB(37, 99, 235));
+            g.drawRoundedRectangle(getLocalBounds().toFloat().reduced(1.0f), 6.0f, 2.0f);
+        }
+    };
+
+    // Lista de resultados del buscador (flotante bajo el campo, no roba el foco).
+    struct SearchResultsList : juce::Component
+    {
+        juce::StringArray rows;
+        bool noResults { false };
+        int hovered { -1 };
+        std::function<void(int)> onPick;
+
+        void paint(juce::Graphics& g) override
+        {
+            auto r = getLocalBounds();
+            g.setColour(juce::Colour::fromRGB(24, 27, 36));
+            g.fillRoundedRectangle(r.toFloat(), 8.0f);
+            g.setColour(juce::Colour::fromRGB(45, 50, 64));
+            g.drawRoundedRectangle(r.toFloat(), 8.0f, 1.0f);
+            r.reduce(2, 2);
+            for (int i = 0; i < rows.size(); ++i)
+            {
+                auto row = r.removeFromTop(26);
+                if (i == hovered)
+                {
+                    g.setColour(juce::Colour::fromRGB(37, 43, 56));
+                    g.fillRoundedRectangle(row.toFloat().reduced(2, 1), 5.0f);
+                }
+                g.setColour(noResults ? juce::Colour::fromRGB(110, 116, 133)
+                                      : juce::Colour::fromRGB(220, 225, 235));
+                g.setFont(juce::FontOptions(13.0f));
+                g.drawText(rows[i], row.reduced(8, 0), juce::Justification::centredLeft);
+            }
+        }
+
+        void mouseMove(const juce::MouseEvent& e) override
+        {
+            int h = noResults ? -1 : (e.y - 2) / 26;
+            if (h >= rows.size()) h = -1;
+            if (h != hovered) { hovered = h; repaint(); }
+        }
+
+        void mouseExit(const juce::MouseEvent&) override { if (hovered != -1) { hovered = -1; repaint(); } }
+
+        void mouseDown(const juce::MouseEvent& e) override
+        {
+            int h = noResults ? -1 : (e.y - 2) / 26;
+            if (h >= 0 && h < rows.size() && onPick) onPick(h);
+        }
+    };
+
+    struct SearchEntry
+    {
+        int tab;
+        juce::String es;
+        juce::String en;
+        std::function<juce::Component*()> widget;
+    };
+
+    juce::TextEditor settingsSearchBox;
+    SearchResultsList resultsList;
+    HighlightOverlay highlightBox;
+    std::vector<SearchEntry> searchIndex;
+    std::vector<int> matchedIndices;
+    int highlightTicksLeft { 0 };  // ticks de timer (2 Hz) que quedan del resaltado
+    int searchDebounceTicks { 0 }; // ticks pendientes para lanzar la busqueda
+
+    void setupSearchIndex();
+    void performSearch();
+    void jumpToSearchResult(int matchedPos);
+
     // Sidebar vertical de pestañas (icono + etiqueta), con scroll si no caben
     juce::Viewport sideViewport;
     juce::Component sideContent;

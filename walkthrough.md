@@ -2631,3 +2631,30 @@ Script de cruce entre los miembros de tipo botón de `src/ui` y todos los `setTo
 ## 5. Validación humana (2026-11-16)
 
 El usuario recorrió la app y confirmó **«está perfecto»**. El ticket #10 queda **Finalizado / Progreso 100 / Validación Aprobada** — sin ajustes de copy pendientes.
+
+---
+
+# Walkthrough — P42: buscador de configuraciones en Ajustes
+
+> Ticket Notion: **DNP-TK-5** «Settings: buscador de configuraciones».
+> Plan aprobado: `implementation_plan.md` (sección «P42»). Decisiones del usuario: salto a pestaña + campo en la cabecera del cuerpo.
+
+## 1. Diagnóstico que condicionó el diseño
+
+Las 11 pestañas de `SettingsModalComponent` se maquetan a mano con filas fijas en `resized()` (3579 líneas) y la visibilidad por widget vive en `updateTabVisibility()`. Filtrar filas dentro de la pestaña (estilo VS Code) habría exigido reescribir el layout completo para que compacte. El usuario eligió el camino de bajo riesgo: **índice de ajustes + salto a pestaña + resaltado**.
+
+## 2. Implementación
+
+- **Cabecera de búsqueda** (`settingsSearchBox`): franja fija de 44 px arriba del `bodyViewport`, siempre visible en las 11 pestañas; placeholder bilingüe «Buscar ajustes… / Search settings…». Sidebar y footer sin cambios.
+- **Índice curado** (`setupSearchIndex()`): ~60 entradas bilingües (es/en), una por ajuste buscable, cada una apuntando al widget real (o `nullptr` en Shortcuts, que se dibuja en `paint`). Cobertura: General (14), Dispositivos (4), Sonido (13), MIDI (5), Shortcuts (1), Streaming (2), Transmitir (16), IA (5), Donar (1), Diseño (7), Versión (3).
+- **Búsqueda**: match case-insensitive en es **o** en; ≥ 2 caracteres; debounce de ~500 ms (1 tick del timer a 2 Hz del modal — el plan decía 300 ms, se implementó con el timer existente); máx. 8 resultados.
+- **Resultados**: lista flotante propia (`SearchResultsList`, pintada a mano) bajo el campo — a diferencia de un `PopupMenu`, **no roba el foco** y se puede seguir escribiendo. Sin coincidencias: fila gris «Sin resultados / No matches».
+- **Salto** (`jumpToSearchResult`): usa `setActiveTab()` (misma vía que los botones de pestaña) → si el ajuste quedó fuera del viewport lo trae a la vista (80 px de margen) → overlay azul (`HighlightOverlay`) sobre el widget durante ~2,5 s (5 ticks del timer) → limpia el campo.
+- **i18n**: placeholder, «Sin resultados» y filas de resultados bilingües; `refreshLanguage()` actualiza el placeholder.
+- **Mantenimiento**: cada configuración nueva agrega una línea en `setupSearchIndex()` (documentado en el ticket).
+
+## 3. Verificación
+
+- `cmake --build build` → **0 errores, 0 warnings** (`[100%] Built target DiscNativePro`).
+- Relanzamiento: `pkill` + `open …Release/DiscNativePro.app` → proceso activo (PID verificado).
+- **Pendiente de validación humana (usuario)**: escribir «buffer», «carpeta», «bitrate», «midi», «color»; verificar salto + resaltado en español y en inglés, y el caso «Sin resultados» (p. ej. «xyz»).
