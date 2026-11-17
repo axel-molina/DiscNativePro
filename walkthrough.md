@@ -2883,3 +2883,18 @@ El usuario confirmó: **«funciona bien»** (clic derecho sin cargar → editor 
 
 ## Validación humana (2026-11-17)
 El usuario confirmó: **«perfecto y validado»** — onda del Deck 2 terracota, botones 1 azul / 2 rojo en las 4 vistas, acento general del Deck 2 intacto y sin cian neón. Ticket Notion #22 → Finalizado / Progreso 100 / Validación Aprobada / Fecha de finalización 2026-11-17.
+---
+
+# P48: badge «2 Bandejas» al lado izquierdo de la barra superior
+
+> Pedido directo del usuario (2026-11-17). Ticket #9 (barra superior) desestimado en Notion con el mismo patrón que #1-#3.
+
+## Cambios
+- `src/ui/TopBarComponent.cpp::resized()`: `layoutBadge` se ubica después de SMP en el cluster izquierdo (95 px + separación de 6 px); se elimina del cluster derecho, que queda con RAM / reloj / UPDATE / settings / fullscreen.
+- `brandLabel` se centra en el hueco entre `layoutBadge.getRight()` y `ramLabel.getX()` (con `jmin/jmax`) para no solaparse en ventanas angostas.
+- Sin cambios en textos, tooltips ni comportamiento (el badge sigue sin interceptar clics).
+
+## Verificación
+- `cmake --build build` → 0 errores, sin warnings propios.
+- Relanzamiento obligatorio: pkill + open Release → proceso activo (pgrep OK).
+- **Pendiente de validación visual del usuario**: badge «2 Bandejas» a la izquierda, marca centrada, lado derecho más liviano.

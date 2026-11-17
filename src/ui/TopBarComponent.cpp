@@ -302,6 +302,11 @@ void TopBarComponent::resized()
     area.removeFromLeft(6);
     smpButton.setBounds(area.removeFromLeft(58).reduced(0, 2));
 
+    // P48: el badge de distribución va en el cluster izquierdo para no
+    // sobrecargar el lado derecho (donde quedan RAM/reloj/update/settings/full).
+    area.removeFromLeft(6);
+    layoutBadge.setBounds(area.removeFromLeft(95).reduced(0, 3));
+
     // Right Buttons & Indicators
     fullscreenButton.setBounds(area.removeFromRight(32).reduced(0, 2));
     area.removeFromRight(4);
@@ -312,13 +317,16 @@ void TopBarComponent::resized()
         updateButton.setBounds(area.removeFromRight(92).reduced(0, 2));
         area.removeFromRight(6);
     }
-    layoutBadge.setBounds(area.removeFromRight(95).reduced(0, 3));
-    area.removeFromRight(6);
     clockLabel.setBounds(area.removeFromRight(80).reduced(0, 3));
     area.removeFromRight(6);
     ramLabel.setBounds(area.removeFromRight(95).reduced(0, 3));
 
-    // Center Brand Title
-    int centerWidth = 220;
-    brandLabel.setBounds((getWidth() - centerWidth) / 2 + 10, area.getY(), centerWidth, area.getHeight());
+    // Center Brand Title — centrada en el hueco entre ambos clusters para
+    // que no se pise con el badge en ventanas angostas.
+    int leftEdge = layoutBadge.getRight();
+    int rightEdge = ramLabel.getX();
+    int freeWidth = juce::jmax(0, rightEdge - leftEdge);
+    int brandWidth = juce::jmin(220, freeWidth);
+    brandLabel.setBounds(leftEdge + (freeWidth - brandWidth) / 2,
+                         area.getY(), brandWidth, area.getHeight());
 }
