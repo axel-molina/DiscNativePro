@@ -2628,6 +2628,6 @@ Script de cruce entre los miembros de tipo botón de `src/ui` y todos los `setTo
 - Incidente corregido durante el trabajo: un script de inserción en dos pasadas dejó líneas duplicadas y partió 3 llamadas multilínea preexistentes (`versionHelpIcon`, `refreshBtn`/`addFolderBtn`, `ytAutoplayToggle`); se restauró el diff final a **90 inserciones, 0 borrados** (verificado con `git diff | grep ^-`).
 - Relanzamiento: `pkill` + `open build/DiscNativePro_artefacts/Release/DiscNativePro.app` → proceso activo (PID verificado).
 
-## 5. Pendiente de validación humana (usuario)
+## 5. Validación humana (2026-11-16)
 
-Recorrer la app con el mouse por encima de los botones: transporte (PLAY/CUE/SYNC/loop/pitch bend), hot cues, editor de grid, FX, Ajustes (11 pestañas), biblioteca, vistas de streaming y el cartel de bienvenida. **El copy es revisable en una línea** por botón si algo no convence.
+El usuario recorrió la app y confirmó **«está perfecto»**. El ticket #10 queda **Finalizado / Progreso 100 / Validación Aprobada** — sin ajustes de copy pendientes.
