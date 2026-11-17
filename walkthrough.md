@@ -2938,3 +2938,13 @@ De 129 llamadas a `setTooltip` en `src/ui`, solo ~48 se reasignan en `refreshLan
 
 ## Validación humana (2026-11-17) — P49 + P50
 El usuario confirmó: **«funciona»**. Verificado el cambio de idioma en cal desde Ajustes → General: el botón de actualización dice «ACTUALIZAR»/«UPDATE» según el idioma y los tooltips de la app siguen el idioma seleccionado sin reiniciar. P49 y P50 quedan validados; todo commiteado en `axel-molina/v1.4.2`.
+
+---
+
+# Publicación v1.4.2 (2026-11-17)
+
+- Orden del usuario: **«pushea todo»**.
+- `git push -u origin axel-molina/v1.4.2` → rama remota nueva creada, tracking configurado.
+- `git tag -a v1.4.2 -m "DiscNativePro v1.4.2"` + `git push origin v1.4.2` → tag publicado sobre `c2b79b3`.
+- CI: `Release Binaries` run **44167769685** disparado por el tag (compila Windows/Linux/macOS y publica el GitHub Release solo si las 3 pasan). Estado inicial: queued.
+- Notion #14 actualizado: bloqueo de publicación levantado; pendiente el resultado del CI y la validación en las dos portátiles Windows del usuario.
