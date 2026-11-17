@@ -2705,3 +2705,6 @@ El usuario confirmó visualmente **25×15 px** (volumen, pitch y crossfader): «
 - Relanzamiento obligatorio: `pkill -f DiscNativePro || true` → `open …/Release/DiscNativePro.app` → proceso activo (pgrep OK).
 - Entorno de prueba preparado en esta Mac arm64: `~/Library/Application Support/DiscNativePro/bin/yt-dlp` (2026.08.19) renombrado a `yt-dlp.bak-P43` — la próxima carga de YouTube pasa por el auto-instalador nuevo en frío (equivalente a la máquina limpia del usuario).
 - **Pendiente de validación humana (usuario)**: cargar un track de YouTube (audio y video) en la app M1; confirmar que se auto-instala yt-dlp y que la descarga arranca. Luego restaurar decisión sobre `yt-dlp.bak-P43` (el nuevo instalado reemplaza al viejo 2026.08.19).
+
+## Validación humana (2026-11-17)
+El usuario probó en su MacBook Air M1: **«funciona perfecto, ambas bandejas, tanto cargar video de youtube como descarga de audio»**. El instalador auto-descargó yt-dlp en frío y el flujo YouTube (audio y video) quedó operativo. Ticket Notion #19 → Finalizado / Progreso 100 / Validación Aprobada / Fecha de finalización 2026-11-17.
