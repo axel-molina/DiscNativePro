@@ -19,6 +19,7 @@ SamplerPanelComponent::SamplerPanelComponent(SamplerBank& bank,
                                 juce::Colours::transparentBlack,
                                 juce::Colours::transparentBlack);
     stopAllBtn.onClick = [this]() { sampler.stopAll(); };
+    stopAllBtn.setTooltip(LanguageManager::trUtf8("Detiene todos los samples a la vez", "Stop all samples at once"));
     addAndMakeVisible(stopAllBtn);
 
     volKnob.setRange(0.0, 1.5, 0.01);

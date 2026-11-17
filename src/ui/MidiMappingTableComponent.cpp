@@ -90,6 +90,7 @@ MidiMappingTableComponent::MidiMappingTableComponent(MidiManager& midiMgr)
     resetDefaultsBtn.setText(LanguageManager::trUtf8("Restablecer Fábrica", "Reset to Default"));
     resetDefaultsBtn.setIcon(LucideIcons::IconType::Repeat, 11.0f);
     resetDefaultsBtn.setFontSize(UiType::caption);
+    resetDefaultsBtn.setTooltip(LanguageManager::trUtf8("Restaura la tabla de mapeo MIDI de fábrica", "Restore the factory MIDI mapping table"));
     resetDefaultsBtn.setCornerRadius(5.0f);
     resetDefaultsBtn.setCustomColours(juce::Colour::fromRGB(24, 27, 36),
                                      juce::Colour::fromRGB(148, 163, 184),
@@ -108,6 +109,7 @@ MidiMappingTableComponent::MidiMappingTableComponent(MidiManager& midiMgr)
                               juce::Colour::fromRGB(0, 180, 216),
                               juce::Colour::fromRGB(36, 40, 54));
     exportBtn.onClick = [this]() { exportMapping(); };
+    exportBtn.setTooltip(LanguageManager::trUtf8("Guarda la tabla de mapeo MIDI en un archivo", "Save the MIDI mapping table to a file"));
     addAndMakeVisible(exportBtn);
 
     // 4. Botón Importar
@@ -120,6 +122,7 @@ MidiMappingTableComponent::MidiMappingTableComponent(MidiManager& midiMgr)
                               juce::Colour::fromRGB(52, 211, 153),
                               juce::Colour::fromRGB(36, 40, 54));
     importBtn.onClick = [this]() { importMapping(); };
+    importBtn.setTooltip(LanguageManager::trUtf8("Carga una tabla de mapeo MIDI desde un archivo", "Load a MIDI mapping table from a file"));
     addAndMakeVisible(importBtn);
 
     // 5. Contador de conflictos de mapeo

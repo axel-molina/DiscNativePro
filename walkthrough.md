@@ -2595,3 +2595,39 @@ Junto al `loopActive.store(false)` (`:160`) se limpian `loopStartSeconds` y `loo
 ## 6. Nota
 
 La automatización por clic no se pudo usar en esta máquina (`osascript` → error -25211, sin permiso de accesibilidad), así que la prueba de la región marcada la hace el usuario. La aritmética sí quedó verificada de forma aislada (punto 2 de la verificación).
+
+---
+
+# Walkthrough — P41: tooltips en todos los botones
+
+> Ticket Notion: **DNP-TK-10** «Tooltips en todos los botones (información al pasar el mouse)».
+> Plan aprobado: `implementation_plan.md` (sección «P41»).
+
+## 1. Diagnóstico (medido, no estimado)
+
+Script de cruce entre los miembros de tipo botón de `src/ui` y todos los `setTooltip` del proyecto:
+
+- **111 botones miembro** (DjButton, TextButton, ImageButton, ToggleButton) en los headers.
+- **23 ya tenían tooltip**; **88 no** (pestañas de Ajustes, toggles, transporte de la bandeja, editor de grid, FX, biblioteca, vistas de streaming, tabla MIDI, sampler, barra superior, cartel de bienvenida).
+
+## 2. Implementación
+
+- **13 archivos de `src/ui`**: un `setTooltip(LanguageManager::trUtf8(es, en))` por botón, colocado junto a su configuración (mismo estilo que los tooltips existentes). Los hot cues (array de 4 pads) reciben un tooltip dinámico en el bucle.
+- **`src/ui/FxSlotComponent.cpp` / `src/ui/FxPanelComponent.cpp`**: se añade el `#include "../services/LanguageManager.h"` (no lo traían).
+- **Criterio de copy**: una línea, ≤ ~70 caracteres, forma «tú» (consistente con el copy existente, p. ej. «Obtén tu API Key»); los botones con etiqueta visible no la repiten (aportan efecto o matiz); los de solo icono describen la acción.
+- **Sin cambios deliberados**: el delay de 700 ms lo fija JUCE en el constructor de `TooltipWindow` (no se puede tocar desde el LookAndFeel); el copy de los tooltips que ya existían no se tocó.
+
+## 3. Guarda de regresión
+
+**`tools/check-button-tooltips.sh` (nuevo)**: cruza los miembros de tipo botón de los headers con los `setTooltip` del proyecto; falla si alguno queda sin tooltip. `OK: los 111 botones miembro de src/ui tienen tooltip.`
+
+## 4. Verificación
+
+- `cmake --build build` → **0 errores, 0 warnings** (`[100%] Built target DiscNativePro`).
+- `bash tools/check-button-tooltips.sh` → exit 0.
+- Incidente corregido durante el trabajo: un script de inserción en dos pasadas dejó líneas duplicadas y partió 3 llamadas multilínea preexistentes (`versionHelpIcon`, `refreshBtn`/`addFolderBtn`, `ytAutoplayToggle`); se restauró el diff final a **90 inserciones, 0 borrados** (verificado con `git diff | grep ^-`).
+- Relanzamiento: `pkill` + `open build/DiscNativePro_artefacts/Release/DiscNativePro.app` → proceso activo (PID verificado).
+
+## 5. Pendiente de validación humana (usuario)
+
+Recorrer la app con el mouse por encima de los botones: transporte (PLAY/CUE/SYNC/loop/pitch bend), hot cues, editor de grid, FX, Ajustes (11 pestañas), biblioteca, vistas de streaming y el cartel de bienvenida. **El copy es revisable en una línea** por botón si algo no convence.

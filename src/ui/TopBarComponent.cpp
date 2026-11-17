@@ -36,6 +36,7 @@ TopBarComponent::TopBarComponent()
                                juce::Colour::fromRGB(96, 165, 250),
                                juce::Colour::fromRGB(45, 50, 65));
     smpButton.onClick = [this]() { if (onSmpClicked) onSmpClicked(); };
+    smpButton.setTooltip(LanguageManager::trUtf8("Abrir el panel del Sampler", "Open the Sampler panel"));
     addAndMakeVisible(smpButton);
 
     // 2. Center Brand
@@ -64,6 +65,7 @@ TopBarComponent::TopBarComponent()
     addAndMakeVisible(ramLabel);
 
     layoutBadge.setIcon(LucideIcons::IconType::CircleDot, 12.0f);
+    layoutBadge.setTooltip(LanguageManager::trUtf8("Distribución activa de la interfaz", "Active UI layout"));
     layoutBadge.setText("2 Decks");
     layoutBadge.setFontSize(10.5f);
     layoutBadge.setCornerRadius(6.0f);

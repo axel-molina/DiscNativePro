@@ -69,6 +69,7 @@ WelcomeModalComponent::WelcomeModalComponent()
                                juce::Colour::fromRGB(255, 120, 120),
                                juce::Colour::fromRGB(58, 44, 52));
     youtubeBtn.onClick = []() { juce::URL(youtubeUrl).launchInDefaultBrowser(); };
+    youtubeBtn.setTooltip(LanguageManager::trUtf8("Abre el canal de YouTube en tu navegador", "Opens the YouTube channel in your browser"));
     addAndMakeVisible(youtubeBtn);
 
     githubBtn.setIcon(LucideIcons::IconType::Star, 16.0f);
@@ -79,6 +80,7 @@ WelcomeModalComponent::WelcomeModalComponent()
                                 juce::Colour::fromRGB(200, 205, 215),
                                 juce::Colour::fromRGB(36, 40, 54));
     githubBtn.onClick = []() { juce::URL(githubUrl).launchInDefaultBrowser(); };
+    githubBtn.setTooltip(LanguageManager::trUtf8("Abre el repositorio en tu navegador", "Opens the repository in your browser"));
     addAndMakeVisible(githubBtn);
 
     supportHintLabel.setFont(juce::FontOptions(UiType::caption, juce::Font::plain));
@@ -150,7 +152,9 @@ void WelcomeModalComponent::refreshLanguage()
                                                       "Tutorials, news and project status."),
                               juce::dontSendNotification);
     dontShowAgainToggle.setButtonText(LanguageManager::trUtf8("No mostrar de nuevo", "Do not show again"));
+    dontShowAgainToggle.setTooltip(LanguageManager::trUtf8("No volver a mostrar el cartel al abrir la app", "Don't show this again on launch"));
     okBtn.setText(LanguageManager::trUtf8("Entendido", "Got it"));
+    okBtn.setTooltip(LanguageManager::trUtf8("Cerrar el cartel de bienvenida", "Close the welcome dialog"));
 }
 
 bool WelcomeModalComponent::isSuppressed()

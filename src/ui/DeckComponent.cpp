@@ -195,6 +195,7 @@ DeckComponent::DeckComponent(int deckNum, DeckPlayer& player, AudioEngine& audio
         deck.setPitchBend(pitchBendDownButton.isDown() ? -0.04f : 0.0f);
     };
     addAndMakeVisible(pitchBendDownButton);
+    pitchBendDownButton.setTooltip(LanguageManager::trUtf8("Tempo momentáneo: baja 4% mientras lo mantienes", "Momentary tempo: -4% while held"));
 
     pitchBendUpButton.setIcon(LucideIcons::IconType::Plus, 11.0f);
     pitchBendUpButton.setCornerRadius(4.0f);
@@ -206,6 +207,7 @@ DeckComponent::DeckComponent(int deckNum, DeckPlayer& player, AudioEngine& audio
         deck.setPitchBend(pitchBendUpButton.isDown() ? 0.04f : 0.0f);
     };
     addAndMakeVisible(pitchBendUpButton);
+    pitchBendUpButton.setTooltip(LanguageManager::trUtf8("Tempo momentáneo: sube 4% mientras lo mantienes", "Momentary tempo: +4% while held"));
 
     // Center Platter
     addAndMakeVisible(jogWheel);
@@ -223,6 +225,7 @@ DeckComponent::DeckComponent(int deckNum, DeckPlayer& player, AudioEngine& audio
         togglePlayPause();
     };
     addAndMakeVisible(playButton);
+    playButton.setTooltip(LanguageManager::trUtf8("Reproducir o pausar la pista", "Play or pause the track"));
 
     cueButton.setIcon(LucideIcons::IconType::Disc, 13.0f);
     cueButton.setText("CUE");
@@ -236,6 +239,7 @@ DeckComponent::DeckComponent(int deckNum, DeckPlayer& player, AudioEngine& audio
         triggerCue();
     };
     addAndMakeVisible(cueButton);
+    cueButton.setTooltip(LanguageManager::trUtf8("En pausa: pre-escucha desde el CUE · suena: vuelve al CUE", "Paused: preview from cue · playing: return to cue"));
 
     // Hot Cue pads (style matching STEMS/FX; session-RAM only, same store as MIDI pads)
     hotCueRowLabel.setText("HOT CUE", juce::dontSendNotification);
@@ -249,6 +253,7 @@ DeckComponent::DeckComponent(int deckNum, DeckPlayer& player, AudioEngine& audio
         auto& pad = hotCueButtons[static_cast<size_t>(i)];
         pad.setText(juce::String(i + 1));
         pad.setFontSize(10.5f);
+        pad.setTooltip(LanguageManager::trUtf8("Hot cue: guarda o salta al punto · clic derecho: menú", "Hot cue: set or jump to point · right-click: menu"));
         pad.setCornerRadius(4.0f);
         pad.setCustomColours(juce::Colour::fromRGB(24, 26, 32),
                              juce::Colour::fromRGB(148, 163, 184),
@@ -292,6 +297,7 @@ DeckComponent::DeckComponent(int deckNum, DeckPlayer& player, AudioEngine& audio
         }
     };
     addAndMakeVisible(loopPrevButton);
+    loopPrevButton.setTooltip(LanguageManager::trUtf8("Mitad de beats para el loop", "Halve the loop length in beats"));
 
     loopBeatsButton.setIcon(LucideIcons::IconType::Repeat, 12.0f);
     loopBeatsButton.setText(juce::String(currentLoopBeats));
@@ -322,6 +328,7 @@ DeckComponent::DeckComponent(int deckNum, DeckPlayer& player, AudioEngine& audio
         }
     };
     addAndMakeVisible(loopBeatsButton);
+    loopBeatsButton.setTooltip(LanguageManager::trUtf8("Activa o desactiva el loop del tamaño indicado", "Toggle the loop of the shown size"));
 
     loopNextButton.setIcon(LucideIcons::IconType::ChevronRight, 11.0f);
     loopNextButton.setCornerRadius(4.0f);
@@ -339,6 +346,7 @@ DeckComponent::DeckComponent(int deckNum, DeckPlayer& player, AudioEngine& audio
         }
     };
     addAndMakeVisible(loopNextButton);
+    loopNextButton.setTooltip(LanguageManager::trUtf8("Doble de beats para el loop", "Double the loop length in beats"));
 
     // P15: Performance row (beat jump cuantizado, loop roll, slip)
     jumpBackButton.setIcon(LucideIcons::IconType::ChevronLeft, 11.0f);

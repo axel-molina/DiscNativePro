@@ -141,6 +141,7 @@ UsbLibraryView::UsbLibraryView(juce::AudioFormatManager& fm)
                                       juce::Colour::fromRGB(0, 229, 255),
                                       juce::Colour::fromRGB(0, 180, 216).withAlpha(0.4f));
     manualExploreBtn.onClick = [this]() { openManualFolder(); };
+    manualExploreBtn.setTooltip(LanguageManager::trUtf8("Elige una unidad o carpeta para explorar", "Choose a drive or folder to browse"));
     addChildComponent(manualExploreBtn);
 
     LanguageManager::getInstance().addListener(this);

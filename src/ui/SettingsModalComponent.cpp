@@ -318,6 +318,7 @@ void SettingsModalComponent::setupGeneralTab()
     bodyContent.addChildComponent(generalSectionDeck);
 
     loadLockToggle.setButtonText(juce::String::fromUTF8("Protección de carga (Load Lock): Bloquear carga si el deck reproduce en vivo"));
+    loadLockToggle.setTooltip(LanguageManager::trUtf8("Evita reemplazar la pista de un deck que suena en vivo", "Prevents replacing the track of a live-playing deck"));
     loadLockToggle.setToggleState(audioEngine.isLoadLockEnabled(), juce::dontSendNotification);
     loadLockToggle.setColour(juce::ToggleButton::textColourId, juce::Colours::white.withAlpha(0.85f));
     loadLockToggle.onClick = [this]() {
@@ -326,6 +327,7 @@ void SettingsModalComponent::setupGeneralTab()
     bodyContent.addChildComponent(loadLockToggle);
 
     autoplayOnLoadToggle.setButtonText(juce::String::fromUTF8("Reproducir al cargar (Autoplay en bandeja)"));
+    autoplayOnLoadToggle.setTooltip(LanguageManager::trUtf8("Al soltar la pista en la bandeja, arranca sola", "Track starts playing by itself when loaded"));
     autoplayOnLoadToggle.setToggleState(audioEngine.isAutoplayOnLoadEnabled(), juce::dontSendNotification);
     autoplayOnLoadToggle.setColour(juce::ToggleButton::textColourId, juce::Colours::white.withAlpha(0.85f));
     autoplayOnLoadToggle.onClick = [this]() {
@@ -372,6 +374,7 @@ void SettingsModalComponent::setupGeneralTab()
     bodyContent.addChildComponent(pitchRangeCombo);
 
     autoCueToggle.setButtonText(juce::String::fromUTF8("Auto-CUE: Posicionar cabezal en el primer beat al cargar pista"));
+    autoCueToggle.setTooltip(LanguageManager::trUtf8("Mueve el cabezal al primer beat al cargar la pista", "Moves the playhead to the first beat on load"));
     autoCueToggle.setToggleState(true, juce::dontSendNotification);
     autoCueToggle.setColour(juce::ToggleButton::textColourId, juce::Colours::white.withAlpha(0.85f));
     bodyContent.addChildComponent(autoCueToggle);
@@ -416,6 +419,7 @@ void SettingsModalComponent::setupGeneralTab()
 
     recBrowseBtn.setIcon(LucideIcons::IconType::Folder, 12.0f);
     recBrowseBtn.setText(juce::String::fromUTF8("Examinar..."));
+    recBrowseBtn.setTooltip(LanguageManager::trUtf8("Elige la carpeta donde se guardan las grabaciones", "Choose the recordings folder"));
     recBrowseBtn.setFontSize(UiType::caption);
     recBrowseBtn.setCornerRadius(5.0f);
     recBrowseBtn.setCustomColours(juce::Colour::fromRGB(32, 35, 48),
@@ -441,6 +445,7 @@ void SettingsModalComponent::setupGeneralTab()
 
     recOpenBtn.setIcon(LucideIcons::IconType::Folder, 12.0f);
     recOpenBtn.setText(juce::String::fromUTF8("Abrir Carpeta"));
+    recOpenBtn.setTooltip(LanguageManager::trUtf8("Abre la carpeta de grabaciones en el Finder", "Open the recordings folder in Finder"));
     recOpenBtn.setFontSize(UiType::caption);
     recOpenBtn.setCornerRadius(5.0f);
     recOpenBtn.setCustomColours(juce::Colour::fromRGB(32, 35, 48),
@@ -456,6 +461,7 @@ void SettingsModalComponent::setupGeneralTab()
     bodyContent.addChildComponent(recOpenBtn);
 
     recResetBtn.setText(juce::String::fromUTF8("Por defecto"));
+    recResetBtn.setTooltip(LanguageManager::trUtf8("Restaura la carpeta de grabaciones por defecto", "Restore the default recordings folder"));
     recResetBtn.setFontSize(UiType::caption);
     recResetBtn.setCornerRadius(5.0f);
     recResetBtn.setCustomColours(juce::Colour::fromRGB(26, 28, 36),
@@ -503,6 +509,7 @@ void SettingsModalComponent::setupGeneralTab()
 
     // P26: precálculo en lote de toda la biblioteca indexada (4 stems).
     stemsPrecalcBtn.setText(LanguageManager::trUtf8("Precalcular biblioteca (4 stems)", "Precompute library (4 stems)"));
+    stemsPrecalcBtn.setTooltip(LanguageManager::trUtf8("Separa todas las pistas de la biblioteca en 4 stems (demora)", "Split the whole library into 4 stems (takes a while)"));
     stemsPrecalcBtn.setFontSize(UiType::caption);
     stemsPrecalcBtn.setCornerRadius(5.0f);
     stemsPrecalcBtn.setCustomColours(juce::Colour::fromRGB(26, 28, 36),
@@ -535,6 +542,7 @@ void SettingsModalComponent::setupGeneralTab()
     bodyContent.addChildComponent(downloadsSectionLabel);
 
     saveDownloadsToggle.setButtonText(juce::String::fromUTF8("Guardar canciones descargadas en disco local (persistente)"));
+    saveDownloadsToggle.setTooltip(LanguageManager::trUtf8("Las descargas se guardan como .m4a AAC en disco", "Downloads are saved to disk as .m4a AAC"));
     saveDownloadsToggle.setToggleState(YouTubeService::isSaveDownloadsEnabled(), juce::dontSendNotification);
     saveDownloadsToggle.setColour(juce::ToggleButton::textColourId, juce::Colours::white.withAlpha(0.85f));
     saveDownloadsToggle.onClick = [this]() {
@@ -558,6 +566,7 @@ void SettingsModalComponent::setupGeneralTab()
 
     downloadsBrowseBtn.setIcon(LucideIcons::IconType::Folder, 12.0f);
     downloadsBrowseBtn.setText(juce::String::fromUTF8("Examinar..."));
+    downloadsBrowseBtn.setTooltip(LanguageManager::trUtf8("Elige la carpeta de descargas de YouTube", "Choose the YouTube downloads folder"));
     downloadsBrowseBtn.setFontSize(UiType::caption);
     downloadsBrowseBtn.setCornerRadius(5.0f);
     downloadsBrowseBtn.setCustomColours(juce::Colour::fromRGB(32, 35, 48),
@@ -585,6 +594,7 @@ void SettingsModalComponent::setupGeneralTab()
 
     downloadsOpenBtn.setIcon(LucideIcons::IconType::Folder, 12.0f);
     downloadsOpenBtn.setText(juce::String::fromUTF8("Abrir Carpeta"));
+    downloadsOpenBtn.setTooltip(LanguageManager::trUtf8("Abre la carpeta de descargas en el Finder", "Open the downloads folder in Finder"));
     downloadsOpenBtn.setFontSize(UiType::caption);
     downloadsOpenBtn.setCornerRadius(5.0f);
     downloadsOpenBtn.setCustomColours(juce::Colour::fromRGB(32, 35, 48),
@@ -600,6 +610,7 @@ void SettingsModalComponent::setupGeneralTab()
     bodyContent.addChildComponent(downloadsOpenBtn);
 
     downloadsResetBtn.setText(juce::String::fromUTF8("Por defecto"));
+    downloadsResetBtn.setTooltip(LanguageManager::trUtf8("Restaura la carpeta de descargas por defecto", "Restore the default downloads folder"));
     downloadsResetBtn.setFontSize(UiType::caption);
     downloadsResetBtn.setCornerRadius(5.0f);
     downloadsResetBtn.setCustomColours(juce::Colour::fromRGB(26, 28, 36),
@@ -677,14 +688,23 @@ void SettingsModalComponent::updateDownloadsFolderUI()
 void SettingsModalComponent::refreshLanguage()
 {
     tabGeneralBtn.setText(LanguageManager::trUtf8("General", "General"));
+    tabGeneralBtn.setTooltip(LanguageManager::trUtf8("Preferencias generales e idioma", "General preferences and language"));
     tabDevicesBtn.setText(LanguageManager::trUtf8("Dispositivos", "Devices"));
+    tabDevicesBtn.setTooltip(LanguageManager::trUtf8("Dispositivos y controladoras", "Devices and controllers"));
     tabSoundBtn.setText(LanguageManager::trUtf8("Sonido", "Sound"));
+    tabSoundBtn.setTooltip(LanguageManager::trUtf8("Dispositivos de audio y enrutamiento de salidas", "Audio devices and output routing"));
     tabMidiBtn.setText(LanguageManager::trUtf8("MIDI", "MIDI"));
+    tabMidiBtn.setTooltip(LanguageManager::trUtf8("Perfiles de controladora, mapeo y aprendizaje", "Controller profiles, mapping and learning"));
     tabShortcutsBtn.setText(LanguageManager::trUtf8("Shortcuts", "Shortcuts"));
+    tabShortcutsBtn.setTooltip(LanguageManager::trUtf8("Atajos de teclado de la app", "App keyboard shortcuts"));
     tabStreamingBtn.setText(LanguageManager::trUtf8("Streaming", "Streaming"));
+    tabStreamingBtn.setTooltip(LanguageManager::trUtf8("YouTube, SoundCloud y USB", "YouTube, SoundCloud and USB"));
     tabAIBtn.setText(LanguageManager::trUtf8("IA Match", "AI Match"));
+    tabAIBtn.setTooltip(LanguageManager::trUtf8("Clave API y recomendaciones con IA", "API key and AI recommendations"));
     tabDonateBtn.setText(LanguageManager::trUtf8("Donar", "Donate"));
+    tabDonateBtn.setTooltip(LanguageManager::trUtf8("Apoya el proyecto con un café", "Support the project with a coffee"));
     tabDesignBtn.setText(LanguageManager::trUtf8("Diseño", "Design"));
+    tabDesignBtn.setTooltip(LanguageManager::trUtf8("Colores de bandejas, ondas y presets", "Deck colors, waveforms and presets"));
 
     undoButton.setButtonText(LanguageManager::trUtf8("Deshacer", "Undo"));
     applyButton.setButtonText(LanguageManager::trUtf8("Aplicar", "Apply"));
@@ -720,6 +740,7 @@ void SettingsModalComponent::refreshLanguage()
     autoCueToggle.setButtonText(LanguageManager::trUtf8("Auto-CUE: Posicionar cabezal en el primer beat al cargar pista", "Auto-CUE: Position playhead at first beat on track load"));
     ytAutoplayToggle.setButtonText(LanguageManager::trUtf8("Autoplay YouTube: Reproducir automáticamente el video al cargarlo en bandeja",
                                                             "YouTube autoplay: Start playing the video automatically when loaded on a deck"));
+    ytAutoplayToggle.setTooltip(LanguageManager::trUtf8("El video arranca al cargarlo en la bandeja", "Video starts playing when loaded to a deck"));
 
     generalSectionDisplay.setText(LanguageManager::trUtf8("Visualización y Rendimiento", "Display & Performance"), juce::dontSendNotification);
     waveformFpsLabel.setText(LanguageManager::trUtf8("Tasa de refresco de formas de onda:", "Waveform Refresh Rate:"), juce::dontSendNotification);
@@ -762,6 +783,7 @@ void SettingsModalComponent::refreshLanguage()
     appInfoLabel.setText(LanguageManager::tr("DiscNativePro DJ Workstation v" + appVersion + " • Motor C++20 nativo con JUCE 8, CoreAudio y SIMD DSP.",
                                              "DiscNativePro DJ Workstation v" + appVersion + " • Native C++20 engine with JUCE 8, CoreAudio & SIMD DSP."), juce::dontSendNotification);
     showWelcomeBtn.setText(LanguageManager::trUtf8("Ver mensaje de bienvenida", "Show welcome message"));
+    showWelcomeBtn.setTooltip(LanguageManager::trUtf8("Vuelve a mostrar el cartel de bienvenida", "Show the welcome dialog again"));
 
     // Tab 1: Dispositivos / Devices
     routingSectionLabel.setText(LanguageManager::trUtf8("Enrutamiento de Salidas de Audio (Pioneer DDJ / Multi-Canal)", "Audio Output Routing (Pioneer DDJ / Multi-Channel)"), juce::dontSendNotification);
@@ -819,6 +841,7 @@ void SettingsModalComponent::refreshLanguage()
     headroomCombo.setSelectedId(curHr > 0 ? curHr : 1, juce::dontSendNotification);
 
     masterLimiterToggle.setButtonText(LanguageManager::trUtf8("Limitador Master de Seguridad (Evita distorsión digital y clipping)", "Safety Master Limiter (Prevents digital distortion and clipping)"));
+    masterLimiterToggle.setTooltip(LanguageManager::trUtf8("Limita el volumen master para evitar distorsión", "Limits master volume to avoid distortion"));
 
     ceilingLabel.setText(LanguageManager::trUtf8("Techo del Limitador (CEILING):", "Limiter Ceiling (CEILING):"), juce::dontSendNotification);
 
@@ -829,9 +852,11 @@ void SettingsModalComponent::refreshLanguage()
     // Bloque Micrófono / Talkover (P38: faltaba la re-traducción en caliente)
     soundSectionMic.setText(LanguageManager::trUtf8("Micrófono (Talkover)", "Microphone (Talkover)"), juce::dontSendNotification);
     micEnableToggle.setButtonText(LanguageManager::trUtf8("Habilitar micrófono (envía tu voz a la mezcla master)", "Enable microphone (sends your voice to the master mix)"));
+    micEnableToggle.setTooltip(LanguageManager::trUtf8("Envía tu voz al mezclador y a la grabación", "Sends your voice to the mixer and recording"));
     micGainLabel.setText(LanguageManager::trUtf8("Ganancia de entrada (GAIN):", "Input Gain (GAIN):"), juce::dontSendNotification);
     micDuckLabel.setText(LanguageManager::trUtf8("Profundidad del Duck (bajada de música al hablar):", "Duck Depth (music drop while talking):"), juce::dontSendNotification);
     micDuckAutoToggle.setButtonText(LanguageManager::trUtf8("Duck automático al hablar (detecta voz y baja la música)", "Automatic ducking when talking (detects voice and lowers the music)"));
+    micDuckAutoToggle.setTooltip(LanguageManager::trUtf8("Baja la música automáticamente cuando hablas", "Automatically ducks the music while you talk"));
 
     // Tab 3: MIDI
     midiTitleLabel.setText(LanguageManager::trUtf8("Controladores USB MIDI", "USB MIDI Controllers"), juce::dontSendNotification);
@@ -851,6 +876,7 @@ void SettingsModalComponent::refreshLanguage()
     apiKeyLabel.setText(LanguageManager::trUtf8("YouTube Data API v3 Key (Opcional - Para búsqueda oficial sin restricciones):", "YouTube Data API v3 Key (Optional - For official search without limits):"), juce::dontSendNotification);
     apiKeyEditor.setTextToShowWhenEmpty(LanguageManager::trUtf8("Pega tu clave AIzaSy...", "Paste your AIzaSy key..."), juce::Colour::fromRGB(100, 108, 125));
     clearApiKeyBtn.setText(LanguageManager::trUtf8("Borrar Key", "Clear Key"));
+    clearApiKeyBtn.setTooltip(LanguageManager::trUtf8("Borra la clave API de transmisión guardada", "Clear the saved broadcast API key"));
 
     // Tab 10: Transmitir (radio + RTMP + podcasts)
     transmitTitleLabel.setText(LanguageManager::trUtf8("Transmitir — Emisiones en vivo y podcasts",
@@ -876,6 +902,7 @@ void SettingsModalComponent::refreshLanguage()
     broadcastDescLabel.setText(LanguageManager::trUtf8("Datos de tu servidor propio de streaming.",
                                                        "Details of your own streaming server."), juce::dontSendNotification);
     broadcastEnabledToggle.setButtonText(LanguageManager::trUtf8("Emitir mezcla en vivo", "Broadcast mix live"));
+    broadcastEnabledToggle.setTooltip(LanguageManager::trUtf8("Activa la emisión en vivo de tu mezcla", "Enables live broadcasting of your mix"));
     broadcastHostLabel.setText(LanguageManager::trUtf8("Servidor (host o IP):", "Server (host or IP):"), juce::dontSendNotification);
     broadcastPortLabel.setText(LanguageManager::trUtf8("Puerto:", "Port:"), juce::dontSendNotification);
     broadcastPasswordLabel.setText(LanguageManager::trUtf8("Contraseña:", "Password:"), juce::dontSendNotification);
@@ -885,14 +912,17 @@ void SettingsModalComponent::refreshLanguage()
     rtmpKeyLabel.setText(LanguageManager::trUtf8("Stream key:", "Stream key:"), juce::dontSendNotification);
     rtmpBitrateLabel.setText(LanguageManager::trUtf8("Bitrate AAC:", "AAC bitrate:"), juce::dontSendNotification);
     installFfmpegBtn.setText(LanguageManager::trUtf8("Instalar ffmpeg", "Install ffmpeg"));
+    installFfmpegBtn.setTooltip(LanguageManager::trUtf8("Descarga ffmpeg para exportar podcasts a MP3", "Downloads ffmpeg to export podcasts as MP3"));
     podcastSectionLabel.setText(LanguageManager::trUtf8("Podcast (exportar grabación a MP3)",
                                                         "Podcast (export recording to MP3)"), juce::dontSendNotification);
     podcastDescLabel.setText(LanguageManager::trUtf8("Convierte una grabación de sesión (WAV) a MP3 listo para publicar.",
                                                     "Converts a session recording (WAV) into a publish-ready MP3."), juce::dontSendNotification);
     podcastRecCombo.setTextWhenNothingSelected(LanguageManager::trUtf8("(sin grabaciones)", "(no recordings)"));
     podcastRefreshBtn.setText(LanguageManager::trUtf8("Refrescar", "Refresh"));
+    podcastRefreshBtn.setTooltip(LanguageManager::trUtf8("Reescanea las grabaciones de sesión", "Rescan session recordings"));
     podcastBitrateLabel.setText(LanguageManager::trUtf8("Bitrate de exportación:", "Export bitrate:"), juce::dontSendNotification);
     podcastExportBtn.setText(LanguageManager::trUtf8("Exportar a MP3", "Export to MP3"));
+    podcastExportBtn.setTooltip(LanguageManager::trUtf8("Convierte la grabación seleccionada a MP3", "Convert the selected recording to MP3"));
     refreshFfmpegStatus();
     apiInfoCard.setText(LanguageManager::trUtf8("Modo Video en Bandejas:\n• Al soltar un video de YouTube en el Deck 1 o Deck 2, el Jog Wheel se transforma en reproductor de video de alta definición (WebKit).\n• Los faders de volumen y el Crossfader central mezclan fluidamente el audio y video entre bandejas.\n• Iniciar sesión en YouTube en Safari comparte tu sesión con WKWebView para reproducción Premium sin publicidad.", "Video Mode in Decks:\n• Dropping a YouTube video onto Deck 1 or 2 turns the Jog Wheel into an HD video player (WebKit).\n• Volume faders and Crossfader smoothly mix audio and video between decks.\n• Logging in to YouTube in Safari shares your session with WKWebView for ad-free Premium playback."), juce::dontSendNotification);
 
@@ -900,16 +930,19 @@ void SettingsModalComponent::refreshLanguage()
     aiSectionTitle.setText(LanguageManager::trUtf8("Inteligencia Artificial (AI Smart Match)", "Artificial Intelligence (AI Smart Match)"), juce::dontSendNotification);
     aiDescLabel.setText(LanguageManager::trUtf8("Analiza la pista en reproducción (local o YouTube) y sugiere mezclas armónicas por género, tempo y Camelot Key.\nElige tu proveedor preferido e ingresa tu clave API personal.", "Analyzes the currently playing track (local or YouTube) and suggests harmonic transitions by genre, tempo and Camelot Key.\nChoose your provider and enter your personal API key."), juce::dontSendNotification);
     aiEnabledToggle.setButtonText(LanguageManager::trUtf8("Habilitar Recomendaciones Inteligentes de IA", "Enable AI Smart Recommendations"));
+    aiEnabledToggle.setTooltip(LanguageManager::trUtf8("Activa las sugerencias de canciones con IA", "Enables AI track suggestions"));
     aiProviderLabel.setText(LanguageManager::trUtf8("Proveedor de Inteligencia Artificial:", "AI Provider:"), juce::dontSendNotification);
     aiModelLabel.setText(LanguageManager::trUtf8("Modelo (editable: elige o pega uno nuevo):", "Model (editable: pick or paste a new one):"), juce::dontSendNotification);
     aiApiKeyLabel.setText(LanguageManager::trUtf8("Clave API (API Key) del Proveedor Seleccionado:", "API Key for Selected Provider:"), juce::dontSendNotification);
     aiApiKeyEditor.setTextToShowWhenEmpty(LanguageManager::trUtf8("Pega tu API Key...", "Paste your API Key..."), juce::Colour::fromRGB(100, 108, 125));
     clearAiApiKeyBtn.setText(LanguageManager::trUtf8("Borrar Key", "Clear Key"));
+    clearAiApiKeyBtn.setTooltip(LanguageManager::trUtf8("Borra la clave API del proveedor de IA", "Clear the AI provider API key"));
     aiInfoCard.setText(LanguageManager::trUtf8("Obtén tu API Key gratuita:\n• Google Gemini: aistudio.google.com (15 req/min sin costo)\n• OpenAI: platform.openai.com\n• Anthropic: console.anthropic.com\n• DeepSeek: platform.deepseek.com\n• OpenRouter: openrouter.ai (una key, 200+ modelos)", "Get your free API Key:\n• Google Gemini: aistudio.google.com (15 req/min free)\n• OpenAI: platform.openai.com\n• Anthropic: console.anthropic.com\n• DeepSeek: platform.deepseek.com\n• OpenRouter: openrouter.ai (one key, 200+ models)"), juce::dontSendNotification);
 
     // Tab 7: Donar
     donateTitleLabel.setText(LanguageManager::trUtf8("Apoya DiscNativePro", "Support DiscNativePro"), juce::dontSendNotification);    donateDescLabel.setText(LanguageManager::trUtf8("¿Estás disfrutando de DiscNativePro? Puedes apoyar el desarrollo y las futuras funcionalidades regalándome un café.", "Enjoying DiscNativePro? You can support development and upcoming features by buying me a coffee."), juce::dontSendNotification);
     donateBtn.setText(LanguageManager::trUtf8("Donar un café en Cafecito", "Buy me a coffee on Cafecito"));
+    donateBtn.setTooltip(LanguageManager::trUtf8("Abre Cafecito en tu navegador para apoyar el proyecto", "Opens Cafecito in your browser to support the project"));
     donateHintLabel.setText(LanguageManager::trUtf8("Se abrirá tu navegador. Aporte voluntario, ¡gracias por apoyar el proyecto!", "Your browser will open. Voluntary contribution — thanks for supporting the project!"), juce::dontSendNotification);
     donateInfoCard.setText(LanguageManager::trUtf8("Tu aporte ayuda a:\n• Mantener el desarrollo activo y corregir errores.\n• Financiar hosting, licencias y pruebas en equipos reales.\n• Priorizar las funcionalidades que más pide la comunidad.", "Your contribution helps to:\n• Keep active development and bug fixes going.\n• Cover hosting, licenses and testing on real hardware.\n• Prioritize the features the community requests most."), juce::dontSendNotification);
 
@@ -918,23 +951,32 @@ void SettingsModalComponent::refreshLanguage()
     designDescLabel.setText(LanguageManager::trUtf8("Elige los colores de Graves, Medios y Agudos. Se aplican en vivo al wave de la bandeja seleccionada y se guardan automáticamente.", "Choose the Low, Mid and High colours. They apply live to the selected deck's waveform and save automatically."), juce::dontSendNotification);
     deckThemeLabel.setText(LanguageManager::trUtf8("Bandeja:", "Deck:"), juce::dontSendNotification);
     deckTheme1Btn.setText(LanguageManager::trUtf8("Bandeja 1", "Deck 1"));
+    deckTheme1Btn.setTooltip(LanguageManager::trUtf8("Aplica la paleta de color a la Bandeja 1", "Apply the color palette to Deck 1"));
     deckTheme2Btn.setText(LanguageManager::trUtf8("Bandeja 2", "Deck 2"));
+    deckTheme2Btn.setTooltip(LanguageManager::trUtf8("Aplica la paleta de color a la Bandeja 2", "Apply the color palette to Deck 2"));
     waveLowLabel.setText(LanguageManager::trUtf8("Graves (Low):", "Lows (Low):"), juce::dontSendNotification);
     waveMidLabel.setText(LanguageManager::trUtf8("Medios (Mid):", "Mids (Mid):"), juce::dontSendNotification);
     waveHighLabel.setText(LanguageManager::trUtf8("Agudos (High):", "Highs (High):"), juce::dontSendNotification);
     designPresetLabel.setText(LanguageManager::trUtf8("Esquemas predefinidos:", "Preset schemes:"), juce::dontSendNotification);
     presetRgbBtn.setText(LanguageManager::trUtf8("RGB Multicolor", "RGB Multicolor"));
+    presetRgbBtn.setTooltip(LanguageManager::trUtf8("Preset: RGB multicolor para las ondas", "Preset: multicolor RGB waveforms"));
     presetNeonBtn.setText(LanguageManager::trUtf8("Azul Neón", "Neon Blue"));
+    presetNeonBtn.setTooltip(LanguageManager::trUtf8("Preset: azul neón para las ondas", "Preset: neon blue waveforms"));
     presetSilverBtn.setText(LanguageManager::trUtf8("Plata Mono", "Mono Silver"));
+    presetSilverBtn.setTooltip(LanguageManager::trUtf8("Preset: plata monocromática para las ondas", "Preset: mono silver waveforms"));
     refreshDesignSwatches();
 
     // Tab 9: Versión / Version
     tabVersionBtn.setText(LanguageManager::trUtf8("Versión", "Version"));
+    tabVersionBtn.setTooltip(LanguageManager::trUtf8("Versión de la app y actualizaciones", "App version and updates"));
     tabTransmitBtn.setText(LanguageManager::trUtf8("Transmitir", "Transmit"));
+    tabTransmitBtn.setTooltip(LanguageManager::trUtf8("Emisión en vivo, podcasts y ffmpeg", "Live broadcasting, podcasts and ffmpeg"));
     versionSectionTitle.setText(LanguageManager::trUtf8("Versión", "Version"), juce::dontSendNotification);
     versionChangeTitle.setText(LanguageManager::trUtf8("Cambiar de versión", "Change version"), juce::dontSendNotification);
     checkUpdatesBtn.setText(LanguageManager::trUtf8("Buscar actualizaciones", "Check for updates"));
+    checkUpdatesBtn.setTooltip(LanguageManager::trUtf8("Busca una versión más nueva en GitHub", "Check GitHub for a newer version"));
     installVersionBtn.setText(LanguageManager::trUtf8("Instalar", "Install"));
+    installVersionBtn.setTooltip(LanguageManager::trUtf8("Descarga e instala la versión encontrada", "Download and install the found version"));
     versionHelpIcon.setTooltip(LanguageManager::trUtf8(
         "Selecciona cualquier versión oficial disponible en GitHub Releases para instalarla o cambiar de versión.",
         "Select any official version available in GitHub Releases to install or switch versions."));
@@ -1967,8 +2009,11 @@ void SettingsModalComponent::setupDesignTab()
     };
 
     setupRow(waveLowLabel, waveLowSwatch, "Graves (Low):", 0);
+    waveLowSwatch.setTooltip(LanguageManager::trUtf8("Elegir el color de los graves de la onda", "Pick the waveform low color"));
     setupRow(waveMidLabel, waveMidSwatch, "Medios (Mid):", 1);
+    waveMidSwatch.setTooltip(LanguageManager::trUtf8("Elegir el color de los medios de la onda", "Pick the waveform mid color"));
     setupRow(waveHighLabel, waveHighSwatch, "Agudos (High):", 2);
+    waveHighSwatch.setTooltip(LanguageManager::trUtf8("Elegir el color de los agudos de la onda", "Pick the waveform high color"));
 
     designPresetLabel.setFont(juce::FontOptions(UiType::body, juce::Font::plain));
     designPresetLabel.setColour(juce::Label::textColourId, juce::Colour::fromRGB(180, 185, 200));

@@ -194,6 +194,7 @@ YouTubeLibraryView::YouTubeLibraryView()
                                juce::Colour::fromRGB(0, 229, 255),
                                juce::Colour::fromRGB(38, 43, 56));
     searchBtn.onClick = [this]() { performSearch(searchBox.getText()); };
+    searchBtn.setTooltip(LanguageManager::trUtf8("Busca en YouTube el texto del campo", "Search YouTube for the query"));
     addAndMakeVisible(searchBtn);
 
     // 4. Paste URL Button
@@ -206,6 +207,7 @@ YouTubeLibraryView::YouTubeLibraryView()
                                  juce::Colour::fromRGB(245, 158, 11),
                                  juce::Colour::fromRGB(38, 43, 56));
     pasteUrlBtn.onClick = [this]() { handlePasteUrl(); };
+    pasteUrlBtn.setTooltip(LanguageManager::trUtf8("Pega una URL de YouTube desde el portapapeles", "Paste a YouTube URL from the clipboard"));
     addAndMakeVisible(pasteUrlBtn);
 
     // 5. API Status Badge

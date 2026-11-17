@@ -1,4 +1,5 @@
 #include "FxPanelComponent.h"
+#include "../services/LanguageManager.h"
 
 FxPanelComponent::FxPanelComponent(DjMixer& djMixer)
     : slot1_1(djMixer.getFxChain(0).getSlot(0)),
@@ -22,6 +23,7 @@ FxPanelComponent::FxPanelComponent(DjMixer& djMixer)
 
     manualBtn.setText("MANUAL");
     manualBtn.setFontSize(8.5f);
+    manualBtn.setTooltip(LanguageManager::trUtf8("Modo manual: control de los efectos con precisión", "Manual mode: precise FX control"));
     manualBtn.setCornerRadius(3.0f);
     manualBtn.onClick = [this]() {
         isInstantMode = false;
@@ -31,6 +33,7 @@ FxPanelComponent::FxPanelComponent(DjMixer& djMixer)
 
     instantBtn.setText("INSTANT");
     instantBtn.setFontSize(8.5f);
+    instantBtn.setTooltip(LanguageManager::trUtf8("Modo instantáneo: control de los efectos con un clic", "Instant mode: one-click FX control"));
     instantBtn.setCornerRadius(3.0f);
     instantBtn.onClick = [this]() {
         isInstantMode = true;

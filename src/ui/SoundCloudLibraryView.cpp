@@ -58,6 +58,7 @@ SoundCloudLibraryView::SoundCloudLibraryView()
                                juce::Colours::white,
                                juce::Colour::fromRGB(255, 85, 0).withAlpha(0.5f));
     searchBtn.onClick = [this]() { performSearch(searchBox.getText()); };
+    searchBtn.setTooltip(LanguageManager::trUtf8("Busca en SoundCloud el texto del campo", "Search SoundCloud for the query"));
     addAndMakeVisible(searchBtn);
 
     statusLabel.setFont(juce::FontOptions(11.0f));

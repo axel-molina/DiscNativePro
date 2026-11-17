@@ -25,6 +25,7 @@ GridEditorComponent::GridEditorComponent(DeckPlayer& player, AudioEngine& engine
     // Fila de offset (ms)
     neutral(nudgeBackFarButton, 10.0f);
     nudgeBackFarButton.setText("-20");
+    nudgeBackFarButton.setTooltip(LanguageManager::trUtf8("Corre el beatgrid 20 ms atrás", "Shift beatgrid 20 ms back"));
     wire(nudgeBackFarButton, [this]() {
         deck.setFirstBeatOffset(deck.getFirstBeatOffset() - 0.020);
         repaint();
@@ -32,6 +33,7 @@ GridEditorComponent::GridEditorComponent(DeckPlayer& player, AudioEngine& engine
 
     neutral(nudgeBackButton, 10.0f);
     nudgeBackButton.setText("-5");
+    nudgeBackButton.setTooltip(LanguageManager::trUtf8("Corre el beatgrid 5 ms atrás", "Shift beatgrid 5 ms back"));
     wire(nudgeBackButton, [this]() {
         deck.setFirstBeatOffset(deck.getFirstBeatOffset() - 0.005);
         repaint();
@@ -39,6 +41,7 @@ GridEditorComponent::GridEditorComponent(DeckPlayer& player, AudioEngine& engine
 
     neutral(nudgeFwdButton, 10.0f);
     nudgeFwdButton.setText("+5");
+    nudgeFwdButton.setTooltip(LanguageManager::trUtf8("Corre el beatgrid 5 ms adelante", "Shift beatgrid 5 ms forward"));
     wire(nudgeFwdButton, [this]() {
         deck.setFirstBeatOffset(deck.getFirstBeatOffset() + 0.005);
         repaint();
@@ -46,6 +49,7 @@ GridEditorComponent::GridEditorComponent(DeckPlayer& player, AudioEngine& engine
 
     neutral(nudgeFwdFarButton, 10.0f);
     nudgeFwdFarButton.setText("+20");
+    nudgeFwdFarButton.setTooltip(LanguageManager::trUtf8("Corre el beatgrid 20 ms adelante", "Shift beatgrid 20 ms forward"));
     wire(nudgeFwdFarButton, [this]() {
         deck.setFirstBeatOffset(deck.getFirstBeatOffset() + 0.020);
         repaint();
@@ -54,6 +58,7 @@ GridEditorComponent::GridEditorComponent(DeckPlayer& player, AudioEngine& engine
     // Fila de BPM
     neutral(bpmDownFarButton, 10.0f);
     bpmDownFarButton.setText("-0.5");
+    bpmDownFarButton.setTooltip(LanguageManager::trUtf8("Baja el BPM del grid 0.5 (corrección gruesa)", "Lower grid BPM 0.5 (coarse)"));
     wire(bpmDownFarButton, [this]() {
         if (deck.getOriginalBpm() > 0.0) deck.setGridBpm(deck.getOriginalBpm() - 0.5);
         repaint();
@@ -61,6 +66,7 @@ GridEditorComponent::GridEditorComponent(DeckPlayer& player, AudioEngine& engine
 
     neutral(bpmDownButton, 10.0f);
     bpmDownButton.setText("-0.05");
+    bpmDownButton.setTooltip(LanguageManager::trUtf8("Baja el BPM del grid 0.05 (afinado fino)", "Lower grid BPM 0.05 (fine)"));
     wire(bpmDownButton, [this]() {
         if (deck.getOriginalBpm() > 0.0) deck.setGridBpm(deck.getOriginalBpm() - 0.05);
         repaint();
@@ -68,6 +74,7 @@ GridEditorComponent::GridEditorComponent(DeckPlayer& player, AudioEngine& engine
 
     neutral(bpmUpButton, 10.0f);
     bpmUpButton.setText("+0.05");
+    bpmUpButton.setTooltip(LanguageManager::trUtf8("Sube el BPM del grid 0.05 (afinado fino)", "Raise grid BPM 0.05 (fine)"));
     wire(bpmUpButton, [this]() {
         if (deck.getOriginalBpm() > 0.0) deck.setGridBpm(deck.getOriginalBpm() + 0.05);
         repaint();
@@ -75,6 +82,7 @@ GridEditorComponent::GridEditorComponent(DeckPlayer& player, AudioEngine& engine
 
     neutral(bpmUpFarButton, 10.0f);
     bpmUpFarButton.setText("+0.5");
+    bpmUpFarButton.setTooltip(LanguageManager::trUtf8("Sube el BPM del grid 0.5 (corrección gruesa)", "Raise grid BPM 0.5 (coarse)"));
     wire(bpmUpFarButton, [this]() {
         if (deck.getOriginalBpm() > 0.0) deck.setGridBpm(deck.getOriginalBpm() + 0.5);
         repaint();
@@ -82,6 +90,7 @@ GridEditorComponent::GridEditorComponent(DeckPlayer& player, AudioEngine& engine
 
     neutral(bpmHalfButton, 10.0f);
     bpmHalfButton.setText(juce::String::fromUTF8("×½"));
+    bpmHalfButton.setTooltip(LanguageManager::trUtf8("Divide el BPM del grid entre 2", "Halve the grid BPM"));
     wire(bpmHalfButton, [this]() {
         if (deck.getOriginalBpm() > 0.0) deck.setGridBpm(deck.getOriginalBpm() / 2.0);
         repaint();
@@ -89,6 +98,7 @@ GridEditorComponent::GridEditorComponent(DeckPlayer& player, AudioEngine& engine
 
     neutral(bpmDoubleButton, 10.0f);
     bpmDoubleButton.setText(juce::String::fromUTF8("×2"));
+    bpmDoubleButton.setTooltip(LanguageManager::trUtf8("Duplica el BPM del grid", "Double the grid BPM"));
     wire(bpmDoubleButton, [this]() {
         if (deck.getOriginalBpm() > 0.0) deck.setGridBpm(deck.getOriginalBpm() * 2.0);
         repaint();
@@ -130,6 +140,7 @@ GridEditorComponent::GridEditorComponent(DeckPlayer& player, AudioEngine& engine
 
     neutral(closeButton, 10.5f);
     closeButton.setText("CERRAR");
+    closeButton.setTooltip(LanguageManager::trUtf8("Cerrar el editor del beatgrid", "Close the beatgrid editor"));
     closeButton.setCustomColours(juce::Colour::fromRGB(37, 99, 235),
                                  juce::Colours::white,
                                  juce::Colours::white,

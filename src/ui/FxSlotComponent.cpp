@@ -1,4 +1,5 @@
 #include "FxSlotComponent.h"
+#include "../services/LanguageManager.h"
 
 FxSlotComponent::FxSlotComponent(FxSlot& fxSlot)
     : slot(fxSlot)
@@ -10,6 +11,7 @@ FxSlotComponent::FxSlotComponent(FxSlot& fxSlot)
                              juce::Colour::fromRGB(148, 163, 184),
                              juce::Colour::fromRGB(36, 41, 54));
     prevBtn.setCornerRadius(4.0f);
+    prevBtn.setTooltip(LanguageManager::trUtf8("Efecto anterior", "Previous effect"));
     prevBtn.onClick = [this]() { cycleEffect(-1); };
     addAndMakeVisible(prevBtn);
 
@@ -20,6 +22,7 @@ FxSlotComponent::FxSlotComponent(FxSlot& fxSlot)
                                juce::Colours::transparentBlack,
                                juce::Colour::fromRGB(36, 41, 54));
     fxNameBtn.setCornerRadius(4.0f);
+    fxNameBtn.setTooltip(LanguageManager::trUtf8("Elegir el efecto de este slot", "Pick the effect for this slot"));
     fxNameBtn.onClick = [this]() { showFxMenu(); };
     addAndMakeVisible(fxNameBtn);
 
@@ -29,11 +32,13 @@ FxSlotComponent::FxSlotComponent(FxSlot& fxSlot)
                              juce::Colour::fromRGB(148, 163, 184),
                              juce::Colour::fromRGB(36, 41, 54));
     nextBtn.setCornerRadius(4.0f);
+    nextBtn.setTooltip(LanguageManager::trUtf8("Efecto siguiente", "Next effect"));
     nextBtn.onClick = [this]() { cycleEffect(1); };
     addAndMakeVisible(nextBtn);
 
     // 2. Control Row: ON Button
     onBtn.setText("ON");
+    onBtn.setTooltip(LanguageManager::trUtf8("Activa o desactiva el efecto", "Enable or disable the effect"));
     onBtn.setFontSize(9.5f);
     onBtn.setCornerRadius(4.0f);
     onBtn.onClick = [this]() {
@@ -51,6 +56,7 @@ FxSlotComponent::FxSlotComponent(FxSlot& fxSlot)
                               juce::Colours::transparentBlack,
                               juce::Colour::fromRGB(36, 41, 54));
     paramBtn.setCornerRadius(4.0f);
+    paramBtn.setTooltip(LanguageManager::trUtf8("Cambiar el parámetro del efecto", "Cycle the effect parameter"));
     paramBtn.onClick = [this]() { cycleParam(); };
     addAndMakeVisible(paramBtn);
 

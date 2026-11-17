@@ -885,6 +885,7 @@ LibraryComponent::LibraryComponent(juce::AudioFormatManager& fm)
                             juce::Colour::fromRGB(0, 229, 255),
                             juce::Colour::fromRGB(38, 43, 56));
     addBtn.onClick = [this]() { importFiles(); };
+    addBtn.setTooltip(LanguageManager::trUtf8("Importa archivos o carpetas a la biblioteca", "Import files or folders into the library"));
     addAndMakeVisible(addBtn);
 
     // Setup Table Columns
@@ -919,6 +920,7 @@ LibraryComponent::LibraryComponent(juce::AudioFormatManager& fm)
     // 4. Right Automix Panel
     automixHeader.setIcon(LucideIcons::IconType::Sparkles, 14.0f);
     automixHeader.setText("Automix");
+    automixHeader.setTooltip(LanguageManager::trUtf8("Panel de Automix: mezcla automática de la cola", "Automix panel: automatic queue mixing"));
     automixHeader.setFontSize(12.5f);
     automixHeader.setInterceptsMouseClicks(false, false);
     automixHeader.setCustomColours(juce::Colours::transparentBlack,
@@ -929,6 +931,7 @@ LibraryComponent::LibraryComponent(juce::AudioFormatManager& fm)
 
     startAutomixBtn.setIcon(LucideIcons::IconType::Sparkles, 12.0f);
     startAutomixBtn.setText("Comenzar Automix");
+    startAutomixBtn.setTooltip(LanguageManager::trUtf8("Inicia o detiene la mezcla automática de la cola", "Start or stop automatic queue mixing"));
     startAutomixBtn.setFontSize(11.0f);
     startAutomixBtn.setCornerRadius(5.0f);
     startAutomixBtn.setCustomColours(juce::Colour::fromRGB(22, 25, 34),
@@ -959,8 +962,10 @@ LibraryComponent::LibraryComponent(juce::AudioFormatManager& fm)
             onSmartAutomix();
     };
     addAndMakeVisible(smartAutomixBtn);
+    smartAutomixBtn.setTooltip(LanguageManager::trUtf8("Ordena la cola con IA y mezcla automáticamente", "AI-orders the queue and mixes automatically"));
 
     clearQueueBtn.setIcon(LucideIcons::IconType::Minus, 10.0f);
+    clearQueueBtn.setTooltip(LanguageManager::trUtf8("Vacía la cola de reproducción", "Empty the playback queue"));
     clearQueueBtn.setCornerRadius(4.0f);
     clearQueueBtn.setCustomColours(juce::Colours::transparentBlack,
                                    juce::Colour::fromRGB(100, 108, 125),
