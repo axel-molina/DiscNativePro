@@ -57,7 +57,7 @@ private:
                 ledColour = lit ? juce::Colour::fromRGB(46, 196, 182) : juce::Colour::fromRGB(15, 45, 40); // Teal / Green
 
             g.setColour(ledColour);
-            g.fillRoundedRectangle(ledRect, 0.0f);
+            g.fillRoundedRectangle(ledRect, 3.0f);
         }
     }
 

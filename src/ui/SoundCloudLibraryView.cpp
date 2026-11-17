@@ -52,7 +52,7 @@ SoundCloudLibraryView::SoundCloudLibraryView()
 
     searchBtn.setIcon(LucideIcons::IconType::Search, 13.0f);
     searchBtn.setFontSize(11.0f);
-    searchBtn.setCornerRadius(0.0f);
+    searchBtn.setCornerRadius(3.0f);
     searchBtn.setCustomColours(juce::Colour::fromRGB(255, 85, 0).withAlpha(0.25f),
                                juce::Colours::white,
                                juce::Colours::white,
@@ -165,7 +165,7 @@ void SoundCloudLibraryView::paintCell(juce::Graphics& g, int rowNumber, int colu
     {
         auto iconBox = juce::Rectangle<float>(6.0f, (static_cast<float>(height) - 32.0f) * 0.5f, 32.0f, 32.0f);
         g.setColour(juce::Colour::fromRGB(28, 20, 16));
-        g.fillRoundedRectangle(iconBox, 0.0f);
+        g.fillRoundedRectangle(iconBox, 3.0f);
 
         LucideIcons::draw(g, LucideIcons::IconType::SoundCloud, iconBox.reduced(6.0f), juce::Colour::fromRGB(255, 85, 0));
     }

@@ -316,9 +316,9 @@ private:
         void paint(juce::Graphics& g) override
         {
             g.setColour(juce::Colour::fromRGB(37, 99, 235).withAlpha(0.14f));
-            g.fillRoundedRectangle(getLocalBounds().toFloat().reduced(1.0f), 0.0f);
+            g.fillRoundedRectangle(getLocalBounds().toFloat().reduced(1.0f), 3.0f);
             g.setColour(juce::Colour::fromRGB(37, 99, 235));
-            g.drawRoundedRectangle(getLocalBounds().toFloat().reduced(1.0f), 0.0f, 2.0f);
+            g.drawRoundedRectangle(getLocalBounds().toFloat().reduced(1.0f), 3.0f, 2.0f);
         }
     };
 
@@ -334,9 +334,9 @@ private:
         {
             auto r = getLocalBounds();
             g.setColour(juce::Colour::fromRGB(24, 27, 36));
-            g.fillRoundedRectangle(r.toFloat(), 0.0f);
+            g.fillRoundedRectangle(r.toFloat(), 3.0f);
             g.setColour(juce::Colour::fromRGB(45, 50, 64));
-            g.drawRoundedRectangle(r.toFloat(), 0.0f, 1.0f);
+            g.drawRoundedRectangle(r.toFloat(), 3.0f, 1.0f);
             r.reduce(2, 2);
             for (int i = 0; i < rows.size(); ++i)
             {
@@ -344,7 +344,7 @@ private:
                 if (i == hovered)
                 {
                     g.setColour(juce::Colour::fromRGB(37, 43, 56));
-                    g.fillRoundedRectangle(row.toFloat().reduced(2, 1), 0.0f);
+                    g.fillRoundedRectangle(row.toFloat().reduced(2, 1), 3.0f);
                 }
                 g.setColour(noResults ? juce::Colour::fromRGB(110, 116, 133)
                                       : juce::Colour::fromRGB(220, 225, 235));

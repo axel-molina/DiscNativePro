@@ -64,7 +64,7 @@ DeckComponent::DeckComponent(int deckNum, DeckPlayer& player, AudioEngine& audio
     // Pitch Section Controls
     syncButton.setText("SYNC");
     syncButton.setFontSize(10.0f);
-    syncButton.setCornerRadius(0.0f);
+    syncButton.setCornerRadius(3.0f);
     syncButton.setCustomColours(juce::Colour::fromRGB(24, 27, 36),
                                 juce::Colour::fromRGB(142, 149, 165),
                                 juce::Colour::fromRGB(142, 149, 165),
@@ -99,7 +99,7 @@ DeckComponent::DeckComponent(int deckNum, DeckPlayer& player, AudioEngine& audio
     // Key Lock / Master Tempo toggle (default ON)
     keyLockButton.setText("KEY");
     keyLockButton.setFontSize(10.0f);
-    keyLockButton.setCornerRadius(0.0f);
+    keyLockButton.setCornerRadius(3.0f);
     keyLockButton.setClickingTogglesState(true);
     keyLockButton.setToggleState(deck.isKeylock(), juce::dontSendNotification);
     updateKeyLockButton();
@@ -113,7 +113,7 @@ DeckComponent::DeckComponent(int deckNum, DeckPlayer& player, AudioEngine& audio
     // P20: Key Shift — transpone ±1 semitono por clic (±6 máx., mezcla armónica)
     auto ksNeutral = [](DjButton& b) {
         b.setFontSize(10.0f);
-        b.setCornerRadius(0.0f);
+        b.setCornerRadius(3.0f);
         b.setCustomColours(juce::Colour::fromRGB(24, 27, 36),
                            juce::Colours::white,
                            juce::Colour::fromRGB(142, 149, 165),
@@ -146,7 +146,7 @@ DeckComponent::DeckComponent(int deckNum, DeckPlayer& player, AudioEngine& audio
 
     // P16: abre el editor de beat grid
     gridButton.setFontSize(10.0f);
-    gridButton.setCornerRadius(0.0f);
+    gridButton.setCornerRadius(3.0f);
     gridButton.setCustomColours(juce::Colour::fromRGB(24, 27, 36),
                                 juce::Colour::fromRGB(142, 149, 165),
                                 juce::Colour::fromRGB(142, 149, 165),
@@ -183,7 +183,7 @@ DeckComponent::DeckComponent(int deckNum, DeckPlayer& player, AudioEngine& audio
     addAndMakeVisible(pitchSlider);
 
     pitchBendDownButton.setIcon(LucideIcons::IconType::Minus, 11.0f);
-    pitchBendDownButton.setCornerRadius(0.0f);
+    pitchBendDownButton.setCornerRadius(3.0f);
     pitchBendDownButton.setCustomColours(juce::Colour::fromRGB(22, 24, 32),
                                          juce::Colour::fromRGB(142, 149, 165),
                                          juce::Colour::fromRGB(142, 149, 165),
@@ -198,7 +198,7 @@ DeckComponent::DeckComponent(int deckNum, DeckPlayer& player, AudioEngine& audio
     pitchBendDownButton.setTooltip(LanguageManager::trUtf8("Tempo momentáneo: baja 4% mientras lo mantienes", "Momentary tempo: -4% while held"));
 
     pitchBendUpButton.setIcon(LucideIcons::IconType::Plus, 11.0f);
-    pitchBendUpButton.setCornerRadius(0.0f);
+    pitchBendUpButton.setCornerRadius(3.0f);
     pitchBendUpButton.setCustomColours(juce::Colour::fromRGB(22, 24, 32),
                                        juce::Colour::fromRGB(142, 149, 165),
                                        juce::Colour::fromRGB(142, 149, 165),
@@ -216,7 +216,7 @@ DeckComponent::DeckComponent(int deckNum, DeckPlayer& player, AudioEngine& audio
     playButton.setIcon(LucideIcons::IconType::Play, 13.0f);
     playButton.setText("PLAY");
     playButton.setFontSize(11.5f);
-    playButton.setCornerRadius(0.0f);
+    playButton.setCornerRadius(3.0f);
     playButton.setCustomColours(juce::Colour::fromRGB(24, 27, 35),
                                 juce::Colours::white,
                                 juce::Colour::fromRGB(30, 215, 96),
@@ -230,7 +230,7 @@ DeckComponent::DeckComponent(int deckNum, DeckPlayer& player, AudioEngine& audio
     cueButton.setIcon(LucideIcons::IconType::Disc, 13.0f);
     cueButton.setText("CUE");
     cueButton.setFontSize(11.5f);
-    cueButton.setCornerRadius(0.0f);
+    cueButton.setCornerRadius(3.0f);
     cueButton.setCustomColours(juce::Colour::fromRGB(24, 27, 35),
                                juce::Colour::fromRGB(245, 158, 11),
                                juce::Colour::fromRGB(245, 158, 11),
@@ -254,7 +254,7 @@ DeckComponent::DeckComponent(int deckNum, DeckPlayer& player, AudioEngine& audio
         pad.setText(juce::String(i + 1));
         pad.setFontSize(10.5f);
         pad.setTooltip(LanguageManager::trUtf8("Hot cue: guarda o salta al punto · clic derecho: menú", "Hot cue: set or jump to point · right-click: menu"));
-        pad.setCornerRadius(0.0f);
+        pad.setCornerRadius(3.0f);
         pad.setCustomColours(juce::Colour::fromRGB(24, 26, 32),
                              juce::Colour::fromRGB(148, 163, 184),
                              juce::Colour::fromRGB(148, 163, 184),
@@ -282,7 +282,7 @@ DeckComponent::DeckComponent(int deckNum, DeckPlayer& player, AudioEngine& audio
 
     // Grouped Loop Controls
     loopPrevButton.setIcon(LucideIcons::IconType::ChevronLeft, 11.0f);
-    loopPrevButton.setCornerRadius(0.0f);
+    loopPrevButton.setCornerRadius(3.0f);
     loopPrevButton.setCustomColours(juce::Colour::fromRGB(20, 23, 30),
                                     juce::Colour::fromRGB(142, 149, 165),
                                     juce::Colour::fromRGB(142, 149, 165),
@@ -302,7 +302,7 @@ DeckComponent::DeckComponent(int deckNum, DeckPlayer& player, AudioEngine& audio
     loopBeatsButton.setIcon(LucideIcons::IconType::Repeat, 12.0f);
     loopBeatsButton.setText(juce::String(currentLoopBeats));
     loopBeatsButton.setFontSize(11.0f);
-    loopBeatsButton.setCornerRadius(0.0f);
+    loopBeatsButton.setCornerRadius(3.0f);
     loopBeatsButton.setCustomColours(juce::Colour::fromRGB(24, 27, 35),
                                      juce::Colours::white,
                                      juce::Colour::fromRGB(142, 149, 165),
@@ -331,7 +331,7 @@ DeckComponent::DeckComponent(int deckNum, DeckPlayer& player, AudioEngine& audio
     loopBeatsButton.setTooltip(LanguageManager::trUtf8("Activa o desactiva el loop del tamaño indicado", "Toggle the loop of the shown size"));
 
     loopNextButton.setIcon(LucideIcons::IconType::ChevronRight, 11.0f);
-    loopNextButton.setCornerRadius(0.0f);
+    loopNextButton.setCornerRadius(3.0f);
     loopNextButton.setCustomColours(juce::Colour::fromRGB(20, 23, 30),
                                     juce::Colour::fromRGB(142, 149, 165),
                                     juce::Colour::fromRGB(142, 149, 165),
@@ -350,7 +350,7 @@ DeckComponent::DeckComponent(int deckNum, DeckPlayer& player, AudioEngine& audio
 
     // P15: Performance row (beat jump cuantizado, loop roll, slip)
     jumpBackButton.setIcon(LucideIcons::IconType::ChevronLeft, 11.0f);
-    jumpBackButton.setCornerRadius(0.0f);
+    jumpBackButton.setCornerRadius(3.0f);
     jumpBackButton.setCustomColours(juce::Colour::fromRGB(20, 23, 30),
                                     juce::Colour::fromRGB(142, 149, 165),
                                     juce::Colour::fromRGB(142, 149, 165),
@@ -361,7 +361,7 @@ DeckComponent::DeckComponent(int deckNum, DeckPlayer& player, AudioEngine& audio
 
     jumpSizeButton.setText(jumpSizeLabel(jumpSizeIdx));
     jumpSizeButton.setFontSize(9.0f);
-    jumpSizeButton.setCornerRadius(0.0f);
+    jumpSizeButton.setCornerRadius(3.0f);
     jumpSizeButton.setCustomColours(juce::Colour::fromRGB(20, 23, 30),
                                     juce::Colours::white,
                                     juce::Colour::fromRGB(142, 149, 165),
@@ -374,7 +374,7 @@ DeckComponent::DeckComponent(int deckNum, DeckPlayer& player, AudioEngine& audio
     addAndMakeVisible(jumpSizeButton);
 
     jumpFwdButton.setIcon(LucideIcons::IconType::ChevronRight, 11.0f);
-    jumpFwdButton.setCornerRadius(0.0f);
+    jumpFwdButton.setCornerRadius(3.0f);
     jumpFwdButton.setCustomColours(juce::Colour::fromRGB(20, 23, 30),
                                    juce::Colour::fromRGB(142, 149, 165),
                                    juce::Colour::fromRGB(142, 149, 165),
@@ -385,7 +385,7 @@ DeckComponent::DeckComponent(int deckNum, DeckPlayer& player, AudioEngine& audio
 
     rollPadButton.setText("ROLL");
     rollPadButton.setFontSize(9.5f);
-    rollPadButton.setCornerRadius(0.0f);
+    rollPadButton.setCornerRadius(3.0f);
     rollPadButton.setCustomColours(juce::Colour::fromRGB(20, 23, 30),
                                    juce::Colour::fromRGB(142, 149, 165),
                                    juce::Colour::fromRGB(142, 149, 165),
@@ -395,7 +395,7 @@ DeckComponent::DeckComponent(int deckNum, DeckPlayer& player, AudioEngine& audio
 
     rollSizeButton.setText(rollSizeLabel(rollSizeIdx));
     rollSizeButton.setFontSize(8.5f);
-    rollSizeButton.setCornerRadius(0.0f);
+    rollSizeButton.setCornerRadius(3.0f);
     rollSizeButton.setCustomColours(juce::Colour::fromRGB(20, 23, 30),
                                     juce::Colours::white,
                                     juce::Colour::fromRGB(142, 149, 165),
@@ -409,7 +409,7 @@ DeckComponent::DeckComponent(int deckNum, DeckPlayer& player, AudioEngine& audio
 
     slipToggleButton.setText("SLIP");
     slipToggleButton.setFontSize(9.5f);
-    slipToggleButton.setCornerRadius(0.0f);
+    slipToggleButton.setCornerRadius(3.0f);
     slipToggleButton.setClickingTogglesState(true);
     slipToggleButton.setToggleState(deck.isSlipEnabled(), juce::dontSendNotification);
     slipToggleButton.onClick = [this]() {
@@ -423,7 +423,7 @@ DeckComponent::DeckComponent(int deckNum, DeckPlayer& player, AudioEngine& audio
     // P25: stems — master toggle + VOC/INST (2-stem) o VOC/DRM/BAS/OTH (4-stem).
     stemsMasterButton.setText("STEMS");
     stemsMasterButton.setFontSize(9.5f);
-    stemsMasterButton.setCornerRadius(0.0f);
+    stemsMasterButton.setCornerRadius(3.0f);
     stemsMasterButton.onClick = [this]() {
         deck.toggleStemsMaster();
         refreshStemButtons();
@@ -445,7 +445,7 @@ DeckComponent::DeckComponent(int deckNum, DeckPlayer& player, AudioEngine& audio
         }
         stemButtons[(size_t)i].setText(lbl);
         stemButtons[(size_t)i].setFontSize(9.5f);
-        stemButtons[(size_t)i].setCornerRadius(0.0f);
+        stemButtons[(size_t)i].setCornerRadius(3.0f);
         const int idx = i; // captura estable
         stemButtons[(size_t)i].onClick = [this, idx]() {
             const float g = deck.getStemGain(idx);
@@ -1625,17 +1625,17 @@ void DeckComponent::paint(juce::Graphics& g)
 
     // Dark deck panel background #0f1116
     g.setColour(juce::Colour::fromRGB(15, 17, 22));
-    g.fillRoundedRectangle(bounds.reduced(2.0f), 0.0f);
+    g.fillRoundedRectangle(bounds.reduced(2.0f), 3.0f);
 
     g.setColour(juce::Colour::fromRGB(30, 34, 44));
-    g.drawRoundedRectangle(bounds.reduced(2.0f), 0.0f, 1.2f);
+    g.drawRoundedRectangle(bounds.reduced(2.0f), 3.0f, 1.2f);
 
     // Album Artwork Box (40x40px with rounded corners)
     juce::Rectangle<float> artBox(12.0f, 10.0f, 40.0f, 40.0f);
     if (coverArtImage.isValid())
     {
         juce::Path clipPath;
-        clipPath.addRoundedRectangle(artBox, 0.0f);
+        clipPath.addRoundedRectangle(artBox, 3.0f);
         juce::Graphics::ScopedSaveState state(g);
         g.reduceClipRegion(clipPath);
         g.drawImage(coverArtImage, artBox, juce::RectanglePlacement::centred | juce::RectanglePlacement::fillDestination);
@@ -1645,11 +1645,11 @@ void DeckComponent::paint(juce::Graphics& g)
         juce::ColourGradient artGrad(accent, artBox.getX(), artBox.getY(),
                                      juce::Colour::fromRGB(20, 24, 34), artBox.getRight(), artBox.getBottom(), false);
         g.setGradientFill(artGrad);
-        g.fillRoundedRectangle(artBox, 0.0f);
+        g.fillRoundedRectangle(artBox, 3.0f);
     }
 
     g.setColour(juce::Colour::fromRGB(48, 54, 70));
-    g.drawRoundedRectangle(artBox, 0.0f, 1.0f);
+    g.drawRoundedRectangle(artBox, 3.0f, 1.0f);
 
 }
 
@@ -1661,16 +1661,16 @@ void DeckComponent::paintOverChildren(juce::Graphics& g)
         auto bounds = getLocalBounds().toFloat();
 
         g.setColour(accent.withAlpha(0.18f));
-        g.fillRoundedRectangle(bounds.reduced(2.0f), 0.0f);
+        g.fillRoundedRectangle(bounds.reduced(2.0f), 3.0f);
 
         g.setColour(accent);
-        g.drawRoundedRectangle(bounds.reduced(2.0f), 0.0f, 2.5f);
+        g.drawRoundedRectangle(bounds.reduced(2.0f), 3.0f, 2.5f);
 
         juce::Rectangle<float> banner(bounds.getCentreX() - 130.0f, bounds.getCentreY() - 32.0f, 260.0f, 64.0f);
         g.setColour(juce::Colour::fromRGB(12, 14, 18).withAlpha(0.96f));
-        g.fillRoundedRectangle(banner, 0.0f);
+        g.fillRoundedRectangle(banner, 3.0f);
         g.setColour(accent);
-        g.drawRoundedRectangle(banner, 0.0f, 1.5f);
+        g.drawRoundedRectangle(banner, 3.0f, 1.5f);
 
         g.setColour(juce::Colours::white);
         g.setFont(juce::FontOptions(13.0f, juce::Font::bold));
@@ -1689,9 +1689,9 @@ void DeckComponent::paintOverChildren(juce::Graphics& g)
         auto bounds = getLocalBounds().toFloat();
         juce::Rectangle<float> banner(bounds.getCentreX() - 145.0f, bounds.getCentreY() - 36.0f, 290.0f, 72.0f);
         g.setColour(juce::Colour::fromRGB(12, 14, 18).withAlpha(0.95f));
-        g.fillRoundedRectangle(banner, 0.0f);
+        g.fillRoundedRectangle(banner, 3.0f);
         g.setColour(accent);
-        g.drawRoundedRectangle(banner, 0.0f, 1.5f);
+        g.drawRoundedRectangle(banner, 3.0f, 1.5f);
 
         auto textRect = banner.removeFromTop(38.0f);
         g.setColour(juce::Colours::white);
@@ -1701,12 +1701,12 @@ void DeckComponent::paintOverChildren(juce::Graphics& g)
 
         auto pBar = banner.reduced(24.0f, 8.0f);
         g.setColour(juce::Colour::fromRGB(32, 36, 48));
-        g.fillRoundedRectangle(pBar, 0.0f);
+        g.fillRoundedRectangle(pBar, 3.0f);
         if (extractionProgress > 0.0f)
         {
             auto fillBar = pBar.withWidth(pBar.getWidth() * juce::jlimit(0.0f, 1.0f, extractionProgress));
             g.setColour(accent);
-            g.fillRoundedRectangle(fillBar, 0.0f);
+            g.fillRoundedRectangle(fillBar, 3.0f);
         }
     }
 
@@ -1716,9 +1716,9 @@ void DeckComponent::paintOverChildren(juce::Graphics& g)
         auto bounds = getLocalBounds().toFloat();
         juce::Rectangle<float> banner(bounds.getCentreX() - 145.0f, bounds.getCentreY() - 36.0f, 290.0f, 52.0f);
         g.setColour(juce::Colour::fromRGB(12, 14, 18).withAlpha(0.95f));
-        g.fillRoundedRectangle(banner, 0.0f);
+        g.fillRoundedRectangle(banner, 3.0f);
         g.setColour(juce::Colour(0xFFE05252));
-        g.drawRoundedRectangle(banner, 0.0f, 1.5f);
+        g.drawRoundedRectangle(banner, 3.0f, 1.5f);
 
         g.setColour(juce::Colours::white);
         g.setFont(juce::FontOptions(12.5f, juce::Font::bold));

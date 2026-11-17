@@ -57,10 +57,10 @@ void OverviewWaveform::paint(juce::Graphics& g)
 
     // Background #111317
     g.setColour(juce::Colour::fromRGB(17, 19, 23));
-    g.fillRoundedRectangle(bounds, 0.0f);
+    g.fillRoundedRectangle(bounds, 3.0f);
 
     g.setColour(juce::Colour::fromRGB(36, 40, 50));
-    g.drawRoundedRectangle(bounds, 0.0f, 1.0f);
+    g.drawRoundedRectangle(bounds, 3.0f, 1.0f);
 
     // Center baseline
     g.setColour(juce::Colour::fromRGB(35, 39, 48));
@@ -78,7 +78,7 @@ void OverviewWaveform::paint(juce::Graphics& g)
         // tramo reproducido en acento tenue + aguja.
         float playedX = (float)(videoPos / videoDur) * width;
         g.setColour(accent.withAlpha(0.35f));
-        g.fillRoundedRectangle(0.0f, 0.0f, playedX, height, 0.0f);
+        g.fillRoundedRectangle(0.0f, 0.0f, playedX, height, 3.0f);
         g.setColour(juce::Colour::fromRGB(255, 51, 75).withAlpha(0.4f));
         g.drawLine(playedX, 0.0f, playedX, height, 4.0f);
         g.setColour(juce::Colour::fromRGB(255, 51, 75));

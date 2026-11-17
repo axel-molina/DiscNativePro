@@ -41,7 +41,7 @@ public:
         }
 
         actionButton.setFontSize(11.0f);
-        actionButton.setCornerRadius(0.0f);
+        actionButton.setCornerRadius(3.0f);
         addAndMakeVisible(actionButton);
     }
 
@@ -51,19 +51,19 @@ public:
 
         // Dark card background
         g.setColour(juce::Colour::fromRGB(18, 20, 26));
-        g.fillRoundedRectangle(bounds, 0.0f);
+        g.fillRoundedRectangle(bounds, 3.0f);
 
         // Border
         g.setColour(recommendation.isLocal ? juce::Colour::fromRGB(16, 185, 129).withAlpha(0.35f)
                                            : juce::Colour::fromRGB(38, 43, 56));
-        g.drawRoundedRectangle(bounds, 0.0f, 1.0f);
+        g.drawRoundedRectangle(bounds, 3.0f, 1.0f);
 
         auto contentArea = bounds.reduced(10.0f, 8.0f);
 
         // 1. Left Icon Thumbnail (36x36)
         auto iconRect = contentArea.removeFromLeft(36.0f).withHeight(36.0f);
         g.setColour(juce::Colour::fromRGB(28, 32, 44));
-        g.fillRoundedRectangle(iconRect, 0.0f);
+        g.fillRoundedRectangle(iconRect, 3.0f);
 
         LucideIcons::draw(g, recommendation.isLocal ? LucideIcons::IconType::Disc : LucideIcons::IconType::Sparkles,
                           iconRect.reduced(8.0f),
@@ -94,7 +94,7 @@ public:
         auto drawBadge = [&](const juce::String& text, juce::Colour bg, juce::Colour fg, float w) {
             juce::Rectangle<float> r(bx, badgesRect.getY(), w, 15.0f);
             g.setColour(bg);
-            g.fillRoundedRectangle(r, 0.0f);
+            g.fillRoundedRectangle(r, 3.0f);
             g.setColour(fg);
             g.setFont(juce::FontOptions(9.5f, juce::Font::bold));
             g.drawText(text, r, juce::Justification::centred, false);
@@ -224,7 +224,7 @@ AIMatchView::AIMatchView()
     // 1. Header Buttons
     refreshButton.setIcon(LucideIcons::IconType::Sparkles, 12.0f);
     refreshButton.setFontSize(11.0f);
-    refreshButton.setCornerRadius(0.0f);
+    refreshButton.setCornerRadius(3.0f);
     refreshButton.setCustomColours(juce::Colour::fromRGB(88, 28, 135),
                                    juce::Colours::white,
                                    juce::Colours::white,
@@ -234,7 +234,7 @@ AIMatchView::AIMatchView()
 
     settingsShortcutButton.setIcon(LucideIcons::IconType::Sliders, 12.0f);
     settingsShortcutButton.setFontSize(11.0f);
-    settingsShortcutButton.setCornerRadius(0.0f);
+    settingsShortcutButton.setCornerRadius(3.0f);
     settingsShortcutButton.setCustomColours(juce::Colour::fromRGB(24, 27, 36),
                                             juce::Colour::fromRGB(142, 149, 165),
                                             juce::Colours::white,

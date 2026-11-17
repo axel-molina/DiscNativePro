@@ -12,7 +12,7 @@ namespace
         {
             btnDeck1.setText("1");
             btnDeck1.setFontSize(10.5f);
-            btnDeck1.setCornerRadius(0.0f);
+            btnDeck1.setCornerRadius(3.0f);
             btnDeck1.setCustomColours(juce::Colour::fromRGB(0, 180, 216).withAlpha(0.25f),
                                      juce::Colour::fromRGB(0, 229, 255),
                                      juce::Colour::fromRGB(0, 229, 255),
@@ -22,7 +22,7 @@ namespace
 
             btnDeck2.setText("2");
             btnDeck2.setFontSize(10.5f);
-            btnDeck2.setCornerRadius(0.0f);
+            btnDeck2.setCornerRadius(3.0f);
             btnDeck2.setCustomColours(juce::Colour::fromRGB(0, 180, 216).withAlpha(0.25f),
                                      juce::Colour::fromRGB(0, 229, 255),
                                      juce::Colour::fromRGB(0, 229, 255),
@@ -67,7 +67,7 @@ UsbLibraryView::UsbLibraryView(juce::AudioFormatManager& fm)
 
     refreshBtn.setIcon(LucideIcons::IconType::Repeat, 13.0f);
     refreshBtn.setTooltip(LanguageManager::trUtf8("Refrescar unidades USB", "Refresh USB drives"));
-    refreshBtn.setCornerRadius(0.0f);
+    refreshBtn.setCornerRadius(3.0f);
     refreshBtn.setCustomColours(juce::Colour::fromRGB(24, 27, 36),
                                 juce::Colour::fromRGB(160, 165, 180),
                                 juce::Colour::fromRGB(0, 229, 255),
@@ -77,7 +77,7 @@ UsbLibraryView::UsbLibraryView(juce::AudioFormatManager& fm)
 
     addFolderBtn.setIcon(LucideIcons::IconType::FolderPlus, 13.0f);
     addFolderBtn.setTooltip(LanguageManager::trUtf8("Abrir unidad o carpeta...", "Open drive or folder..."));
-    addFolderBtn.setCornerRadius(0.0f);
+    addFolderBtn.setCornerRadius(3.0f);
     addFolderBtn.setCustomColours(juce::Colour::fromRGB(24, 27, 36),
                                  juce::Colour::fromRGB(160, 165, 180),
                                  juce::Colour::fromRGB(0, 229, 255),
@@ -135,7 +135,7 @@ UsbLibraryView::UsbLibraryView(juce::AudioFormatManager& fm)
     manualExploreBtn.setText(LanguageManager::trUtf8("Explorar Unidad o Carpeta Manualmente", "Browse Drive or Folder Manually"));
     manualExploreBtn.setIcon(LucideIcons::IconType::Folder, 14.0f);
     manualExploreBtn.setFontSize(12.5f);
-    manualExploreBtn.setCornerRadius(0.0f);
+    manualExploreBtn.setCornerRadius(3.0f);
     manualExploreBtn.setCustomColours(juce::Colour::fromRGB(0, 180, 216).withAlpha(0.22f),
                                       juce::Colour::fromRGB(0, 229, 255),
                                       juce::Colour::fromRGB(0, 229, 255),
@@ -288,7 +288,7 @@ void UsbLibraryView::refreshDrives()
         btn->setIcon(LucideIcons::IconType::Usb, 13.0f);
         btn->setText(d.name);
         btn->setFontSize(11.5f);
-        btn->setCornerRadius(0.0f);
+        btn->setCornerRadius(3.0f);
 
         bool isSel = (i == selectedDriveIndex);
         btn->setCustomColours(isSel ? juce::Colour::fromRGB(0, 180, 216).withAlpha(0.2f) : juce::Colour::fromRGB(18, 20, 28),
@@ -310,7 +310,7 @@ void UsbLibraryView::refreshDrives()
             allBtn->setIcon(LucideIcons::IconType::Music, 12.0f);
             allBtn->setText(LanguageManager::trUtf8("Todas las pistas", "All Tracks"));
             allBtn->setFontSize(10.5f);
-            allBtn->setCornerRadius(0.0f);
+            allBtn->setCornerRadius(3.0f);
 
             bool isAllSel = (selectedFolderName == "Todas las pistas");
             allBtn->setCustomColours(isAllSel ? juce::Colour::fromRGB(0, 180, 216).withAlpha(0.18f) : juce::Colour::fromRGB(14, 16, 22),
@@ -329,7 +329,7 @@ void UsbLibraryView::refreshDrives()
                 fBtn->setIcon(LucideIcons::IconType::Folder, 12.0f);
                 fBtn->setText(fName);
                 fBtn->setFontSize(10.5f);
-                fBtn->setCornerRadius(0.0f);
+                fBtn->setCornerRadius(3.0f);
 
                 bool isFolderSel = (selectedFolderName == fName);
                 fBtn->setCustomColours(isFolderSel ? juce::Colour::fromRGB(0, 180, 216).withAlpha(0.18f) : juce::Colour::fromRGB(14, 16, 22),
@@ -538,9 +538,9 @@ void UsbLibraryView::paintCell(juce::Graphics& g, int rowNumber, int columnId, i
         {
             auto pill = bounds.reduced(4, 7).toFloat();
             g.setColour(juce::Colour::fromRGB(0, 180, 216).withAlpha(0.15f));
-            g.fillRoundedRectangle(pill, 0.0f);
+            g.fillRoundedRectangle(pill, 3.0f);
             g.setColour(juce::Colour::fromRGB(0, 180, 216).withAlpha(0.35f));
-            g.drawRoundedRectangle(pill, 0.0f, 1.0f);
+            g.drawRoundedRectangle(pill, 3.0f, 1.0f);
             g.setColour(juce::Colour::fromRGB(0, 229, 255));
             g.setFont(juce::FontOptions(10.5f, juce::Font::bold));
             g.drawText(track.key, pill, juce::Justification::centred, false);
@@ -639,16 +639,16 @@ void UsbLibraryView::paint(juce::Graphics& g)
 
         // Center card background
         g.setColour(juce::Colour::fromRGB(16, 18, 25));
-        g.fillRoundedRectangle(cardRect, 0.0f);
+        g.fillRoundedRectangle(cardRect, 3.0f);
         g.setColour(juce::Colour::fromRGB(32, 36, 48));
-        g.drawRoundedRectangle(cardRect, 0.0f, 1.0f);
+        g.drawRoundedRectangle(cardRect, 3.0f, 1.0f);
 
         // Large USB Icon inside pill
         float iconBoxW = 56.0f;
         float iconBoxH = 56.0f;
         auto iconBox = juce::Rectangle<float>(cardRect.getCentreX() - iconBoxW * 0.5f, cardRect.getY() + 20.0f, iconBoxW, iconBoxH);
         g.setColour(juce::Colour::fromRGB(24, 28, 38));
-        g.fillRoundedRectangle(iconBox, 0.0f);
+        g.fillRoundedRectangle(iconBox, 3.0f);
 
         LucideIcons::draw(g, LucideIcons::IconType::Usb, iconBox.reduced(10.0f), juce::Colours::white, 2.0f);
 

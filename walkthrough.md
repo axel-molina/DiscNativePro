@@ -2775,3 +2775,29 @@ El usuario confirmó visualmente en la app: «funciona perfecto». Se cumplen lo
 
 ## Validación humana (2026-11-17)
 El usuario confirmó: **«funciona bien»** (clic derecho sin cargar → editor con audición y persistencia; con pista ya en bandeja → editor de esa bandeja). Ticket Notion #21 → Finalizado / Progreso 100 / Validación Aprobada / Fecha de finalización 2026-11-17.
+---
+
+# P46: quitar los bordes redondeados en todo el diseño (Notion #7)
+
+> Ticket: Notion **#7** · Mejora UX.
+
+## Cambios (commit ce1d8f0)
+- Barrido mecánico con script (parseo de argumentos con anidamiento):
+  `setCornerRadius(N)` → `0.0f` (~40 sitios) y default de `DjButton` 6.0f → 0.0f;
+  `fillRoundedRectangle`/`drawRoundedRectangle`/`addRoundedRectangle` con radio
+  literal → `0.0f` (el script distingue: en `draw…` el radio es el penúltimo arg).
+  Variable-radius manual: `DjButton::cornerRadius` y `float corner` en
+  `DjLookAndFeel` → 0.0f.
+- 22 archivos modificados (210 líneas): decks, biblioteca, Ajustes (cpp+h),
+  modales MIDI/Grid/Bienvenida, vistas YouTube/USB/SoundCloud/AI, sampler,
+  FX, channel strip, TopBar, waveforms, VU meters, JogWheel (marcas),
+  overlays de video (win/linux).
+- **Excluido**: `LucideIcons.cpp` — los iconos son glifos vectoriales; el
+  redondeo es parte del dibujo del símbolo, no de un contenedor.
+
+## Verificación
+- Grep de verificación: cero radios > 0 fuera de LucideIcons.
+- `cmake --build build` → 0 errores, sin warnings propios.
+- Relanzamiento obligatorio: pkill + open Release → proceso activo (pgrep OK).
+- **Pendiente de validación humana (usuario)**: revisión visual global — todo
+  cuadrado (botones, cards, tablas, badges, LEDs, barras), iconos intactos.

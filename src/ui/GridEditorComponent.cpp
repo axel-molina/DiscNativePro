@@ -10,7 +10,7 @@ GridEditorComponent::GridEditorComponent(DeckPlayer& player, AudioEngine& engine
 {
     auto neutral = [](DjButton& b, float fs) {
         b.setFontSize(fs);
-        b.setCornerRadius(0.0f);
+        b.setCornerRadius(3.0f);
         b.setCustomColours(juce::Colour::fromRGB(24, 27, 35),
                            juce::Colours::white,
                            juce::Colour::fromRGB(142, 149, 165),
@@ -200,15 +200,15 @@ void GridEditorComponent::paint(juce::Graphics& g)
 {
     auto bounds = getLocalBounds().toFloat();
     g.setColour(juce::Colour::fromRGB(20, 22, 30));
-    g.fillRoundedRectangle(bounds, 0.0f);
+    g.fillRoundedRectangle(bounds, 3.0f);
     g.setColour(juce::Colour::fromRGB(40, 45, 58));
-    g.drawRoundedRectangle(bounds, 0.0f, 1.2f);
+    g.drawRoundedRectangle(bounds, 3.0f, 1.2f);
 
     const auto canvas = canvasRect().toFloat();
     g.setColour(juce::Colour::fromRGB(12, 14, 19));
-    g.fillRoundedRectangle(canvas, 0.0f);
+    g.fillRoundedRectangle(canvas, 3.0f);
     g.setColour(juce::Colour::fromRGB(38, 43, 56));
-    g.drawRoundedRectangle(canvas, 0.0f, 1.0f);
+    g.drawRoundedRectangle(canvas, 3.0f, 1.0f);
 
     if (!deck.isLoaded() || deck.getLengthInSeconds() <= 0.0)
         return;

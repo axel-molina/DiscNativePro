@@ -227,7 +227,7 @@ void JogWheel::paint(juce::Graphics& g)
         float tapeWidth = 3.5f;
 
         g.setColour(juce::Colours::white.withAlpha(0.92f));
-        g.fillRoundedRectangle(center.x - tapeWidth * 0.5f, tapeTop, tapeWidth, tapeBottom - tapeTop, 0.0f);
+        g.fillRoundedRectangle(center.x - tapeWidth * 0.5f, tapeTop, tapeWidth, tapeBottom - tapeTop, 3.0f);
 
         // 3. Center Label (Record Sticker)
         juce::Path labelCircle;
@@ -256,7 +256,7 @@ void JogWheel::paint(juce::Graphics& g)
 
             // Color bar separator (ponytail: branding text removed — DiscNativePro too long for 60px sticker)
             g.setColour(accent);
-            g.fillRoundedRectangle(center.x - 12.0f, center.y - 2.5f, 24.0f, 2.0f, 0.0f);
+            g.fillRoundedRectangle(center.x - 12.0f, center.y - 2.5f, 24.0f, 2.0f, 3.0f);
 
             // BPM Text (formato unico: 1 decimal, "--" si no hay deteccion)
             g.setColour(juce::Colours::white.withAlpha(0.85f));
