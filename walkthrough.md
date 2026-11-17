@@ -2662,3 +2662,46 @@ Las 11 pestañas de `SettingsModalComponent` se maquetan a mano con filas fijas 
 ## 4. Validación humana (2026-11-17)
 
 El usuario probó el buscador y confirmó **«funciona excelente»**. El ticket #5 queda **Finalizado / Progreso 100 / Validación Aprobada** — sin ajustes pendientes.
+
+---
+
+# DNP-TK-17: Achicar perillas de los faders (fader cap)
+
+> Ticket: Notion **DNP-TK-17** (FB-14) · rama `axel-molina/v1.4.2`.
+
+## Cambios (estado final validado por el usuario)
+- `src/ui/DjLookAndFeel.cpp` (`drawLinearSlider`): **enfoque corregido por el usuario** — la petición era achicar los caps conservando proporción y llevarlos a una medida más compacta.
+- LinearVertical (volumen CH1/CH2 y pitch): final **25×15 px**; `getSliderLayout` margen vertical 10 px.
+- LinearHorizontal (crossfader): final **25×15 px**. Aplica a todos los sliders LinearHorizontal con modo `DjLookAndFeel`.
+- Pista renderizada igual; hit areas del Slider intactas.
+- Iteración hasta la medida final: 32×18 original → 22×14/22×16 → lectura errónea de 40×18 → 30×15 → 25×15 (medida final, confirmada como correcta por el usuario).
+
+## Verificación
+- `cmake --build build` → **0 errores, 0 warnings** (solo recompiló `DjLookAndFeel.cpp` + link).
+- Relanzamiento Release: `pkill -f "DiscNativePro/build/DiscNativePro_artefacts/Release"` + `open …/Release/DiscNativePro.app` → PID 93941 vivo (filtrado por path de este worktree; sin pkill global).
+- **Pendiente de validación visual del usuario**: volumen CH1/CH2, pitch de ambas bandejas y crossfader — cap visiblemente menor, línea blanca centrada, sin recorte ni pérdida de hit area.
+
+## Ajuste del cap vertical a 20 px (2026-11-17)
+- Alto del cap vertical 16 → **20 px** (ancho 22 px conservado); margen del layout 11 → 13 px. Build 0/0; app Release relanzada PID 29390 (única instancia por ruta, sin otra build corriendo).
+
+## Validación humana (2026-11-17)
+El usuario confirmó visualmente **25×15 px** (volumen, pitch y crossfader): «perfecto». Ticket DNP-TK-17 → Finalizado / Progreso 100 / Validación Aprobada / Fecha de finalización 2026-11-17.
+---
+
+# P43: yt-dlp no arranca en macOS Apple Silicon (Notion #19)
+
+> Ticket: Notion **#19** (FB-18) · rama `axel-molina/v1.4.2`.
+
+## Causa raíz (verificada)
+- El auto-instalador de `YouTubeAudioDownloader.cpp` lanzaba `curl -sL "…" -o "…" && chmod +x "…"` vía `ChildProcess::start(String)`.
+- En POSIX JUCE **no hay shell**: `StringArray::fromTokens(command, true)` preserva las comillas y llama `execvp` directo (`juce_SharedCode_posix.h:1159`). curl recibía la URL con comillas incluidas (URL malformada, no descargaba) y `chmod +x` nunca se ejecutaba → binario jamás instalado → «No se pudo iniciar el extractor yt-dlp».
+- El asset oficial `yt-dlp_macos` es universal2 y corre bien en arm64 (probado: `--version` → 2026.10.26, exit 0). `FfmpegLocator.cpp` no comparte el bug (usa `/bin/sh -c '...'`); sin cambios.
+
+## Cambios
+- `src/services/YouTubeAudioDownloader.cpp` (bloque auto-instalación): comando de shell reemplazado por pasos discretos con `ChildProcess::start(StringArray)` sin comillas — 1) curl descarga a App Support/bin/yt-dlp (exit 0 + archivo > 0 bytes), 2) `File::setExecutePermission(true)`, 3) sanity check corriendo el binario con `--version` (exit 0). Sin cambios en `getBinaryPath()` ni en el mensaje de error bilingüe.
+
+## Verificación
+- `cmake --build build` → **0 errores, 0 warnings**.
+- Relanzamiento obligatorio: `pkill -f DiscNativePro || true` → `open …/Release/DiscNativePro.app` → proceso activo (pgrep OK).
+- Entorno de prueba preparado en esta Mac arm64: `~/Library/Application Support/DiscNativePro/bin/yt-dlp` (2026.08.19) renombrado a `yt-dlp.bak-P43` — la próxima carga de YouTube pasa por el auto-instalador nuevo en frío (equivalente a la máquina limpia del usuario).
+- **Pendiente de validación humana (usuario)**: cargar un track de YouTube (audio y video) en la app M1; confirmar que se auto-instala yt-dlp y que la descarga arranca. Luego restaurar decisión sobre `yt-dlp.bak-P43` (el nuevo instalado reemplaza al viejo 2026.08.19).

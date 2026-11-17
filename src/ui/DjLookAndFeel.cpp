@@ -25,8 +25,8 @@ juce::Slider::SliderLayout DjLookAndFeel::getSliderLayout(juce::Slider& slider)
     else if (style == juce::Slider::LinearVertical)
     {
         juce::Slider::SliderLayout layout;
-        // 12px vertical margin for 18px height knob (9px half-height + 3px margin)
-        layout.sliderBounds = slider.getLocalBounds().reduced(0, 12);
+        // 10.5px vertical margin for 15px height knob (7.5px half-height + 3px margin)
+        layout.sliderBounds = slider.getLocalBounds().reduced(0, 10);
         return layout;
     }
 
@@ -56,8 +56,8 @@ void DjLookAndFeel::drawLinearSlider(juce::Graphics& g, int x, int y, int width,
         g.fillRect(trackX - 4.0f, midY - 0.75f, trackW + 8.0f, 1.5f);
 
         // DJ Fader Handle (Knob)
-        float knobW = juce::jmin((float)width - 4.0f, 32.0f);
-        float knobH = 18.0f;
+        float knobW = juce::jmin((float)width - 4.0f, 25.0f);
+        float knobH = 15.0f;
         float knobX = (float)x + ((float)width - knobW) * 0.5f;
         float knobY = sliderPos - knobH * 0.5f;
 
@@ -99,8 +99,8 @@ void DjLookAndFeel::drawLinearSlider(juce::Graphics& g, int x, int y, int width,
         g.fillRect(midX - 0.75f, trackY - 4.0f, 1.5f, trackH + 8.0f);
 
         // DJ Crossfader Handle (Knob)
-        float knobW = 28.0f;
-        float knobH = juce::jmin((float)height - 4.0f, 22.0f);
+        float knobW = 25.0f;
+        float knobH = juce::jmin((float)height - 4.0f, 15.0f);
         float knobX = sliderPos - knobW * 0.5f;
         float knobY = (float)y + ((float)height - knobH) * 0.5f;
 
