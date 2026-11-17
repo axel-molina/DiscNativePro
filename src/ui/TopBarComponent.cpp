@@ -283,11 +283,10 @@ void TopBarComponent::paint(juce::Graphics& g)
     g.setColour(juce::Colour::fromRGB(32, 35, 44));
     g.drawHorizontalLine(getHeight() - 1, 0.0f, bounds.getWidth());
 
-    // Center Disc Logo icon (pure vector LucideIcons::Disc)
-    float centerX = bounds.getCentreX() - 48.0f;
-    float centerY = bounds.getCentreY();
-    LucideIcons::draw(g, LucideIcons::IconType::Disc,
-                      juce::Rectangle<float>(centerX - 8.0f, centerY - 8.0f, 16.0f, 16.0f),
+    // Disc Logo (pure vector LucideIcons::Disc) — ubicado por resized() justo
+    // a la izquierda del título, con separación fija (antes era centro-48 px
+    // y se pegaba a la «D» de DiscNativePro).
+    LucideIcons::draw(g, LucideIcons::IconType::Disc, discLogoBounds,
                       juce::Colour::fromRGB(200, 205, 215), 1.8f);
 }
 
@@ -321,14 +320,20 @@ void TopBarComponent::resized()
     area.removeFromRight(6);
     ramLabel.setBounds(area.removeFromRight(95).reduced(0, 3));
 
-    // Center Brand Title — SIEMPRE centrada en la ventana. El centro no debe
-    // depender de los clusters (UPDATE aparece/desaparece y movía el título).
-    // Si la ventana es angosta, se reduce el ancho de forma simétrica para
-    // no pisar el badge ni el cluster derecho.
-    int centerX = getWidth() / 2;
-    int leftLimit = layoutBadge.getRight() + 4;
-    int rightLimit = ramLabel.getX() - 4;
-    int half = juce::jmax(0, juce::jmin(centerX - leftLimit, rightLimit - centerX));
-    int brandWidth = juce::jmin(220, half * 2);
-    brandLabel.setBounds(centerX - brandWidth / 2, area.getY(), brandWidth, area.getHeight());
+    // Centro el conjunto [logo Disc + texto] como una sola unidad, para que
+    // el logo no quede pegado a la «D» de DiscNativePro. El centro no depende
+    // de los clusters (UPDATE aparece/desaparece y movía el título).
+    juce::Font brandFont(juce::FontOptions(15.0f, juce::Font::bold));
+    constexpr float iconSize = 16.0f;
+    constexpr float gap = 12.0f;
+    float textWidth = brandFont.getStringWidthFloat(brandLabel.getText());
+    float groupWidth = iconSize + gap + textWidth;
+    float groupX = static_cast<float>(getWidth()) * 0.5f - groupWidth * 0.5f;
+    groupX = juce::jmax(static_cast<float>(layoutBadge.getRight() + 16),
+                        juce::jmin(groupX, static_cast<float>(ramLabel.getX()) - groupWidth));
+    discLogoBounds = juce::Rectangle<float>(groupX,
+                                            static_cast<float>(area.getCentreY()) - iconSize * 0.5f,
+                                            iconSize, iconSize);
+    brandLabel.setBounds(juce::roundToInt(groupX + iconSize + gap), area.getY(),
+                         juce::roundToInt(textWidth) + 2, area.getHeight());
 }

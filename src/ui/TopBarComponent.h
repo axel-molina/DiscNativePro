@@ -40,8 +40,10 @@ private:
     DjButton fxButton;
     DjButton smpButton;
 
-    // Center logo
+    // Center logo (bounds del logo calculadas en resized() para que no se
+    // separe del texto del título)
     juce::Label brandLabel;
+    juce::Rectangle<float> discLogoBounds;
 
     // Right elements
     juce::Label ramLabel;
