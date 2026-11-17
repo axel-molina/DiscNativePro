@@ -195,7 +195,7 @@ SettingsModalComponent::SettingsModalComponent(AudioEngine& engine, MidiManager&
         btn.setText(text);
         btn.setFontSize(UiType::micro);
         btn.setStackedLayout(true);
-        btn.setCornerRadius(6.0f);
+        btn.setCornerRadius(0.0f);
         btn.onClick = [this, tabIdx]() {
             activeTab = tabIdx;
             updateTabVisibility();
@@ -455,7 +455,7 @@ void SettingsModalComponent::setupGeneralTab()
     recBrowseBtn.setText(juce::String::fromUTF8("Examinar..."));
     recBrowseBtn.setTooltip(LanguageManager::trUtf8("Elige la carpeta donde se guardan las grabaciones", "Choose the recordings folder"));
     recBrowseBtn.setFontSize(UiType::caption);
-    recBrowseBtn.setCornerRadius(5.0f);
+    recBrowseBtn.setCornerRadius(0.0f);
     recBrowseBtn.setCustomColours(juce::Colour::fromRGB(32, 35, 48),
                                  juce::Colour::fromRGB(200, 205, 220),
                                  juce::Colour::fromRGB(0, 180, 216),
@@ -481,7 +481,7 @@ void SettingsModalComponent::setupGeneralTab()
     recOpenBtn.setText(juce::String::fromUTF8("Abrir Carpeta"));
     recOpenBtn.setTooltip(LanguageManager::trUtf8("Abre la carpeta de grabaciones en el Finder", "Open the recordings folder in Finder"));
     recOpenBtn.setFontSize(UiType::caption);
-    recOpenBtn.setCornerRadius(5.0f);
+    recOpenBtn.setCornerRadius(0.0f);
     recOpenBtn.setCustomColours(juce::Colour::fromRGB(32, 35, 48),
                                juce::Colour::fromRGB(200, 205, 220),
                                juce::Colour::fromRGB(74, 222, 128),
@@ -497,7 +497,7 @@ void SettingsModalComponent::setupGeneralTab()
     recResetBtn.setText(juce::String::fromUTF8("Por defecto"));
     recResetBtn.setTooltip(LanguageManager::trUtf8("Restaura la carpeta de grabaciones por defecto", "Restore the default recordings folder"));
     recResetBtn.setFontSize(UiType::caption);
-    recResetBtn.setCornerRadius(5.0f);
+    recResetBtn.setCornerRadius(0.0f);
     recResetBtn.setCustomColours(juce::Colour::fromRGB(26, 28, 36),
                                 juce::Colour::fromRGB(140, 145, 160),
                                 juce::Colour::fromRGB(200, 205, 220),
@@ -545,7 +545,7 @@ void SettingsModalComponent::setupGeneralTab()
     stemsPrecalcBtn.setText(LanguageManager::trUtf8("Precalcular biblioteca (4 stems)", "Precompute library (4 stems)"));
     stemsPrecalcBtn.setTooltip(LanguageManager::trUtf8("Separa todas las pistas de la biblioteca en 4 stems (demora)", "Split the whole library into 4 stems (takes a while)"));
     stemsPrecalcBtn.setFontSize(UiType::caption);
-    stemsPrecalcBtn.setCornerRadius(5.0f);
+    stemsPrecalcBtn.setCornerRadius(0.0f);
     stemsPrecalcBtn.setCustomColours(juce::Colour::fromRGB(26, 28, 36),
                                      juce::Colour::fromRGB(140, 145, 160),
                                      juce::Colour::fromRGB(200, 205, 220),
@@ -602,7 +602,7 @@ void SettingsModalComponent::setupGeneralTab()
     downloadsBrowseBtn.setText(juce::String::fromUTF8("Examinar..."));
     downloadsBrowseBtn.setTooltip(LanguageManager::trUtf8("Elige la carpeta de descargas de YouTube", "Choose the YouTube downloads folder"));
     downloadsBrowseBtn.setFontSize(UiType::caption);
-    downloadsBrowseBtn.setCornerRadius(5.0f);
+    downloadsBrowseBtn.setCornerRadius(0.0f);
     downloadsBrowseBtn.setCustomColours(juce::Colour::fromRGB(32, 35, 48),
                                       juce::Colour::fromRGB(200, 205, 220),
                                       juce::Colour::fromRGB(0, 180, 216),
@@ -630,7 +630,7 @@ void SettingsModalComponent::setupGeneralTab()
     downloadsOpenBtn.setText(juce::String::fromUTF8("Abrir Carpeta"));
     downloadsOpenBtn.setTooltip(LanguageManager::trUtf8("Abre la carpeta de descargas en el Finder", "Open the downloads folder in Finder"));
     downloadsOpenBtn.setFontSize(UiType::caption);
-    downloadsOpenBtn.setCornerRadius(5.0f);
+    downloadsOpenBtn.setCornerRadius(0.0f);
     downloadsOpenBtn.setCustomColours(juce::Colour::fromRGB(32, 35, 48),
                                     juce::Colour::fromRGB(200, 205, 220),
                                     juce::Colour::fromRGB(74, 222, 128),
@@ -646,7 +646,7 @@ void SettingsModalComponent::setupGeneralTab()
     downloadsResetBtn.setText(juce::String::fromUTF8("Por defecto"));
     downloadsResetBtn.setTooltip(LanguageManager::trUtf8("Restaura la carpeta de descargas por defecto", "Restore the default downloads folder"));
     downloadsResetBtn.setFontSize(UiType::caption);
-    downloadsResetBtn.setCornerRadius(5.0f);
+    downloadsResetBtn.setCornerRadius(0.0f);
     downloadsResetBtn.setCustomColours(juce::Colour::fromRGB(26, 28, 36),
                                      juce::Colour::fromRGB(140, 145, 160),
                                      juce::Colour::fromRGB(200, 205, 220),
@@ -668,7 +668,7 @@ void SettingsModalComponent::setupGeneralTab()
     // P36: botón para reabrir el aviso de bienvenida (proyecto en desarrollo).
     showWelcomeBtn.setIcon(LucideIcons::IconType::Star, 14.0f);
     showWelcomeBtn.setFontSize(UiType::caption);
-    showWelcomeBtn.setCornerRadius(6.0f);
+    showWelcomeBtn.setCornerRadius(0.0f);
     showWelcomeBtn.setCustomColours(juce::Colour::fromRGB(32, 35, 48),
                                     juce::Colours::white,
                                     juce::Colour::fromRGB(200, 205, 215),
@@ -1338,7 +1338,7 @@ void SettingsModalComponent::setupStreamingTab()
 
     clearApiKeyBtn.setText("Borrar Key");
     clearApiKeyBtn.setFontSize(UiType::caption);
-    clearApiKeyBtn.setCornerRadius(5.0f);
+    clearApiKeyBtn.setCornerRadius(0.0f);
     clearApiKeyBtn.setCustomColours(juce::Colour::fromRGB(32, 35, 48),
                                    juce::Colour::fromRGB(244, 63, 94),
                                    juce::Colour::fromRGB(244, 63, 94),
@@ -1502,7 +1502,7 @@ void SettingsModalComponent::setupTransmitTab()
 
     installFfmpegBtn.setText("Instalar ffmpeg");
     installFfmpegBtn.setFontSize(UiType::caption);
-    installFfmpegBtn.setCornerRadius(5.0f);
+    installFfmpegBtn.setCornerRadius(0.0f);
     installFfmpegBtn.setCustomColours(juce::Colour::fromRGB(32, 35, 48),
                                       juce::Colour::fromRGB(0, 180, 216),
                                       juce::Colour::fromRGB(0, 180, 216),
@@ -1553,7 +1553,7 @@ void SettingsModalComponent::setupTransmitTab()
 
     podcastRefreshBtn.setText("Refrescar");
     podcastRefreshBtn.setFontSize(UiType::caption);
-    podcastRefreshBtn.setCornerRadius(5.0f);
+    podcastRefreshBtn.setCornerRadius(0.0f);
     podcastRefreshBtn.setCustomColours(juce::Colour::fromRGB(32, 35, 48),
                                        juce::Colour::fromRGB(0, 180, 216),
                                        juce::Colour::fromRGB(0, 180, 216),
@@ -1573,7 +1573,7 @@ void SettingsModalComponent::setupTransmitTab()
 
     podcastExportBtn.setText("Exportar a MP3");
     podcastExportBtn.setFontSize(UiType::caption);
-    podcastExportBtn.setCornerRadius(5.0f);
+    podcastExportBtn.setCornerRadius(0.0f);
     podcastExportBtn.setCustomColours(juce::Colour::fromRGB(37, 99, 235),
                                       juce::Colours::white,
                                       juce::Colours::white,
@@ -2133,7 +2133,7 @@ void SettingsModalComponent::setupAITab()
 
     clearAiApiKeyBtn.setText("Borrar Key");
     clearAiApiKeyBtn.setFontSize(UiType::caption);
-    clearAiApiKeyBtn.setCornerRadius(5.0f);
+    clearAiApiKeyBtn.setCornerRadius(0.0f);
     clearAiApiKeyBtn.setCustomColours(juce::Colour::fromRGB(32, 35, 48),
                                       juce::Colour::fromRGB(244, 63, 94),
                                       juce::Colour::fromRGB(244, 63, 94),
@@ -2172,7 +2172,7 @@ void SettingsModalComponent::setupDonateTab()
     donateBtn.setIcon(LucideIcons::IconType::Coffee, 15.0f);
     donateBtn.setText(juce::String::fromUTF8("Donar un café en Cafecito"));
     donateBtn.setFontSize(UiType::section);
-    donateBtn.setCornerRadius(8.0f);
+    donateBtn.setCornerRadius(0.0f);
     donateBtn.setCustomColours(juce::Colour::fromRGB(120, 53, 15),
                                juce::Colours::white,
                                juce::Colour::fromRGB(251, 191, 36),
@@ -2214,7 +2214,7 @@ void SettingsModalComponent::setupDesignTab()
 
     auto setupDeckToggle = [this](DjButton& btn, int deck) {
         btn.setFontSize(UiType::caption);
-        btn.setCornerRadius(6.0f);
+        btn.setCornerRadius(0.0f);
         btn.onClick = [this, deck]() {
             designDeckIndex = deck;
             refreshDesignSwatches();
@@ -2234,7 +2234,7 @@ void SettingsModalComponent::setupDesignTab()
         bodyContent.addChildComponent(label);
 
         swatch.setFontSize(UiType::caption);
-        swatch.setCornerRadius(6.0f);
+        swatch.setCornerRadius(0.0f);
         swatch.onClick = [this, band]() { openColourPicker(band); };
         bodyContent.addChildComponent(swatch);
     };
@@ -2252,7 +2252,7 @@ void SettingsModalComponent::setupDesignTab()
 
     auto setupPreset = [this](DjButton& btn, int preset) {
         btn.setFontSize(UiType::caption);
-        btn.setCornerRadius(6.0f);
+        btn.setCornerRadius(0.0f);
         btn.setCustomColours(juce::Colour::fromRGB(32, 35, 48),
                              juce::Colour::fromRGB(200, 205, 220),
                              juce::Colour::fromRGB(0, 180, 216),
@@ -2310,7 +2310,7 @@ void SettingsModalComponent::setupVersionTab()
 
     checkUpdatesBtn.setText(LanguageManager::trUtf8("Buscar actualizaciones", "Check for updates"));
     checkUpdatesBtn.setFontSize(UiType::body);
-    checkUpdatesBtn.setCornerRadius(6.0f);
+    checkUpdatesBtn.setCornerRadius(0.0f);
     checkUpdatesBtn.setCustomColours(juce::Colour::fromRGB(32, 35, 48),
                                     juce::Colours::white,
                                     juce::Colours::white,
@@ -2348,7 +2348,7 @@ void SettingsModalComponent::setupVersionTab()
     installVersionBtn.setIcon(LucideIcons::IconType::Download, 13.0f);
     installVersionBtn.setText(LanguageManager::trUtf8("Instalar", "Install"));
     installVersionBtn.setFontSize(UiType::section);
-    installVersionBtn.setCornerRadius(6.0f);
+    installVersionBtn.setCornerRadius(0.0f);
     installVersionBtn.setCustomColours(juce::Colour::fromRGB(14, 165, 233),
                                        juce::Colours::white,
                                        juce::Colours::white,
@@ -3087,9 +3087,9 @@ void SettingsModalComponent::paint(juce::Graphics& g)
         if (midiConnectedDevices.isEmpty())
         {
             g.setColour(juce::Colour::fromRGB(17, 18, 25));
-            g.fillRoundedRectangle(devBox, 8.0f);
+            g.fillRoundedRectangle(devBox, 0.0f);
             g.setColour(juce::Colour::fromRGB(40, 44, 60));
-            g.drawRoundedRectangle(devBox, 8.0f, 1.0f);
+            g.drawRoundedRectangle(devBox, 0.0f, 1.0f);
 
             g.setColour(juce::Colour::fromRGB(255, 159, 28));
             g.setFont(juce::FontOptions(UiType::section, juce::Font::bold));
@@ -3104,9 +3104,9 @@ void SettingsModalComponent::paint(juce::Graphics& g)
         else
         {
             g.setColour(juce::Colour::fromRGB(17, 18, 25));
-            g.fillRoundedRectangle(devBox, 8.0f);
+            g.fillRoundedRectangle(devBox, 0.0f);
             g.setColour(juce::Colour::fromRGB(40, 44, 60));
-            g.drawRoundedRectangle(devBox, 8.0f, 1.0f);
+            g.drawRoundedRectangle(devBox, 0.0f, 1.0f);
 
             auto listArea = devBox.reduced(10.0f);
             for (int i = 0; i < midiConnectedDevices.size(); ++i)
@@ -3151,9 +3151,9 @@ void SettingsModalComponent::paint(juce::Graphics& g)
         auto drawCard = [&g](juce::Rectangle<int> r, const juce::String& title, juce::Colour col,
                              const std::vector<std::pair<juce::String, juce::String>>& keys) {
             g.setColour(juce::Colour::fromRGB(18, 20, 26));
-            g.fillRoundedRectangle(r.toFloat(), 6.0f);
+            g.fillRoundedRectangle(r.toFloat(), 0.0f);
             g.setColour(juce::Colour::fromRGB(37, 40, 52));
-            g.drawRoundedRectangle(r.toFloat(), 6.0f, 1.0f);
+            g.drawRoundedRectangle(r.toFloat(), 0.0f, 1.0f);
 
             auto inner = r.reduced(10, 8);
             g.setColour(col);
@@ -3170,7 +3170,7 @@ void SettingsModalComponent::paint(juce::Graphics& g)
                 int kbdW = juce::jmax(36, static_cast<int>(ga.getBoundingBox(0, -1, true).getWidth()) + 14);
                 auto kbdRect = row.removeFromLeft(kbdW).reduced(0, 2);
                 g.setColour(juce::Colour::fromRGB(36, 39, 53));
-                g.fillRoundedRectangle(kbdRect.toFloat(), 3.0f);
+                g.fillRoundedRectangle(kbdRect.toFloat(), 0.0f);
                 g.setColour(juce::Colours::white);
                 g.drawText(item.first, kbdRect, juce::Justification::centred, false);
 
@@ -3210,9 +3210,9 @@ void SettingsModalComponent::paint(juce::Graphics& g)
     {
         auto cardArea = (streamingInfoCardBox + contentOffset).toFloat();
         g.setColour(juce::Colour::fromRGB(18, 20, 27));
-        g.fillRoundedRectangle(cardArea, 8.0f);
+        g.fillRoundedRectangle(cardArea, 0.0f);
         g.setColour(juce::Colour::fromRGB(40, 44, 60));
-        g.drawRoundedRectangle(cardArea, 8.0f, 1.0f);
+        g.drawRoundedRectangle(cardArea, 0.0f, 1.0f);
     }
 
     // 8. If activeTab == 6 (AI Match), paint info card background
@@ -3220,9 +3220,9 @@ void SettingsModalComponent::paint(juce::Graphics& g)
     {
         auto cardArea = (aiInfoCardBox + contentOffset).toFloat();
         g.setColour(juce::Colour::fromRGB(18, 20, 27));
-        g.fillRoundedRectangle(cardArea, 8.0f);
+        g.fillRoundedRectangle(cardArea, 0.0f);
         g.setColour(juce::Colour::fromRGB(40, 44, 60));
-        g.drawRoundedRectangle(cardArea, 8.0f, 1.0f);
+        g.drawRoundedRectangle(cardArea, 0.0f, 1.0f);
     }
 
     // 9. If activeTab == 7 (Donar), paint info card background
@@ -3230,9 +3230,9 @@ void SettingsModalComponent::paint(juce::Graphics& g)
     {
         auto cardArea = (donateCardBox + contentOffset).toFloat();
         g.setColour(juce::Colour::fromRGB(18, 20, 27));
-        g.fillRoundedRectangle(cardArea, 8.0f);
+        g.fillRoundedRectangle(cardArea, 0.0f);
         g.setColour(juce::Colour::fromRGB(40, 44, 60));
-        g.drawRoundedRectangle(cardArea, 8.0f, 1.0f);
+        g.drawRoundedRectangle(cardArea, 0.0f, 1.0f);
     }
 }
 

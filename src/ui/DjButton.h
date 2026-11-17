@@ -129,7 +129,7 @@ private:
     std::optional<LucideIcons::IconType> icon;
     juce::String buttonText;
     float iconSize { 15.0f };
-    float cornerRadius { 6.0f };
+    float cornerRadius { 0.0f };
     float fontSize { 11.5f };
     bool stackedLayout { false };
 

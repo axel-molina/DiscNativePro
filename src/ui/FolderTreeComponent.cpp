@@ -38,21 +38,21 @@ void FolderTreeComponent::TreeViewInternal::paint(juce::Graphics& g)
         {
             auto hoverRect = rowRect.toFloat();
             g.setColour(juce::Colour::fromRGB(0, 229, 255).withAlpha(0.12f));
-            g.fillRoundedRectangle(hoverRect, 5.0f);
+            g.fillRoundedRectangle(hoverRect, 0.0f);
             g.setColour(juce::Colour::fromRGB(0, 229, 255).withAlpha(0.8f));
-            g.drawRoundedRectangle(hoverRect, 5.0f, 1.5f);
+            g.drawRoundedRectangle(hoverRect, 0.0f, 1.5f);
         }
 
         // Row background
         if (isSelected)
         {
             g.setColour(juce::Colour::fromRGB(59, 62, 71)); // #3b3e47 active selection
-            g.fillRoundedRectangle(rowRect.toFloat(), 5.0f);
+            g.fillRoundedRectangle(rowRect.toFloat(), 0.0f);
         }
         else if (i == hoveredRow)
         {
             g.setColour(juce::Colour::fromRGB(255, 255, 255).withAlpha(0.04f));
-            g.fillRoundedRectangle(rowRect.toFloat(), 5.0f);
+            g.fillRoundedRectangle(rowRect.toFloat(), 0.0f);
         }
 
         int indent = rowRect.getX() + row.depth * 14;
@@ -79,9 +79,9 @@ void FolderTreeComponent::TreeViewInternal::paint(juce::Graphics& g)
         {
             auto chevBox = juce::Rectangle<float>((float)indent, (float)(y + 5), 18.0f, 18.0f);
             g.setColour(juce::Colour::fromRGB(24, 27, 36));
-            g.fillRoundedRectangle(chevBox, 3.5f);
+            g.fillRoundedRectangle(chevBox, 0.0f);
             g.setColour(juce::Colour::fromRGB(45, 50, 68));
-            g.drawRoundedRectangle(chevBox, 3.5f, 1.0f);
+            g.drawRoundedRectangle(chevBox, 0.0f, 1.0f);
 
             if (row.isExpanded)
             {
@@ -343,7 +343,7 @@ FolderTreeComponent::FolderTreeComponent()
     addAndMakeVisible(headerTitleLabel);
 
     addFolderBtn.setIcon(LucideIcons::IconType::Plus, 13.0f);
-    addFolderBtn.setCornerRadius(4.0f);
+    addFolderBtn.setCornerRadius(0.0f);
     addFolderBtn.setCustomColours(juce::Colour::fromRGB(20, 24, 32),
                                   juce::Colour::fromRGB(0, 229, 255),
                                   juce::Colour::fromRGB(0, 229, 255),

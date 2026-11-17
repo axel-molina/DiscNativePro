@@ -10,13 +10,13 @@ public:
         : learnCallback(std::move(onLearn)), clearCallback(std::move(onClear))
     {
         learnBtn.setFontSize(UiType::caption);
-        learnBtn.setCornerRadius(4.0f);
+        learnBtn.setCornerRadius(0.0f);
         learnBtn.onClick = [this]() { if (learnCallback) learnCallback(); };
         addAndMakeVisible(learnBtn);
 
         clearBtn.setText(juce::String::fromUTF8("✕"));
         clearBtn.setFontSize(UiType::micro);
-        clearBtn.setCornerRadius(4.0f);
+        clearBtn.setCornerRadius(0.0f);
         clearBtn.setCustomColours(juce::Colour::fromRGB(24, 27, 36),
                                  juce::Colour::fromRGB(239, 68, 68),
                                  juce::Colour::fromRGB(239, 68, 68),
@@ -91,7 +91,7 @@ MidiMappingTableComponent::MidiMappingTableComponent(MidiManager& midiMgr)
     resetDefaultsBtn.setIcon(LucideIcons::IconType::Repeat, 11.0f);
     resetDefaultsBtn.setFontSize(UiType::caption);
     resetDefaultsBtn.setTooltip(LanguageManager::trUtf8("Restaura la tabla de mapeo MIDI de fábrica", "Restore the factory MIDI mapping table"));
-    resetDefaultsBtn.setCornerRadius(5.0f);
+    resetDefaultsBtn.setCornerRadius(0.0f);
     resetDefaultsBtn.setCustomColours(juce::Colour::fromRGB(24, 27, 36),
                                      juce::Colour::fromRGB(148, 163, 184),
                                      juce::Colour::fromRGB(148, 163, 184),
@@ -103,7 +103,7 @@ MidiMappingTableComponent::MidiMappingTableComponent(MidiManager& midiMgr)
     exportBtn.setText(LanguageManager::trUtf8("Exportar...", "Export..."));
     exportBtn.setIcon(LucideIcons::IconType::Download, 11.0f);
     exportBtn.setFontSize(UiType::caption);
-    exportBtn.setCornerRadius(5.0f);
+    exportBtn.setCornerRadius(0.0f);
     exportBtn.setCustomColours(juce::Colour::fromRGB(24, 27, 36),
                               juce::Colour::fromRGB(0, 180, 216),
                               juce::Colour::fromRGB(0, 180, 216),
@@ -116,7 +116,7 @@ MidiMappingTableComponent::MidiMappingTableComponent(MidiManager& midiMgr)
     importBtn.setText(LanguageManager::trUtf8("Importar...", "Import..."));
     importBtn.setIcon(LucideIcons::IconType::Folder, 11.0f);
     importBtn.setFontSize(UiType::caption);
-    importBtn.setCornerRadius(5.0f);
+    importBtn.setCornerRadius(0.0f);
     importBtn.setCustomColours(juce::Colour::fromRGB(24, 27, 36),
                               juce::Colour::fromRGB(52, 211, 153),
                               juce::Colour::fromRGB(52, 211, 153),
@@ -127,7 +127,7 @@ MidiMappingTableComponent::MidiMappingTableComponent(MidiManager& midiMgr)
 
     // 5. Contador de conflictos de mapeo
     conflictBtn.setFontSize(UiType::micro);
-    conflictBtn.setCornerRadius(5.0f);
+    conflictBtn.setCornerRadius(0.0f);
     conflictBtn.setCustomColours(juce::Colour::fromRGB(24, 27, 36),
                                  juce::Colour::fromRGB(248, 113, 113),
                                  juce::Colour::fromRGB(248, 113, 113),
@@ -324,9 +324,9 @@ void MidiMappingTableComponent::paintCell(juce::Graphics& g, int rowNumber, int 
 
             auto pill = cellBounds.toFloat().reduced(0, 2);
             g.setColour(groupCol.withAlpha(0.15f));
-            g.fillRoundedRectangle(pill, 4.0f);
+            g.fillRoundedRectangle(pill, 0.0f);
             g.setColour(groupCol.withAlpha(0.35f));
-            g.drawRoundedRectangle(pill, 4.0f, 1.0f);
+            g.drawRoundedRectangle(pill, 0.0f, 1.0f);
 
             g.setColour(groupCol);
             g.setFont(juce::FontOptions(UiType::micro, juce::Font::bold));
@@ -353,9 +353,9 @@ void MidiMappingTableComponent::paintCell(juce::Graphics& g, int rowNumber, int 
             if (isLearningThis)
             {
                 g.setColour(juce::Colour::fromRGB(245, 158, 11).withAlpha(0.25f));
-                g.fillRoundedRectangle(pill, 4.0f);
+                g.fillRoundedRectangle(pill, 0.0f);
                 g.setColour(juce::Colour::fromRGB(245, 158, 11));
-                g.drawRoundedRectangle(pill, 4.0f, 1.2f);
+                g.drawRoundedRectangle(pill, 0.0f, 1.2f);
 
                 g.setFont(juce::FontOptions(UiType::micro, juce::Font::bold));
                 g.drawText(LanguageManager::trUtf8("Mueve un botón o fader...", "Move a knob or fader..."), pill, juce::Justification::centred, false);
@@ -367,9 +367,9 @@ void MidiMappingTableComponent::paintCell(juce::Graphics& g, int rowNumber, int 
                 juce::Colour textCol = hasBinding ? juce::Colour::fromRGB(0, 229, 255) : juce::Colour::fromRGB(100, 108, 125);
 
                 g.setColour(bgCol);
-                g.fillRoundedRectangle(pill, 4.0f);
+                g.fillRoundedRectangle(pill, 0.0f);
                 g.setColour(juce::Colour::fromRGB(36, 40, 56));
-                g.drawRoundedRectangle(pill, 4.0f, 1.0f);
+                g.drawRoundedRectangle(pill, 0.0f, 1.0f);
 
                 auto textArea = pill;
                 if (conflicts > 0)
@@ -587,9 +587,9 @@ void MidiMappingTableComponent::paint(juce::Graphics& g)
 {
     auto bounds = getLocalBounds().toFloat();
     g.setColour(juce::Colour::fromRGB(18, 20, 28));
-    g.fillRoundedRectangle(bounds, 8.0f);
+    g.fillRoundedRectangle(bounds, 0.0f);
     g.setColour(juce::Colour::fromRGB(36, 40, 56));
-    g.drawRoundedRectangle(bounds, 8.0f, 1.0f);
+    g.drawRoundedRectangle(bounds, 0.0f, 1.0f);
 }
 
 void MidiMappingTableComponent::resized()

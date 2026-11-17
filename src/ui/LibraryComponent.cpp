@@ -150,22 +150,22 @@ public:
             if (isHover)
                 bg = bg.brighter(0.08f);
             g.setColour(bg);
-            g.fillRoundedRectangle(itemRect.toFloat(), 4.0f);
+            g.fillRoundedRectangle(itemRect.toFloat(), 0.0f);
 
             // Highlight playing or next track
             if (playing)
             {
                 g.setColour(juce::Colour::fromRGB(96, 165, 250).withAlpha(0.18f));
-                g.fillRoundedRectangle(itemRect.toFloat(), 4.0f);
+                g.fillRoundedRectangle(itemRect.toFloat(), 0.0f);
                 g.setColour(juce::Colour::fromRGB(96, 165, 250).withAlpha(0.6f));
-                g.drawRoundedRectangle(itemRect.toFloat().reduced(0.5f), 4.0f, 1.2f);
+                g.drawRoundedRectangle(itemRect.toFloat().reduced(0.5f), 0.0f, 1.2f);
             }
             else if (next)
             {
                 g.setColour(juce::Colour::fromRGB(0, 229, 255).withAlpha(0.08f));
-                g.fillRoundedRectangle(itemRect.toFloat(), 4.0f);
+                g.fillRoundedRectangle(itemRect.toFloat(), 0.0f);
                 g.setColour(juce::Colour::fromRGB(0, 229, 255).withAlpha(0.35f));
-                g.drawRoundedRectangle(itemRect.toFloat().reduced(0.5f), 4.0f, 1.0f);
+                g.drawRoundedRectangle(itemRect.toFloat().reduced(0.5f), 0.0f, 1.0f);
             }
 
             // Track number
@@ -184,7 +184,7 @@ public:
                 auto stemsArea = numArea.removeFromRight(30).reduced(1, 6);
                 const bool ready = stemsStatus == "ready";
                 g.setColour((ready ? juce::Colour::fromRGB(34, 197, 94) : juce::Colour::fromRGB(245, 158, 11)).withAlpha(0.14f));
-                g.fillRoundedRectangle(stemsArea.toFloat(), 3.0f);
+                g.fillRoundedRectangle(stemsArea.toFloat(), 0.0f);
                 g.setColour(ready ? juce::Colour::fromRGB(74, 222, 128) : juce::Colour::fromRGB(251, 191, 36));
                 g.setFont(juce::FontOptions(7.5f, juce::Font::bold));
                 g.drawText(ready ? "STEMS" : "SEP", stemsArea, juce::Justification::centred, false);
@@ -195,7 +195,7 @@ public:
             if (playing)
             {
                 g.setColour(juce::Colour::fromRGB(96, 165, 250).withAlpha(0.2f));
-                g.fillRoundedRectangle(badgeArea.toFloat(), 3.0f);
+                g.fillRoundedRectangle(badgeArea.toFloat(), 0.0f);
                 g.setColour(juce::Colour::fromRGB(147, 197, 253));
                 g.setFont(juce::FontOptions(8.0f, juce::Font::bold));
                 g.drawText("ON AIR", badgeArea, juce::Justification::centred, false);
@@ -203,7 +203,7 @@ public:
             else if (next)
             {
                 g.setColour(juce::Colour::fromRGB(0, 229, 255).withAlpha(0.12f));
-                g.fillRoundedRectangle(badgeArea.toFloat(), 3.0f);
+                g.fillRoundedRectangle(badgeArea.toFloat(), 0.0f);
                 g.setColour(juce::Colour::fromRGB(0, 229, 255));
                 g.setFont(juce::FontOptions(8.0f, juce::Font::bold));
                 g.drawText("NEXT", badgeArea, juce::Justification::centred, false);
@@ -211,7 +211,7 @@ public:
             else
             {
                 g.setColour(juce::Colour::fromRGB(0, 180, 216).withAlpha(0.1f));
-                g.fillRoundedRectangle(badgeArea.toFloat(), 3.0f);
+                g.fillRoundedRectangle(badgeArea.toFloat(), 0.0f);
                 g.setColour(juce::Colour::fromRGB(0, 229, 255));
                 g.setFont(juce::FontOptions(9.0f, juce::Font::bold));
                 g.drawText(formatBpm(track.bpm), badgeArea, juce::Justification::centred, false);
@@ -350,10 +350,10 @@ public:
         auto bounds = getLocalBounds().toFloat();
         bool isHover = owner.automixDropHover || externalDropHover;
         g.setColour(isHover ? juce::Colour::fromRGB(37, 99, 235).withAlpha(0.12f) : juce::Colour::fromRGB(16, 18, 25));
-        g.fillRoundedRectangle(bounds, 8.0f);
+        g.fillRoundedRectangle(bounds, 0.0f);
 
         g.setColour(isHover ? juce::Colour::fromRGB(96, 165, 250).withAlpha(0.6f) : juce::Colour::fromRGB(36, 42, 56));
-        g.drawRoundedRectangle(bounds, 8.0f, isHover ? 2.0f : 1.0f);
+        g.drawRoundedRectangle(bounds, 0.0f, isHover ? 2.0f : 1.0f);
 
         if (owner.automixQueue.empty())
         {
@@ -468,7 +468,7 @@ public:
         addAndMakeVisible(descLabel);
 
         actionBtn.setFontSize(11.0f);
-        actionBtn.setCornerRadius(6.0f);
+        actionBtn.setCornerRadius(0.0f);
         addAndMakeVisible(actionBtn);
     }
 
@@ -522,17 +522,17 @@ public:
         if (!isSaveEnabled)
         {
             g.setColour(juce::Colour::fromRGB(0, 180, 216).withAlpha(0.12f));
-            g.fillRoundedRectangle(badgeRect, 24.0f);
+            g.fillRoundedRectangle(badgeRect, 0.0f);
             g.setColour(juce::Colour::fromRGB(0, 180, 216).withAlpha(0.35f));
-            g.drawRoundedRectangle(badgeRect, 24.0f, 1.2f);
+            g.drawRoundedRectangle(badgeRect, 0.0f, 1.2f);
             LucideIcons::draw(g, LucideIcons::IconType::Download, badgeRect.reduced(13.0f), juce::Colour::fromRGB(0, 229, 255), 1.8f);
         }
         else
         {
             g.setColour(juce::Colour::fromRGB(16, 185, 129).withAlpha(0.12f));
-            g.fillRoundedRectangle(badgeRect, 24.0f);
+            g.fillRoundedRectangle(badgeRect, 0.0f);
             g.setColour(juce::Colour::fromRGB(16, 185, 129).withAlpha(0.35f));
-            g.drawRoundedRectangle(badgeRect, 24.0f, 1.2f);
+            g.drawRoundedRectangle(badgeRect, 0.0f, 1.2f);
             LucideIcons::draw(g, LucideIcons::IconType::Download, badgeRect.reduced(13.0f), juce::Colour::fromRGB(52, 211, 153), 1.8f);
         }
     }
@@ -696,7 +696,7 @@ LibraryComponent::LibraryComponent(juce::AudioFormatManager& fm)
     // 1. Far-Left Vertical Icon Rail
     auto setupRailIcon = [this](DjButton& btn, LucideIcons::IconType iconType, juce::Colour col, bool active) {
         btn.setIcon(iconType, 16.0f);
-        btn.setCornerRadius(6.0f);
+        btn.setCornerRadius(0.0f);
         btn.setCustomColours(active ? juce::Colour::fromRGB(0, 180, 216).withAlpha(0.2f) : juce::Colour::fromRGB(18, 20, 26),
                              col,
                              col,
@@ -879,7 +879,7 @@ LibraryComponent::LibraryComponent(juce::AudioFormatManager& fm)
     addBtn.setIcon(LucideIcons::IconType::FolderPlus, 13.0f);
     addBtn.setText(juce::String::fromUTF8("Añadir"));
     addBtn.setFontSize(11.0f);
-    addBtn.setCornerRadius(5.0f);
+    addBtn.setCornerRadius(0.0f);
     addBtn.setCustomColours(juce::Colour::fromRGB(22, 26, 35),
                             juce::Colour::fromRGB(0, 229, 255),
                             juce::Colour::fromRGB(0, 229, 255),
@@ -933,7 +933,7 @@ LibraryComponent::LibraryComponent(juce::AudioFormatManager& fm)
     startAutomixBtn.setText("Comenzar Automix");
     startAutomixBtn.setTooltip(LanguageManager::trUtf8("Inicia o detiene la mezcla automática de la cola", "Start or stop automatic queue mixing"));
     startAutomixBtn.setFontSize(11.0f);
-    startAutomixBtn.setCornerRadius(5.0f);
+    startAutomixBtn.setCornerRadius(0.0f);
     startAutomixBtn.setCustomColours(juce::Colour::fromRGB(22, 25, 34),
                                      juce::Colour::fromRGB(142, 149, 165),
                                      juce::Colour::fromRGB(142, 149, 165),
@@ -952,7 +952,7 @@ LibraryComponent::LibraryComponent(juce::AudioFormatManager& fm)
 
     smartAutomixBtn.setIcon(LucideIcons::IconType::Zap, 12.0f);
     smartAutomixBtn.setFontSize(11.0f);
-    smartAutomixBtn.setCornerRadius(5.0f);
+    smartAutomixBtn.setCornerRadius(0.0f);
     smartAutomixBtn.setCustomColours(juce::Colour::fromRGB(22, 25, 34),
                                      juce::Colour::fromRGB(142, 149, 165),
                                      juce::Colour::fromRGB(142, 149, 165),
@@ -966,7 +966,7 @@ LibraryComponent::LibraryComponent(juce::AudioFormatManager& fm)
 
     clearQueueBtn.setIcon(LucideIcons::IconType::Minus, 10.0f);
     clearQueueBtn.setTooltip(LanguageManager::trUtf8("Vacía la cola de reproducción", "Empty the playback queue"));
-    clearQueueBtn.setCornerRadius(4.0f);
+    clearQueueBtn.setCornerRadius(0.0f);
     clearQueueBtn.setCustomColours(juce::Colours::transparentBlack,
                                    juce::Colour::fromRGB(100, 108, 125),
                                    juce::Colour::fromRGB(244, 63, 94),
@@ -1666,12 +1666,12 @@ void LibraryComponent::paintCell(juce::Graphics& g, int rowNumber, int columnId,
             auto cover = CoverArtGenerator::getCoverForTrack(track.title, 128);
 
             juce::Path p;
-            p.addRoundedRectangle(thumb.toFloat(), 3.0f);
+            p.addRoundedRectangle(thumb.toFloat(), 0.0f);
             juce::Graphics::ScopedSaveState state(g);
             g.reduceClipRegion(p);
             g.drawImage(cover, thumb.toFloat(), juce::RectanglePlacement::fillDestination);
             g.setColour(juce::Colour::fromRGB(45, 52, 68));
-            g.drawRoundedRectangle(thumb.toFloat(), 3.0f, 1.0f);
+            g.drawRoundedRectangle(thumb.toFloat(), 0.0f, 1.0f);
             break;
         }
 
@@ -1684,7 +1684,7 @@ void LibraryComponent::paintCell(juce::Graphics& g, int rowNumber, int columnId,
                 const bool ready = stemsStatus == "ready";
                 auto pill = titleArea.removeFromRight(46).reduced(3, 8).toFloat();
                 g.setColour((ready ? juce::Colour::fromRGB(34, 197, 94) : juce::Colour::fromRGB(245, 158, 11)).withAlpha(0.14f));
-                g.fillRoundedRectangle(pill, 3.0f);
+                g.fillRoundedRectangle(pill, 0.0f);
                 g.setColour(ready ? juce::Colour::fromRGB(74, 222, 128) : juce::Colour::fromRGB(251, 191, 36));
                 g.setFont(juce::FontOptions(7.5f, juce::Font::bold));
                 g.drawText(ready ? "STEMS" : "SEP", pill, juce::Justification::centred, false);
@@ -1722,9 +1722,9 @@ void LibraryComponent::paintCell(juce::Graphics& g, int rowNumber, int columnId,
             auto pill = cellBounds.reduced(3, 6).toFloat();
             auto keyCol = KeyDetector::getCamelotColour(track.key);
             g.setColour(keyCol.withAlpha(0.16f));
-            g.fillRoundedRectangle(pill, 4.0f);
+            g.fillRoundedRectangle(pill, 0.0f);
             g.setColour(keyCol.withAlpha(0.40f));
-            g.drawRoundedRectangle(pill, 4.0f, 1.0f);
+            g.drawRoundedRectangle(pill, 0.0f, 1.0f);
 
             g.setColour(keyCol.brighter(0.25f));
             g.setFont(juce::FontOptions(10.5f, juce::Font::bold));

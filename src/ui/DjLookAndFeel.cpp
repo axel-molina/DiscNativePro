@@ -46,9 +46,9 @@ void DjLookAndFeel::drawLinearSlider(juce::Graphics& g, int x, int y, int width,
 
         // Recessed track
         g.setColour(juce::Colour::fromRGB(12, 14, 18));
-        g.fillRoundedRectangle(trackX, trackY, trackW, trackH, 3.0f);
+        g.fillRoundedRectangle(trackX, trackY, trackW, trackH, 0.0f);
         g.setColour(juce::Colour::fromRGB(36, 42, 54));
-        g.drawRoundedRectangle(trackX, trackY, trackW, trackH, 3.0f, 1.0f);
+        g.drawRoundedRectangle(trackX, trackY, trackW, trackH, 0.0f, 1.0f);
 
         // Center detent marker
         float midY = (float)y + (float)height * 0.5f;
@@ -63,18 +63,18 @@ void DjLookAndFeel::drawLinearSlider(juce::Graphics& g, int x, int y, int width,
 
         // Shadow
         g.setColour(juce::Colours::black.withAlpha(0.6f));
-        g.fillRoundedRectangle(knobX, knobY + 2.0f, knobW, knobH, 3.0f);
+        g.fillRoundedRectangle(knobX, knobY + 2.0f, knobW, knobH, 0.0f);
 
         // Metallic / Dark Gradient
         juce::ColourGradient knobGrad(juce::Colour::fromRGB(58, 63, 78), knobX, knobY,
                                       juce::Colour::fromRGB(22, 24, 31), knobX, knobY + knobH, false);
         knobGrad.addColour(0.5, juce::Colour::fromRGB(36, 40, 50));
         g.setGradientFill(knobGrad);
-        g.fillRoundedRectangle(knobX, knobY, knobW, knobH, 3.0f);
+        g.fillRoundedRectangle(knobX, knobY, knobW, knobH, 0.0f);
 
         // Border
         g.setColour(juce::Colour::fromRGB(75, 82, 100));
-        g.drawRoundedRectangle(knobX, knobY, knobW, knobH, 3.0f, 1.0f);
+        g.drawRoundedRectangle(knobX, knobY, knobW, knobH, 0.0f, 1.0f);
 
         // White center line notch
         g.setColour(juce::Colours::white.withAlpha(0.95f));
@@ -89,9 +89,9 @@ void DjLookAndFeel::drawLinearSlider(juce::Graphics& g, int x, int y, int width,
 
         // Recessed track
         g.setColour(juce::Colour::fromRGB(9, 10, 13));
-        g.fillRoundedRectangle(trackX, trackY, trackW, trackH, 3.0f);
+        g.fillRoundedRectangle(trackX, trackY, trackW, trackH, 0.0f);
         g.setColour(juce::Colour::fromRGB(38, 42, 54));
-        g.drawRoundedRectangle(trackX, trackY, trackW, trackH, 3.0f, 1.0f);
+        g.drawRoundedRectangle(trackX, trackY, trackW, trackH, 0.0f, 1.0f);
 
         // Center detent marker
         float midX = (float)x + (float)width * 0.5f;
@@ -106,18 +106,18 @@ void DjLookAndFeel::drawLinearSlider(juce::Graphics& g, int x, int y, int width,
 
         // Shadow
         g.setColour(juce::Colours::black.withAlpha(0.7f));
-        g.fillRoundedRectangle(knobX, knobY + 2.0f, knobW, knobH, 3.0f);
+        g.fillRoundedRectangle(knobX, knobY + 2.0f, knobW, knobH, 0.0f);
 
         // Gradient
         juce::ColourGradient knobGrad(juce::Colour::fromRGB(70, 76, 93), knobX, knobY,
                                       juce::Colour::fromRGB(19, 21, 28), knobX, knobY + knobH, false);
         knobGrad.addColour(0.5, juce::Colour::fromRGB(36, 39, 50));
         g.setGradientFill(knobGrad);
-        g.fillRoundedRectangle(knobX, knobY, knobW, knobH, 3.0f);
+        g.fillRoundedRectangle(knobX, knobY, knobW, knobH, 0.0f);
 
         // Border
         g.setColour(juce::Colour::fromRGB(90, 98, 119));
-        g.drawRoundedRectangle(knobX, knobY, knobW, knobH, 3.0f, 1.0f);
+        g.drawRoundedRectangle(knobX, knobY, knobW, knobH, 0.0f, 1.0f);
 
         // White vertical center notch
         g.setColour(juce::Colours::white.withAlpha(0.95f));
@@ -168,7 +168,7 @@ void DjLookAndFeel::drawButtonBackground(juce::Graphics& g, juce::Button& button
                                         bool shouldDrawButtonAsDown)
 {
     auto bounds = button.getLocalBounds().toFloat();
-    float corner = 5.0f;
+    float corner = 0.0f;
 
     auto baseCol = backgroundColour;
     if (shouldDrawButtonAsDown)

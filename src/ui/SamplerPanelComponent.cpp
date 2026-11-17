@@ -13,7 +13,7 @@ SamplerPanelComponent::SamplerPanelComponent(SamplerBank& bank,
 
     stopAllBtn.setText("STOP");
     stopAllBtn.setFontSize(8.5f);
-    stopAllBtn.setCornerRadius(3.0f);
+    stopAllBtn.setCornerRadius(0.0f);
     stopAllBtn.setCustomColours(juce::Colour::fromRGB(18, 20, 28),
                                 juce::Colour::fromRGB(100, 116, 139),
                                 juce::Colours::transparentBlack,
@@ -32,7 +32,7 @@ SamplerPanelComponent::SamplerPanelComponent(SamplerBank& bank,
     for (int i = 0; i < SamplerBank::numSlots; ++i)
     {
         pads[i].setFontSize(9.0f);
-        pads[i].setCornerRadius(4.0f);
+        pads[i].setCornerRadius(0.0f);
         pads[i].onClick = [this, i]() {
             if (sampler.isLoaded(i))
                 sampler.trigger(i);
@@ -167,9 +167,9 @@ void SamplerPanelComponent::paint(juce::Graphics& g)
 {
     auto bounds = getLocalBounds().toFloat();
     g.setColour(juce::Colour::fromRGB(12, 14, 19));
-    g.fillRoundedRectangle(bounds, 6.0f);
+    g.fillRoundedRectangle(bounds, 0.0f);
     g.setColour(juce::Colour::fromRGB(26, 30, 42));
-    g.drawRoundedRectangle(bounds, 6.0f, 1.0f);
+    g.drawRoundedRectangle(bounds, 0.0f, 1.0f);
 }
 
 void SamplerPanelComponent::resized()

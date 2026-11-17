@@ -263,15 +263,15 @@ void MidiModalComponent::paint(juce::Graphics& g)
 
     // Modal Background #161822 with border #2c3142
     g.setColour(juce::Colour::fromRGB(22, 24, 34));
-    g.fillRoundedRectangle(bounds, 10.0f);
+    g.fillRoundedRectangle(bounds, 0.0f);
 
     g.setColour(juce::Colour::fromRGB(44, 49, 66));
-    g.drawRoundedRectangle(bounds.reduced(0.5f), 10.0f, 1.2f);
+    g.drawRoundedRectangle(bounds.reduced(0.5f), 0.0f, 1.2f);
 
     // Header bar #12131c
     auto headerBounds = bounds.removeFromTop(42.0f);
     g.setColour(juce::Colour::fromRGB(18, 19, 28));
-    g.fillRoundedRectangle(headerBounds, 10.0f);
+    g.fillRoundedRectangle(headerBounds, 0.0f);
     g.fillRect(headerBounds.removeFromBottom(10.0f)); // straighten bottom corners of header
     g.setColour(juce::Colour::fromRGB(36, 40, 56));
     g.drawHorizontalLine(42, 0.0f, (float)getWidth());
@@ -285,11 +285,11 @@ void MidiModalComponent::paint(juce::Graphics& g)
     if (currentDevices.isEmpty())
     {
         g.setColour(juce::Colour::fromRGB(17, 18, 25));
-        g.fillRoundedRectangle(devBox, 8.0f);
+        g.fillRoundedRectangle(devBox, 0.0f);
 
         // Dashed border
         g.setColour(juce::Colour::fromRGB(40, 44, 60));
-        g.drawRoundedRectangle(devBox, 8.0f, 1.0f);
+        g.drawRoundedRectangle(devBox, 0.0f, 1.0f);
 
         g.setColour(juce::Colour::fromRGB(255, 159, 28));
         g.setFont(juce::FontOptions(12.0f, juce::Font::bold));
@@ -308,10 +308,10 @@ void MidiModalComponent::paint(juce::Graphics& g)
         {
             juce::Rectangle<float> card(16.0f, cardY, (float)getWidth() - 32.0f, 48.0f);
             g.setColour(juce::Colour::fromRGB(26, 29, 41));
-            g.fillRoundedRectangle(card, 6.0f);
+            g.fillRoundedRectangle(card, 0.0f);
 
             g.setColour(juce::Colour::fromRGB(42, 47, 64));
-            g.drawRoundedRectangle(card, 6.0f, 1.0f);
+            g.drawRoundedRectangle(card, 0.0f, 1.0f);
 
             // Green connected dot
             g.setColour(juce::Colour::fromRGB(46, 196, 182));
@@ -331,7 +331,7 @@ void MidiModalComponent::paint(juce::Graphics& g)
             // "Conectado" badge
             juce::Rectangle<float> badge(card.getRight() - 76.0f, card.getCentreY() - 9.0f, 66.0f, 18.0f);
             g.setColour(juce::Colour::fromRGB(46, 196, 182).withAlpha(0.18f));
-            g.fillRoundedRectangle(badge, 4.0f);
+            g.fillRoundedRectangle(badge, 0.0f);
             g.setColour(juce::Colour::fromRGB(46, 196, 182));
             g.setFont(juce::FontOptions(9.5f, juce::Font::bold));
             g.drawText(LanguageManager::trUtf8("Conectado", "Connected"), badge, juce::Justification::centred, false);
@@ -343,9 +343,9 @@ void MidiModalComponent::paint(juce::Graphics& g)
     // Monitor background box #0d0e14
     juce::Rectangle<float> monBox(16.0f, 272.0f, (float)getWidth() - 32.0f, 60.0f);
     g.setColour(juce::Colour::fromRGB(13, 14, 20));
-    g.fillRoundedRectangle(monBox, 6.0f);
+    g.fillRoundedRectangle(monBox, 0.0f);
     g.setColour(juce::Colour::fromRGB(33, 37, 52));
-    g.drawRoundedRectangle(monBox, 6.0f, 1.0f);
+    g.drawRoundedRectangle(monBox, 0.0f, 1.0f);
 }
 
 void MidiModalComponent::resized()

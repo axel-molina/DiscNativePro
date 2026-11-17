@@ -24,7 +24,7 @@ FxPanelComponent::FxPanelComponent(DjMixer& djMixer)
     manualBtn.setText("MANUAL");
     manualBtn.setFontSize(8.5f);
     manualBtn.setTooltip(LanguageManager::trUtf8("Modo manual: control de los efectos con precisión", "Manual mode: precise FX control"));
-    manualBtn.setCornerRadius(3.0f);
+    manualBtn.setCornerRadius(0.0f);
     manualBtn.onClick = [this]() {
         isInstantMode = false;
         updateModeButtons();
@@ -34,7 +34,7 @@ FxPanelComponent::FxPanelComponent(DjMixer& djMixer)
     instantBtn.setText("INSTANT");
     instantBtn.setFontSize(8.5f);
     instantBtn.setTooltip(LanguageManager::trUtf8("Modo instantáneo: control de los efectos con un clic", "Instant mode: one-click FX control"));
-    instantBtn.setCornerRadius(3.0f);
+    instantBtn.setCornerRadius(0.0f);
     instantBtn.onClick = [this]() {
         isInstantMode = true;
         updateModeButtons();
@@ -55,11 +55,11 @@ void FxPanelComponent::paint(juce::Graphics& g)
 
     // Outer container background
     g.setColour(juce::Colour::fromRGB(12, 14, 19));
-    g.fillRoundedRectangle(bounds, 6.0f);
+    g.fillRoundedRectangle(bounds, 0.0f);
 
     // Outline
     g.setColour(juce::Colour::fromRGB(26, 30, 42));
-    g.drawRoundedRectangle(bounds, 6.0f, 1.0f);
+    g.drawRoundedRectangle(bounds, 0.0f, 1.0f);
 }
 
 void FxPanelComponent::resized()

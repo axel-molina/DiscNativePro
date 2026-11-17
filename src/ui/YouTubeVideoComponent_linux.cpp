@@ -151,11 +151,11 @@ void YouTubeVideoComponent::paint(juce::Graphics& g)
 
     // Dark sleek background
     g.setColour(juce::Colour::fromRGB(11, 12, 16));
-    g.fillRoundedRectangle(bounds, 10.0f);
+    g.fillRoundedRectangle(bounds, 0.0f);
 
     // Border
     g.setColour(juce::Colour::fromRGB(36, 39, 48));
-    g.drawRoundedRectangle(bounds, 10.0f, 1.5f);
+    g.drawRoundedRectangle(bounds, 0.0f, 1.5f);
 
     // Header bar (24px)
     auto headerRect = bounds.removeFromTop(24.0f).reduced(6.0f, 2.0f);
@@ -163,9 +163,9 @@ void YouTubeVideoComponent::paint(juce::Graphics& g)
     // Left badge: RED YOUTUBE BADGE
     auto badgeRect = headerRect.removeFromLeft(96.0f);
     g.setColour(juce::Colour::fromRGB(220, 38, 38).withAlpha(0.2f));
-    g.fillRoundedRectangle(badgeRect, 4.0f);
+    g.fillRoundedRectangle(badgeRect, 0.0f);
     g.setColour(juce::Colour::fromRGB(220, 38, 38));
-    g.drawRoundedRectangle(badgeRect, 4.0f, 1.0f);
+    g.drawRoundedRectangle(badgeRect, 0.0f, 1.0f);
 
     LucideIcons::draw(g, LucideIcons::IconType::Tv,
                       juce::Rectangle<float>(badgeRect.getX() + 4.0f, badgeRect.getY() + 3.0f, 13.0f, 13.0f),
@@ -179,7 +179,7 @@ void YouTubeVideoComponent::paint(juce::Graphics& g)
     int volPercent = (int)(currentVolume * 100.0f);
     auto volRect = headerRect.removeFromRight(64.0f);
     g.setColour(juce::Colour::fromRGB(20, 24, 32));
-    g.fillRoundedRectangle(volRect, 4.0f);
+    g.fillRoundedRectangle(volRect, 0.0f);
     g.setColour(volPercent > 0 ? juce::Colour::fromRGB(74, 222, 128) : juce::Colour::fromRGB(239, 68, 68));
     g.setFont(juce::FontOptions(9.5f, juce::Font::plain));
     g.drawText(volPercent > 0 ? juce::String::formatted("VOL %d%%", volPercent) : "MUTED",

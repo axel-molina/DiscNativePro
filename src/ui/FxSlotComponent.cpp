@@ -10,7 +10,7 @@ FxSlotComponent::FxSlotComponent(FxSlot& fxSlot)
                              juce::Colour::fromRGB(148, 163, 184),
                              juce::Colour::fromRGB(148, 163, 184),
                              juce::Colour::fromRGB(36, 41, 54));
-    prevBtn.setCornerRadius(4.0f);
+    prevBtn.setCornerRadius(0.0f);
     prevBtn.setTooltip(LanguageManager::trUtf8("Efecto anterior", "Previous effect"));
     prevBtn.onClick = [this]() { cycleEffect(-1); };
     addAndMakeVisible(prevBtn);
@@ -21,7 +21,7 @@ FxSlotComponent::FxSlotComponent(FxSlot& fxSlot)
                                juce::Colour::fromRGB(241, 245, 249),
                                juce::Colours::transparentBlack,
                                juce::Colour::fromRGB(36, 41, 54));
-    fxNameBtn.setCornerRadius(4.0f);
+    fxNameBtn.setCornerRadius(0.0f);
     fxNameBtn.setTooltip(LanguageManager::trUtf8("Elegir el efecto de este slot", "Pick the effect for this slot"));
     fxNameBtn.onClick = [this]() { showFxMenu(); };
     addAndMakeVisible(fxNameBtn);
@@ -31,7 +31,7 @@ FxSlotComponent::FxSlotComponent(FxSlot& fxSlot)
                              juce::Colour::fromRGB(148, 163, 184),
                              juce::Colour::fromRGB(148, 163, 184),
                              juce::Colour::fromRGB(36, 41, 54));
-    nextBtn.setCornerRadius(4.0f);
+    nextBtn.setCornerRadius(0.0f);
     nextBtn.setTooltip(LanguageManager::trUtf8("Efecto siguiente", "Next effect"));
     nextBtn.onClick = [this]() { cycleEffect(1); };
     addAndMakeVisible(nextBtn);
@@ -40,7 +40,7 @@ FxSlotComponent::FxSlotComponent(FxSlot& fxSlot)
     onBtn.setText("ON");
     onBtn.setTooltip(LanguageManager::trUtf8("Activa o desactiva el efecto", "Enable or disable the effect"));
     onBtn.setFontSize(9.5f);
-    onBtn.setCornerRadius(4.0f);
+    onBtn.setCornerRadius(0.0f);
     onBtn.onClick = [this]() {
         bool current = slot.enabled.load();
         slot.enabled.store(!current);
@@ -55,7 +55,7 @@ FxSlotComponent::FxSlotComponent(FxSlot& fxSlot)
                               juce::Colour::fromRGB(147, 197, 253),
                               juce::Colours::transparentBlack,
                               juce::Colour::fromRGB(36, 41, 54));
-    paramBtn.setCornerRadius(4.0f);
+    paramBtn.setCornerRadius(0.0f);
     paramBtn.setTooltip(LanguageManager::trUtf8("Cambiar el parámetro del efecto", "Cycle the effect parameter"));
     paramBtn.onClick = [this]() { cycleParam(); };
     addAndMakeVisible(paramBtn);
@@ -94,13 +94,13 @@ void FxSlotComponent::paint(juce::Graphics& g)
 
     // Card background
     g.setColour(juce::Colour::fromRGB(17, 20, 27));
-    g.fillRoundedRectangle(bounds, 6.0f);
+    g.fillRoundedRectangle(bounds, 0.0f);
 
     // Subtle outline
     bool isActive = slot.enabled.load();
     g.setColour(isActive ? juce::Colour::fromRGB(59, 130, 246).withAlpha(0.35f)
                          : juce::Colour::fromRGB(32, 36, 48));
-    g.drawRoundedRectangle(bounds, 6.0f, 1.0f);
+    g.drawRoundedRectangle(bounds, 0.0f, 1.0f);
 }
 
 void FxSlotComponent::resized()

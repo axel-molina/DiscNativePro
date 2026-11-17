@@ -51,7 +51,7 @@ namespace
         YtDownloadButtonComponent()
         {
             btn.setFontSize(10.5f);
-            btn.setCornerRadius(4.0f);
+            btn.setCornerRadius(0.0f);
             btn.onClick = [this]() {
                 if (videoId.isEmpty()) return;
                 if (YouTubeAudioDownloader::getInstance().getCachedAudioFile(videoId).existsAsFile())
@@ -159,7 +159,7 @@ YouTubeLibraryView::YouTubeLibraryView()
     // 1b. Playback Mode Toggle: Audio (Native) vs Video (Web)
     audioModeBtn.setIcon(LucideIcons::IconType::Music, 11.0f);
     audioModeBtn.setFontSize(11.0f);
-    audioModeBtn.setCornerRadius(4.0f);
+    audioModeBtn.setCornerRadius(0.0f);
     audioModeBtn.onClick = [this]() {
         YouTubeService::setAudioPlaybackMode(true);
         updateModeButtons();
@@ -168,7 +168,7 @@ YouTubeLibraryView::YouTubeLibraryView()
 
     videoModeBtn.setIcon(LucideIcons::IconType::Video, 11.0f);
     videoModeBtn.setFontSize(11.0f);
-    videoModeBtn.setCornerRadius(4.0f);
+    videoModeBtn.setCornerRadius(0.0f);
     videoModeBtn.onClick = [this]() {
         YouTubeService::setAudioPlaybackMode(false);
         updateModeButtons();
@@ -188,7 +188,7 @@ YouTubeLibraryView::YouTubeLibraryView()
     searchBtn.setIcon(LucideIcons::IconType::Search, 13.0f);
     searchBtn.setText("Buscar");
     searchBtn.setFontSize(11.0f);
-    searchBtn.setCornerRadius(5.0f);
+    searchBtn.setCornerRadius(0.0f);
     searchBtn.setCustomColours(juce::Colour::fromRGB(22, 26, 36),
                                juce::Colour::fromRGB(0, 229, 255),
                                juce::Colour::fromRGB(0, 229, 255),
@@ -201,7 +201,7 @@ YouTubeLibraryView::YouTubeLibraryView()
     pasteUrlBtn.setIcon(LucideIcons::IconType::Plus, 12.0f);
     pasteUrlBtn.setText("Pegar URL");
     pasteUrlBtn.setFontSize(11.0f);
-    pasteUrlBtn.setCornerRadius(5.0f);
+    pasteUrlBtn.setCornerRadius(0.0f);
     pasteUrlBtn.setCustomColours(juce::Colour::fromRGB(22, 26, 36),
                                  juce::Colour::fromRGB(245, 158, 11),
                                  juce::Colour::fromRGB(245, 158, 11),
@@ -443,13 +443,13 @@ void YouTubeLibraryView::paintCell(juce::Graphics& g, int rowNumber, int columnI
 
             // Base background
             g.setColour(juce::Colour::fromRGB(22, 25, 34));
-            g.fillRoundedRectangle(thumbRect, 4.0f);
+            g.fillRoundedRectangle(thumbRect, 0.0f);
 
             if (img.isValid())
             {
                 juce::Graphics::ScopedSaveState state(g);
                 juce::Path clipPath;
-                clipPath.addRoundedRectangle(thumbRect, 4.0f);
+                clipPath.addRoundedRectangle(thumbRect, 0.0f);
                 g.reduceClipRegion(clipPath);
 
                 g.drawImage(img, thumbRect, juce::RectanglePlacement::centred | juce::RectanglePlacement::fillDestination);
@@ -465,7 +465,7 @@ void YouTubeLibraryView::paintCell(juce::Graphics& g, int rowNumber, int columnI
 
             // Sleek outer border
             g.setColour(juce::Colour::fromRGB(42, 47, 62));
-            g.drawRoundedRectangle(thumbRect, 4.0f, 1.0f);
+            g.drawRoundedRectangle(thumbRect, 0.0f, 1.0f);
 
             // Duration badge overlaid in bottom-right corner of thumbnail
             if (item.durationText.isNotEmpty())
@@ -480,7 +480,7 @@ void YouTubeLibraryView::paintCell(juce::Graphics& g, int rowNumber, int columnI
                                                         badgeW, badgeH);
 
                 g.setColour(juce::Colours::black.withAlpha(0.82f));
-                g.fillRoundedRectangle(badgeRect, 2.5f);
+                g.fillRoundedRectangle(badgeRect, 0.0f);
 
                 g.setColour(juce::Colours::white);
                 g.setFont(badgeFont);
@@ -588,7 +588,7 @@ void YouTubeLibraryView::paint(juce::Graphics& g)
 {
     auto bounds = getLocalBounds().toFloat();
     g.setColour(juce::Colour::fromRGB(12, 13, 18));
-    g.fillRoundedRectangle(bounds, 6.0f);
+    g.fillRoundedRectangle(bounds, 0.0f);
 
     // YouTube brand icon in top header row
     auto iconRect = juce::Rectangle<float>(10.0f, 13.0f, 20.0f, 18.0f);
