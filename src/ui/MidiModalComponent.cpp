@@ -1,6 +1,7 @@
 #include "MidiModalComponent.h"
 #include "../services/MixxxPresetCatalog.h"
 #include "../services/MixxxMappingImporter.h"
+#include "UiPalette.h"
 
 namespace
 {
@@ -97,7 +98,7 @@ MidiModalComponent::MidiModalComponent(MidiManager& midiMgr)
     addAndMakeVisible(profileBadge);
 
     scanBtn.setColour(juce::TextButton::buttonColourId, juce::Colour::fromRGB(24, 28, 36));
-    scanBtn.setColour(juce::TextButton::textColourOffId, juce::Colour::fromRGB(0, 180, 216));
+    scanBtn.setColour(juce::TextButton::textColourOffId, UiPalette::accentBright);
     scanBtn.onClick = [this]() {
         midi.rescanDevices();
         refreshDeviceList();
@@ -115,7 +116,7 @@ MidiModalComponent::MidiModalComponent(MidiManager& midiMgr)
     addAndMakeVisible(monitorHeader);
 
     monitorText.setFont(juce::FontOptions("Menlo", 11.5f, juce::Font::plain));
-    monitorText.setColour(juce::Label::textColourId, juce::Colour::fromRGB(0, 229, 255));
+    monitorText.setColour(juce::Label::textColourId, UiPalette::accentBright);
     addAndMakeVisible(monitorText);
 
     // Live listener for incoming MIDI messages

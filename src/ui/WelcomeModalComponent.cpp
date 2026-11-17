@@ -2,6 +2,7 @@
 #include "UiTypeScale.h"
 #include "LucideIcons.h"
 #include "../audio/AudioEngine.h"
+#include "UiPalette.h"
 
 namespace
 {
@@ -89,7 +90,7 @@ WelcomeModalComponent::WelcomeModalComponent()
     addAndMakeVisible(supportHintLabel);
 
     dontShowAgainToggle.setColour(juce::ToggleButton::textColourId, juce::Colours::white.withAlpha(0.85f));
-    dontShowAgainToggle.setColour(juce::ToggleButton::tickColourId, juce::Colour::fromRGB(0, 180, 216));
+    dontShowAgainToggle.setColour(juce::ToggleButton::tickColourId, UiPalette::accentBright);
     dontShowAgainToggle.onClick = [this]() {
         // Se persiste al cambiar la casilla para que el estado en disco siempre
         // refleje lo que el usuario ha elegido.

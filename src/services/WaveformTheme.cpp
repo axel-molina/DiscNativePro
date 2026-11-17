@@ -1,4 +1,5 @@
 #include "WaveformTheme.h"
+#include "../ui/UiPalette.h"
 
 namespace
 {
@@ -36,17 +37,19 @@ WaveformTheme::Theme& WaveformTheme::cached(int deck)
 
 WaveformTheme::Theme WaveformTheme::defaultsForDeck(int deck)
 {
-    // Deck 1: familia cian (#00B4D8). Deck 2: familia gris azulado (#94A3B8).
+    // Deck 1: familia azul acero sobria (#2E4B66 → #8FAECB).
+    // Deck 2: familia terracota apagada del theme pálido (FB-19).
+    // El preset Azul Acero y los colores guardados en settings no se tocan.
     if (deck == 0)
     {
-        return { juce::Colour::fromRGB(0, 119, 182),    // #0077B6 graves
-                 juce::Colour::fromRGB(0, 180, 216),    // #00B4D8 medios
-                 juce::Colour::fromRGB(144, 224, 239) };// #90E0EF agudos
+        return { UiPalette::waveLowDeckOne,
+                 UiPalette::waveMidDeckOne,
+                 UiPalette::waveHighDeckOne };
     }
 
-    return { juce::Colour::fromRGB(71, 85, 105),       // #475569 graves
-             juce::Colour::fromRGB(148, 163, 184),     // #94A3B8 medios
-             juce::Colour::fromRGB(226, 232, 240) };   // #E2E8F0 agudos
+    return { UiPalette::waveLowDeckTwo,
+             UiPalette::waveMidDeckTwo,
+             UiPalette::waveHighDeckTwo };
 }
 
 WaveformTheme::ThemeArray WaveformTheme::loadFromDisk()
@@ -122,11 +125,11 @@ void WaveformTheme::applyPreset(int deck, int preset)
 {
     Theme theme = defaultsForDeck(deck);
 
-    if (preset == NeonBlue)
+    if (preset == BlueSteel)
     {
-        theme.low  = juce::Colour::fromRGB(21, 101, 192);
-        theme.mid  = juce::Colour::fromRGB(41, 182, 246);
-        theme.high = juce::Colour::fromRGB(0, 229, 255);
+        theme.low  = juce::Colour::fromRGB(30, 58, 95);
+        theme.mid  = juce::Colour::fromRGB(62, 95, 138);
+        theme.high = juce::Colour::fromRGB(127, 163, 204);
     }
     else if (preset == SilverMono)
     {
@@ -138,7 +141,7 @@ void WaveformTheme::applyPreset(int deck, int preset)
     {
         theme.low  = juce::Colour::fromRGB(230, 57, 70);
         theme.mid  = juce::Colour::fromRGB(255, 159, 28);
-        theme.high = juce::Colour::fromRGB(0, 229, 255);
+        theme.high = UiPalette::accentBright;
     }
 
     cached(deck) = theme;

@@ -1,5 +1,6 @@
 #include "FxSlotComponent.h"
 #include "../services/LanguageManager.h"
+#include "UiPalette.h"
 
 FxSlotComponent::FxSlotComponent(FxSlot& fxSlot)
     : slot(fxSlot)
@@ -71,7 +72,7 @@ FxSlotComponent::FxSlotComponent(FxSlot& fxSlot)
     wetDrySlider.setTextBoxStyle(juce::Slider::NoTextBox, false, 0, 0);
     wetDrySlider.setRange(0.0, 1.0, 0.01);
     wetDrySlider.setValue(slot.wetDry.load());
-    wetDrySlider.setColour(juce::Slider::thumbColourId, juce::Colour::fromRGB(56, 189, 248));
+    wetDrySlider.setColour(juce::Slider::thumbColourId, UiPalette::accentBright);
     wetDrySlider.setColour(juce::Slider::trackColourId, juce::Colour::fromRGB(37, 99, 235));
     wetDrySlider.setColour(juce::Slider::backgroundColourId, juce::Colour::fromRGB(30, 34, 46));
     wetDrySlider.onValueChange = [this]() {
@@ -140,7 +141,7 @@ void FxSlotComponent::updateUiFromSlot()
         onBtn.setCustomColours(juce::Colour::fromRGB(37, 99, 235),
                                juce::Colours::white,
                                juce::Colours::transparentBlack,
-                               juce::Colour::fromRGB(96, 165, 250));
+                               UiPalette::accentBright);
     }
     else
     {

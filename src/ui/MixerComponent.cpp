@@ -1,7 +1,8 @@
 #include "MixerComponent.h"
+#include "UiPalette.h"
 
 MixerComponent::MixerComponent(AudioEngine& engine)
-    : channel1(0, engine.getMixer().getChannel(0), juce::Colour::fromRGB(0, 180, 216)),
+    : channel1(0, engine.getMixer().getChannel(0), UiPalette::accentBright),
       centerColumn(engine),
       channel2(1, engine.getMixer().getChannel(1), juce::Colour::fromRGB(148, 163, 184))
 {

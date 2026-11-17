@@ -1,5 +1,6 @@
 #include "OverviewWaveform.h"
 #include "../services/WaveformTheme.h"
+#include "UiPalette.h"
 
 OverviewWaveform::OverviewWaveform(DeckPlayer& player, juce::Colour deckAccent, int deckIndex)
     : deck(player), accent(deckAccent), deckIdx(deckIndex)
@@ -125,7 +126,7 @@ void OverviewWaveform::paint(juce::Graphics& g)
 
         g.setColour(juce::Colour::fromRGB(37, 99, 235).withAlpha(0.35f));
         g.fillRect(loopStartX, 0.0f, loopWidthX, height);
-        g.setColour(juce::Colour::fromRGB(96, 165, 250));
+        g.setColour(UiPalette::accentBright);
         g.drawRect(loopStartX, 0.0f, loopWidthX, height, 1.0f);
     }
 
@@ -134,7 +135,7 @@ void OverviewWaveform::paint(juce::Graphics& g)
         juce::Colour::fromRGB(255, 51, 75),
         juce::Colour::fromRGB(255, 159, 28),
         juce::Colour::fromRGB(46, 196, 182),
-        juce::Colour::fromRGB(0, 210, 255)
+        UiPalette::accentBright
     };
 
     for (int i = 0; i < 4; ++i)

@@ -1,11 +1,12 @@
 #pragma once
 
 #include <juce_gui_basics/juce_gui_basics.h>
+#include "UiPalette.h"
 
 class DjKnob : public juce::Slider
 {
 public:
-    DjKnob(const juce::String& labelText, juce::Colour accentColour = juce::Colour::fromRGB(0, 210, 255))
+    DjKnob(const juce::String& labelText, juce::Colour accentColour = UiPalette::accentBright)
         : label(labelText), accent(accentColour)
     {
         setSliderStyle(juce::Slider::RotaryHorizontalVerticalDrag);

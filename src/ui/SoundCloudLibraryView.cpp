@@ -1,4 +1,5 @@
 #include "SoundCloudLibraryView.h"
+#include "UiPalette.h"
 
 namespace
 {
@@ -9,14 +10,14 @@ namespace
             : onDeckLoad(std::move(onClickCallback))
         {
             btn1.setButtonText("1");
-            btn1.setColour(juce::TextButton::buttonColourId, juce::Colour::fromRGB(255, 85, 0).withAlpha(0.2f));
-            btn1.setColour(juce::TextButton::textColourOffId, juce::Colour::fromRGB(255, 140, 60));
+            btn1.setColour(juce::TextButton::buttonColourId, UiPalette::accent.withAlpha(0.15f));
+            btn1.setColour(juce::TextButton::textColourOffId, UiPalette::accentBright);
             btn1.onClick = [this]() { if (onDeckLoad) onDeckLoad(0); };
             addAndMakeVisible(btn1);
 
             btn2.setButtonText("2");
-            btn2.setColour(juce::TextButton::buttonColourId, juce::Colour::fromRGB(255, 85, 0).withAlpha(0.2f));
-            btn2.setColour(juce::TextButton::textColourOffId, juce::Colour::fromRGB(255, 140, 60));
+            btn2.setColour(juce::TextButton::buttonColourId, UiPalette::deckTwoLoadFill);
+            btn2.setColour(juce::TextButton::textColourOffId, UiPalette::deckTwoLoadText);
             btn2.onClick = [this]() { if (onDeckLoad) onDeckLoad(1); };
             addAndMakeVisible(btn2);
         }

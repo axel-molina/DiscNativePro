@@ -9,6 +9,7 @@
 #include <cstdio>
 #endif
 #include <cmath>
+#include "UiPalette.h"
 
 TopBarComponent::TopBarComponent()
 {
@@ -24,16 +25,16 @@ TopBarComponent::TopBarComponent()
 
     fxButton.setText("FX");
     fxButton.setCustomColours(juce::Colour::fromRGB(24, 26, 32),
-                              juce::Colour::fromRGB(96, 165, 250),
-                              juce::Colour::fromRGB(96, 165, 250),
+                              UiPalette::accentBright,
+                              UiPalette::accentBright,
                               juce::Colour::fromRGB(45, 50, 65));
     fxButton.onClick = [this]() { if (onFxClicked) onFxClicked(); };
     addAndMakeVisible(fxButton);
 
     smpButton.setText("SMP");
     smpButton.setCustomColours(juce::Colour::fromRGB(24, 26, 32),
-                               juce::Colour::fromRGB(96, 165, 250),
-                               juce::Colour::fromRGB(96, 165, 250),
+                               UiPalette::accentBright,
+                               UiPalette::accentBright,
                                juce::Colour::fromRGB(45, 50, 65));
     smpButton.onClick = [this]() { if (onSmpClicked) onSmpClicked(); };
     smpButton.setTooltip(LanguageManager::trUtf8("Abrir el panel del Sampler", "Open the Sampler panel"));
@@ -70,8 +71,8 @@ TopBarComponent::TopBarComponent()
     layoutBadge.setFontSize(10.5f);
     layoutBadge.setCornerRadius(6.0f);
     layoutBadge.setCustomColours(juce::Colour::fromRGB(22, 24, 32),
-                                juce::Colour::fromRGB(96, 165, 250),
-                                juce::Colour::fromRGB(96, 165, 250),
+                                UiPalette::accentBright,
+                                UiPalette::accentBright,
                                 juce::Colour::fromRGB(37, 40, 51));
     layoutBadge.setInterceptsMouseClicks(false, false);
     addAndMakeVisible(layoutBadge);
@@ -143,15 +144,15 @@ void TopBarComponent::setFxActive(bool active)
     if (active)
     {
         fxButton.setCustomColours(juce::Colour::fromRGB(30, 41, 59),
-                                  juce::Colour::fromRGB(56, 189, 248),
-                                  juce::Colour::fromRGB(56, 189, 248),
-                                  juce::Colour::fromRGB(56, 189, 248).withAlpha(0.6f));
+                                  UiPalette::accentBright,
+                                  UiPalette::accentBright,
+                                  UiPalette::accent.withAlpha(0.6f));
     }
     else
     {
         fxButton.setCustomColours(juce::Colour::fromRGB(24, 26, 32),
-                                  juce::Colour::fromRGB(96, 165, 250),
-                                  juce::Colour::fromRGB(96, 165, 250),
+                                  UiPalette::accentBright,
+                                  UiPalette::accentBright,
                                   juce::Colour::fromRGB(45, 50, 65));
     }
 }
@@ -161,15 +162,15 @@ void TopBarComponent::setSmpActive(bool active)
     if (active)
     {
         smpButton.setCustomColours(juce::Colour::fromRGB(30, 41, 59),
-                                   juce::Colour::fromRGB(56, 189, 248),
-                                   juce::Colour::fromRGB(56, 189, 248),
-                                   juce::Colour::fromRGB(56, 189, 248).withAlpha(0.6f));
+                                   UiPalette::accentBright,
+                                   UiPalette::accentBright,
+                                   UiPalette::accent.withAlpha(0.6f));
     }
     else
     {
         smpButton.setCustomColours(juce::Colour::fromRGB(24, 26, 32),
-                                   juce::Colour::fromRGB(96, 165, 250),
-                                   juce::Colour::fromRGB(96, 165, 250),
+                                   UiPalette::accentBright,
+                                   UiPalette::accentBright,
                                    juce::Colour::fromRGB(45, 50, 65));
     }
 }

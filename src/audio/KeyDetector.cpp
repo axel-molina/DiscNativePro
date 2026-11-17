@@ -4,6 +4,7 @@
 #include <vector>
 #include <array>
 #include <algorithm>
+#include "../ui/UiPalette.h"
 
 namespace
 {
@@ -51,7 +52,7 @@ constexpr int kHop = 2048;               // 50% solapamiento para mayor resoluci
 // Colores oficiales de la Rueda Camelot
 const juce::Colour kCamelotColours[12] = {
     juce::Colour::fromRGB(0, 210, 190),   // 1A / 1B: Aqua / Cyan
-    juce::Colour::fromRGB(0, 180, 216),   // 2A / 2B: Sky Blue
+    UiPalette::accentBright,   // 2A / 2B: Sky Blue
     juce::Colour::fromRGB(67, 97, 238),   // 3A / 3B: Royal Blue
     juce::Colour::fromRGB(114, 9, 183),   // 4A / 4B: Deep Indigo / Violet
     juce::Colour::fromRGB(181, 23, 158),  // 5A / 5B: Magenta

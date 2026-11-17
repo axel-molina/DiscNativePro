@@ -1,6 +1,7 @@
 #include "VerticalWaveform.h"
 #include "../services/WaveformTheme.h"
 #include <cmath>
+#include "UiPalette.h"
 
 VerticalWaveform::VerticalWaveform(DeckPlayer& p1, DeckPlayer& p2)
     : deck1(p1), deck2(p2)
@@ -201,7 +202,7 @@ void VerticalWaveform::renderDeckHalf(juce::Graphics& g,
             const bool active = player.isLooping();
             g.setColour(juce::Colour::fromRGB(37, 99, 235).withAlpha(active ? 0.35f : 0.10f));
             g.fillRect(startX, top, deckWidth, bottom - top);
-            g.setColour(juce::Colour::fromRGB(96, 165, 250).withAlpha(active ? 1.0f : 0.40f));
+            g.setColour(UiPalette::accent.withAlpha(active ? 1.0f : 0.40f));
             g.drawHorizontalLine((int) top,    startX, startX + deckWidth);
             g.drawHorizontalLine((int) bottom, startX, startX + deckWidth);
         }
@@ -280,7 +281,7 @@ void VerticalWaveform::paint(juce::Graphics& g)
 
     // 6. Top Deck Badges (Cyan "1" on left, Cyan "2" on right)
     g.setFont(juce::FontOptions(11.0f, juce::Font::bold));
-    g.setColour(juce::Colour::fromRGB(0, 229, 255));
+    g.setColour(UiPalette::accentBright);
     g.drawText("1", 0, 4, static_cast<int>(halfWidth), 16, juce::Justification::centred, false);
     g.drawText("2", static_cast<int>(halfWidth), 4, static_cast<int>(halfWidth), 16, juce::Justification::centred, false);
 }

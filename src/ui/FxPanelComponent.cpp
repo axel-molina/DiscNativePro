@@ -1,5 +1,6 @@
 #include "FxPanelComponent.h"
 #include "../services/LanguageManager.h"
+#include "UiPalette.h"
 
 FxPanelComponent::FxPanelComponent(DjMixer& djMixer)
     : slot1_1(djMixer.getFxChain(0).getSlot(0)),
@@ -104,9 +105,9 @@ void FxPanelComponent::updateModeButtons()
     if (!isInstantMode)
     {
         manualBtn.setCustomColours(juce::Colour::fromRGB(30, 41, 59),
-                                  juce::Colour::fromRGB(56, 189, 248),
+                                  UiPalette::accentBright,
                                   juce::Colours::transparentBlack,
-                                  juce::Colour::fromRGB(56, 189, 248).withAlpha(0.5f));
+                                  UiPalette::accent.withAlpha(0.5f));
         instantBtn.setCustomColours(juce::Colour::fromRGB(18, 20, 28),
                                    juce::Colour::fromRGB(100, 116, 139),
                                    juce::Colours::transparentBlack,
@@ -119,8 +120,8 @@ void FxPanelComponent::updateModeButtons()
                                    juce::Colours::transparentBlack,
                                    juce::Colours::transparentBlack);
         instantBtn.setCustomColours(juce::Colour::fromRGB(30, 41, 59),
-                                   juce::Colour::fromRGB(56, 189, 248),
+                                   UiPalette::accentBright,
                                    juce::Colours::transparentBlack,
-                                   juce::Colour::fromRGB(56, 189, 248).withAlpha(0.5f));
+                                   UiPalette::accent.withAlpha(0.5f));
     }
 }

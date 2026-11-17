@@ -1,6 +1,7 @@
 #include "AIMatchView.h"
 #include "CoverArtGenerator.h"
 #include "../services/YouTubeService.h"
+#include "UiPalette.h"
 
 class RecommendationCardComponent : public juce::Component
 {
@@ -112,7 +113,7 @@ public:
         {
             drawBadge(recommendation.key,
                       juce::Colour::fromRGB(30, 58, 138).withAlpha(0.4f),
-                      juce::Colour::fromRGB(96, 165, 250), 38.0f);
+                      UiPalette::accentBright, 38.0f);
         }
 
         if (recommendation.genre.isNotEmpty())
@@ -141,7 +142,7 @@ public:
         {
             drawBadge(LanguageManager::trUtf8("ARMONÍA", "HARMONY"),
                       juce::Colour::fromRGB(30, 58, 138).withAlpha(0.4f),
-                      juce::Colour::fromRGB(96, 165, 250), 62.0f);
+                      UiPalette::accentBright, 62.0f);
         }
         else
         {

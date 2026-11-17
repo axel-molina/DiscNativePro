@@ -1,5 +1,6 @@
 #include "FolderTreeComponent.h"
 #include "LibraryComponent.h"
+#include "UiPalette.h"
 
 namespace
 {
@@ -37,9 +38,9 @@ void FolderTreeComponent::TreeViewInternal::paint(juce::Graphics& g)
         if (row.isPlaylist && i == owner.dragHoverRow)
         {
             auto hoverRect = rowRect.toFloat();
-            g.setColour(juce::Colour::fromRGB(0, 229, 255).withAlpha(0.12f));
+            g.setColour(UiPalette::accent.withAlpha(0.12f));
             g.fillRoundedRectangle(hoverRect, 3.0f);
-            g.setColour(juce::Colour::fromRGB(0, 229, 255).withAlpha(0.8f));
+            g.setColour(UiPalette::accent.withAlpha(0.8f));
             g.drawRoundedRectangle(hoverRect, 3.0f, 1.5f);
         }
 
@@ -68,7 +69,7 @@ void FolderTreeComponent::TreeViewInternal::paint(juce::Graphics& g)
             // Botón "+" de crear playlist (siempre visible, tenue)
             auto plusRect = juce::Rectangle<float>((float)(getWidth() - 24), (float)(y + 6), 16.0f, 16.0f);
             auto plusCol = (i == hoveredRow)
-                ? juce::Colour::fromRGB(0, 229, 255)
+                ? UiPalette::accentBright
                 : juce::Colour::fromRGB(100, 108, 125);
             LucideIcons::draw(g, LucideIcons::IconType::Plus, plusRect.reduced(1.0f), plusCol, 1.8f);
             continue;
@@ -87,7 +88,7 @@ void FolderTreeComponent::TreeViewInternal::paint(juce::Graphics& g)
             {
                 LucideIcons::draw(g, LucideIcons::IconType::ChevronDown,
                                   chevBox.reduced(3.5f),
-                                  juce::Colour::fromRGB(0, 229, 255), 1.8f);
+                                  UiPalette::accentBright, 1.8f);
             }
             else
             {
@@ -110,7 +111,7 @@ void FolderTreeComponent::TreeViewInternal::paint(juce::Graphics& g)
         auto folderCol = isSelected ? juce::Colours::white : juce::Colour::fromRGB(148, 163, 184);
         if (row.isPlaylist)
         {
-            auto plCol = isSelected ? juce::Colours::white : juce::Colour::fromRGB(0, 229, 255);
+            auto plCol = isSelected ? juce::Colours::white : UiPalette::accentBright;
             LucideIcons::draw(g, LucideIcons::IconType::ListMusic, folderRect, plCol, 1.5f);
         }
         else if (row.isSystem && row.name == "Descargas")
@@ -345,8 +346,8 @@ FolderTreeComponent::FolderTreeComponent()
     addFolderBtn.setIcon(LucideIcons::IconType::Plus, 13.0f);
     addFolderBtn.setCornerRadius(3.0f);
     addFolderBtn.setCustomColours(juce::Colour::fromRGB(20, 24, 32),
-                                  juce::Colour::fromRGB(0, 229, 255),
-                                  juce::Colour::fromRGB(0, 229, 255),
+                                  UiPalette::accentBright,
+                                  UiPalette::accentBright,
                                   juce::Colour::fromRGB(38, 43, 56));
     addFolderBtn.onClick = [this]() {
         if (onAddFolder) onAddFolder();

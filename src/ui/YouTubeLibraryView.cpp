@@ -1,5 +1,6 @@
 #include "YouTubeLibraryView.h"
 #include "../services/YouTubeAudioDownloader.h"
+#include "UiPalette.h"
 
 namespace
 {
@@ -9,14 +10,14 @@ namespace
         YtLoadButtonsComponent()
         {
             btn1.setButtonText("1");
-            btn1.setColour(juce::TextButton::buttonColourId, juce::Colour::fromRGB(0, 180, 216).withAlpha(0.15f));
-            btn1.setColour(juce::TextButton::textColourOffId, juce::Colour::fromRGB(0, 210, 255));
+            btn1.setColour(juce::TextButton::buttonColourId, UiPalette::accent.withAlpha(0.15f));
+            btn1.setColour(juce::TextButton::textColourOffId, UiPalette::accentBright);
             btn1.onClick = [this]() { if (onDeckLoad) onDeckLoad(0); };
             addAndMakeVisible(btn1);
 
             btn2.setButtonText("2");
-            btn2.setColour(juce::TextButton::buttonColourId, juce::Colour::fromRGB(0, 229, 255).withAlpha(0.15f));
-            btn2.setColour(juce::TextButton::textColourOffId, juce::Colour::fromRGB(0, 229, 255));
+            btn2.setColour(juce::TextButton::buttonColourId, UiPalette::deckTwoLoadFill);
+            btn2.setColour(juce::TextButton::textColourOffId, UiPalette::deckTwoLoadText);
             btn2.onClick = [this]() { if (onDeckLoad) onDeckLoad(1); };
             addAndMakeVisible(btn2);
         }
@@ -124,8 +125,8 @@ namespace
                 btn.setIcon(LucideIcons::IconType::Download, 11.0f);
                 btn.setText(LanguageManager::trUtf8("Descargar", "Download"));
                 btn.setCustomColours(juce::Colour::fromRGB(20, 24, 34),
-                                     juce::Colour::fromRGB(0, 210, 255),
-                                     juce::Colour::fromRGB(0, 210, 255),
+                                     UiPalette::accentBright,
+                                     UiPalette::accentBright,
                                      juce::Colour::fromRGB(38, 43, 58));
             }
         }
@@ -190,8 +191,8 @@ YouTubeLibraryView::YouTubeLibraryView()
     searchBtn.setFontSize(11.0f);
     searchBtn.setCornerRadius(3.0f);
     searchBtn.setCustomColours(juce::Colour::fromRGB(22, 26, 36),
-                               juce::Colour::fromRGB(0, 229, 255),
-                               juce::Colour::fromRGB(0, 229, 255),
+                               UiPalette::accentBright,
+                               UiPalette::accentBright,
                                juce::Colour::fromRGB(38, 43, 56));
     searchBtn.onClick = [this]() { performSearch(searchBox.getText()); };
     searchBtn.setTooltip(LanguageManager::trUtf8("Busca en YouTube el texto del campo", "Search YouTube for the query"));
@@ -260,10 +261,10 @@ void YouTubeLibraryView::updateModeButtons()
     bool audioMode = YouTubeService::isAudioPlaybackMode();
     if (audioMode)
     {
-        audioModeBtn.setCustomColours(juce::Colour::fromRGB(0, 180, 216).withAlpha(0.25f),
-                                      juce::Colour::fromRGB(0, 229, 255),
-                                      juce::Colour::fromRGB(0, 229, 255),
-                                      juce::Colour::fromRGB(0, 180, 216).withAlpha(0.45f));
+        audioModeBtn.setCustomColours(UiPalette::accent.withAlpha(0.25f),
+                                      UiPalette::accentBright,
+                                      UiPalette::accentBright,
+                                      UiPalette::accent.withAlpha(0.45f));
         videoModeBtn.setCustomColours(juce::Colour::fromRGB(20, 23, 30),
                                       juce::Colour::fromRGB(142, 149, 165),
                                       juce::Colour::fromRGB(142, 149, 165),
@@ -317,7 +318,7 @@ void YouTubeLibraryView::updateApiStatus()
     else
     {
         apiStatusBadge.setText(LanguageManager::trUtf8("● Modo Scraping Público Activo", "● Public Scraping Active"), juce::dontSendNotification);
-        apiStatusBadge.setColour(juce::Label::textColourId, juce::Colour::fromRGB(0, 229, 255));
+        apiStatusBadge.setColour(juce::Label::textColourId, UiPalette::accentBright);
     }
 }
 
@@ -502,7 +503,7 @@ void YouTubeLibraryView::paintCell(juce::Graphics& g, int rowNumber, int columnI
             break;
 
         case 5: // DURACIÓN
-            g.setColour(juce::Colour::fromRGB(0, 229, 255));
+            g.setColour(UiPalette::accentBright);
             g.setFont(juce::FontOptions(11.0f, juce::Font::bold));
             g.drawText(item.durationText, 4, 0, width - 8, height, juce::Justification::centred, false);
             break;

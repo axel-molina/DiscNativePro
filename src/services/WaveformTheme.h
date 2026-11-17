@@ -13,7 +13,7 @@
 class WaveformTheme
 {
 public:
-    enum Preset { RgbMulticolor = 0, NeonBlue = 1, SilverMono = 2 };
+    enum Preset { RgbMulticolor = 0, BlueSteel = 1, SilverMono = 2 };
 
     static constexpr int numDecks = 2;
 

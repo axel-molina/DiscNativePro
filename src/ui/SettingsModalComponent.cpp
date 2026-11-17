@@ -10,6 +10,7 @@
 #include "../services/MixxxMappingImporter.h"
 #include "../services/VdjMappingImporter.h"
 #include "../audio/Mp3Exporter.h"
+#include "UiPalette.h"
 
 #if JUCE_MAC
     #include "../services/MacSparkleUpdater.h"
@@ -314,7 +315,7 @@ void SettingsModalComponent::setupGeneralTab()
     // Section 0: Idioma / Language
     languageSectionLabel.setText(LanguageManager::trUtf8("Idioma de la Interfaz", "Interface Language"), juce::dontSendNotification);
     languageSectionLabel.setFont(juce::FontOptions(UiType::section, juce::Font::bold));
-    languageSectionLabel.setColour(juce::Label::textColourId, juce::Colour::fromRGB(0, 180, 216));
+    languageSectionLabel.setColour(juce::Label::textColourId, UiPalette::accentBright);
     bodyContent.addChildComponent(languageSectionLabel);
 
     languageSelectLabel.setText(LanguageManager::trUtf8("Idioma:", "Language:"), juce::dontSendNotification);
@@ -348,7 +349,7 @@ void SettingsModalComponent::setupGeneralTab()
     // Section 1: Comportamiento de Decks
     generalSectionDeck.setText(juce::String::fromUTF8("Comportamiento de Decks"), juce::dontSendNotification);
     generalSectionDeck.setFont(juce::FontOptions(UiType::section, juce::Font::bold));
-    generalSectionDeck.setColour(juce::Label::textColourId, juce::Colour::fromRGB(0, 180, 216));
+    generalSectionDeck.setColour(juce::Label::textColourId, UiPalette::accentBright);
     bodyContent.addChildComponent(generalSectionDeck);
 
     loadLockToggle.setButtonText(juce::String::fromUTF8("Protección de carga (Load Lock): Bloquear carga si el deck reproduce en vivo"));
@@ -420,7 +421,7 @@ void SettingsModalComponent::setupGeneralTab()
     // Section 2: Visualización y Rendimiento
     generalSectionDisplay.setText(juce::String::fromUTF8("Visualización y Rendimiento"), juce::dontSendNotification);
     generalSectionDisplay.setFont(juce::FontOptions(UiType::section, juce::Font::bold));
-    generalSectionDisplay.setColour(juce::Label::textColourId, juce::Colour::fromRGB(0, 180, 216));
+    generalSectionDisplay.setColour(juce::Label::textColourId, UiPalette::accentBright);
     bodyContent.addChildComponent(generalSectionDisplay);
 
     waveformFpsLabel.setText(juce::String::fromUTF8("Tasa de refresco de formas de onda:"), juce::dontSendNotification);
@@ -436,7 +437,7 @@ void SettingsModalComponent::setupGeneralTab()
     // Section 3: Grabación de Sesiones
     recSectionLabel.setText(juce::String::fromUTF8("Grabación de Sesiones"), juce::dontSendNotification);
     recSectionLabel.setFont(juce::FontOptions(UiType::section, juce::Font::bold));
-    recSectionLabel.setColour(juce::Label::textColourId, juce::Colour::fromRGB(0, 180, 216));
+    recSectionLabel.setColour(juce::Label::textColourId, UiPalette::accentBright);
     bodyContent.addChildComponent(recSectionLabel);
 
     recFolderDescLabel.setText(juce::String::fromUTF8("Carpeta de destino para archivos grabados (.wav 24-bit):"), juce::dontSendNotification);
@@ -458,7 +459,7 @@ void SettingsModalComponent::setupGeneralTab()
     recBrowseBtn.setCornerRadius(3.0f);
     recBrowseBtn.setCustomColours(juce::Colour::fromRGB(32, 35, 48),
                                  juce::Colour::fromRGB(200, 205, 220),
-                                 juce::Colour::fromRGB(0, 180, 216),
+                                 UiPalette::accentBright,
                                  juce::Colour::fromRGB(45, 50, 68));
     recBrowseBtn.onClick = [this]() {
         fileChooser = std::make_unique<juce::FileChooser>(
@@ -513,7 +514,7 @@ void SettingsModalComponent::setupGeneralTab()
     // Section 3b: Stems (separación automática, P22)
     stemsSectionLabel.setText(LanguageManager::trUtf8("Stems (Separación de Pistas)", "Stems (Track Separation)"), juce::dontSendNotification);
     stemsSectionLabel.setFont(juce::FontOptions(UiType::section, juce::Font::bold));
-    stemsSectionLabel.setColour(juce::Label::textColourId, juce::Colour::fromRGB(0, 180, 216));
+    stemsSectionLabel.setColour(juce::Label::textColourId, UiPalette::accentBright);
     bodyContent.addChildComponent(stemsSectionLabel);
 
     {
@@ -572,7 +573,7 @@ void SettingsModalComponent::setupGeneralTab()
     // Section 4: Descargas de YouTube y Archivos Locales
     downloadsSectionLabel.setText(juce::String::fromUTF8("Descargas de YouTube y Archivos Locales"), juce::dontSendNotification);
     downloadsSectionLabel.setFont(juce::FontOptions(UiType::section, juce::Font::bold));
-    downloadsSectionLabel.setColour(juce::Label::textColourId, juce::Colour::fromRGB(0, 180, 216));
+    downloadsSectionLabel.setColour(juce::Label::textColourId, UiPalette::accentBright);
     bodyContent.addChildComponent(downloadsSectionLabel);
 
     saveDownloadsToggle.setButtonText(juce::String::fromUTF8("Guardar canciones descargadas en disco local (persistente)"));
@@ -605,7 +606,7 @@ void SettingsModalComponent::setupGeneralTab()
     downloadsBrowseBtn.setCornerRadius(3.0f);
     downloadsBrowseBtn.setCustomColours(juce::Colour::fromRGB(32, 35, 48),
                                       juce::Colour::fromRGB(200, 205, 220),
-                                      juce::Colour::fromRGB(0, 180, 216),
+                                      UiPalette::accentBright,
                                       juce::Colour::fromRGB(45, 50, 68));
     downloadsBrowseBtn.onClick = [this]() {
         fileChooser = std::make_unique<juce::FileChooser>(
@@ -997,8 +998,8 @@ void SettingsModalComponent::refreshLanguage()
     designPresetLabel.setText(LanguageManager::trUtf8("Esquemas predefinidos:", "Preset schemes:"), juce::dontSendNotification);
     presetRgbBtn.setText(LanguageManager::trUtf8("RGB Multicolor", "RGB Multicolor"));
     presetRgbBtn.setTooltip(LanguageManager::trUtf8("Preset: RGB multicolor para las ondas", "Preset: multicolor RGB waveforms"));
-    presetNeonBtn.setText(LanguageManager::trUtf8("Azul Neón", "Neon Blue"));
-    presetNeonBtn.setTooltip(LanguageManager::trUtf8("Preset: azul neón para las ondas", "Preset: neon blue waveforms"));
+    presetNeonBtn.setText(LanguageManager::trUtf8("Azul Acero", "Steel Blue"));
+    presetNeonBtn.setTooltip(LanguageManager::trUtf8("Preset: azul acero sobrio para las ondas", "Preset: sober steel blue waveforms"));
     presetSilverBtn.setText(LanguageManager::trUtf8("Plata Mono", "Mono Silver"));
     presetSilverBtn.setTooltip(LanguageManager::trUtf8("Preset: plata monocromática para las ondas", "Preset: mono silver waveforms"));
     refreshDesignSwatches();
@@ -1032,7 +1033,7 @@ void SettingsModalComponent::setupDevicesTab()
     // Section: Enrutamiento de Canales de Audio
     routingSectionLabel.setText(juce::String::fromUTF8("Enrutamiento de Salidas de Audio (Pioneer DDJ / Multi-Canal)"), juce::dontSendNotification);
     routingSectionLabel.setFont(juce::FontOptions(UiType::section, juce::Font::bold));
-    routingSectionLabel.setColour(juce::Label::textColourId, juce::Colour::fromRGB(0, 180, 216));
+    routingSectionLabel.setColour(juce::Label::textColourId, UiPalette::accentBright);
     bodyContent.addChildComponent(routingSectionLabel);
 
     // Master Routing
@@ -1075,7 +1076,7 @@ void SettingsModalComponent::setupSoundTab()
     // Section 1: Motor de Audio
     soundSectionEngine.setText(juce::String::fromUTF8("Motor de Audio CoreAudio"), juce::dontSendNotification);
     soundSectionEngine.setFont(juce::FontOptions(UiType::section, juce::Font::bold));
-    soundSectionEngine.setColour(juce::Label::textColourId, juce::Colour::fromRGB(0, 180, 216));
+    soundSectionEngine.setColour(juce::Label::textColourId, UiPalette::accentBright);
     bodyContent.addChildComponent(soundSectionEngine);
 
     int sr = (int)audioEngine.getSampleRate();
@@ -1107,7 +1108,7 @@ void SettingsModalComponent::setupSoundTab()
     // Section 2: Mezclador & Curvas
     soundSectionMixer.setText(juce::String::fromUTF8("Ecualizador & Crossfader"), juce::dontSendNotification);
     soundSectionMixer.setFont(juce::FontOptions(UiType::section, juce::Font::bold));
-    soundSectionMixer.setColour(juce::Label::textColourId, juce::Colour::fromRGB(0, 180, 216));
+    soundSectionMixer.setColour(juce::Label::textColourId, UiPalette::accentBright);
     bodyContent.addChildComponent(soundSectionMixer);
 
     eqModeLabel.setText(juce::String::fromUTF8("Curva de Ecualizador (EQ Mode):"), juce::dontSendNotification);
@@ -1134,7 +1135,7 @@ void SettingsModalComponent::setupSoundTab()
     // Section 3: Margen Dinámico & Limitador
     soundSectionMaster.setText(juce::String::fromUTF8("Margen Dinámico y Limitador Master"), juce::dontSendNotification);
     soundSectionMaster.setFont(juce::FontOptions(UiType::section, juce::Font::bold));
-    soundSectionMaster.setColour(juce::Label::textColourId, juce::Colour::fromRGB(0, 180, 216));
+    soundSectionMaster.setColour(juce::Label::textColourId, UiPalette::accentBright);
     bodyContent.addChildComponent(soundSectionMaster);
 
     headroomLabel.setText(juce::String::fromUTF8("Margen Dinámico Master (Headroom):"), juce::dontSendNotification);
@@ -1170,7 +1171,7 @@ void SettingsModalComponent::setupSoundTab()
     // Section 5: Micrófono (Talkover) — control completo desde aquí (P18d)
     soundSectionMic.setText(LanguageManager::trUtf8("Micrófono (Talkover)", "Microphone (Talkover)"), juce::dontSendNotification);
     soundSectionMic.setFont(juce::FontOptions(UiType::section, juce::Font::bold));
-    soundSectionMic.setColour(juce::Label::textColourId, juce::Colour::fromRGB(0, 180, 216));
+    soundSectionMic.setColour(juce::Label::textColourId, UiPalette::accentBright);
     bodyContent.addChildComponent(soundSectionMic);
 
     micEnableToggle.setButtonText(LanguageManager::trUtf8("Habilitar micrófono (envía tu voz a la mezcla master)", "Enable microphone (sends your voice to the master mix)"));
@@ -1218,7 +1219,7 @@ void SettingsModalComponent::setupSoundTab()
     // Section 4: Monitoreo & Auriculares (CUE)
     soundSectionPhones.setText(juce::String::fromUTF8("Monitoreo y Auriculares (Preescucha CUE)"), juce::dontSendNotification);
     soundSectionPhones.setFont(juce::FontOptions(UiType::section, juce::Font::bold));
-    soundSectionPhones.setColour(juce::Label::textColourId, juce::Colour::fromRGB(0, 180, 216));
+    soundSectionPhones.setColour(juce::Label::textColourId, UiPalette::accentBright);
     bodyContent.addChildComponent(soundSectionPhones);
 
     cueMixLabel.setText(juce::String::fromUTF8("Mezcla Auriculares (CUE a la izquierda / MASTER a la derecha):"), juce::dontSendNotification);
@@ -1267,7 +1268,7 @@ void SettingsModalComponent::setupMidiTab()
 
     midiScanBtn.setButtonText(juce::String::fromUTF8("Escanear Puertos"));
     midiScanBtn.setColour(juce::TextButton::buttonColourId, juce::Colour::fromRGB(24, 28, 36));
-    midiScanBtn.setColour(juce::TextButton::textColourOffId, juce::Colour::fromRGB(0, 180, 216));
+    midiScanBtn.setColour(juce::TextButton::textColourOffId, UiPalette::accentBright);
     midiScanBtn.onClick = [this]() {
         midi.rescanDevices();
         refreshMidiDevices();
@@ -1293,7 +1294,7 @@ void SettingsModalComponent::setupMidiTab()
 
     midiMonitorText.setText(juce::String::fromUTF8("Esperando movimiento de fader, jog o pad..."), juce::dontSendNotification);
     midiMonitorText.setFont(juce::FontOptions("Menlo", UiType::body, juce::Font::plain));
-    midiMonitorText.setColour(juce::Label::textColourId, juce::Colour::fromRGB(0, 229, 255));
+    midiMonitorText.setColour(juce::Label::textColourId, UiPalette::accentBright);
     bodyContent.addChildComponent(midiMonitorText);
 
     midi.onMidiActivity = [this](const juce::String& desc) {
@@ -1315,7 +1316,7 @@ void SettingsModalComponent::setupStreamingTab()
 {
     streamingSectionTitle.setText(juce::String::fromUTF8("Integración de YouTube Streaming"), juce::dontSendNotification);
     streamingSectionTitle.setFont(juce::FontOptions(UiType::heading, juce::Font::bold));
-    streamingSectionTitle.setColour(juce::Label::textColourId, juce::Colour::fromRGB(0, 180, 216));
+    streamingSectionTitle.setColour(juce::Label::textColourId, UiPalette::accentBright);
     bodyContent.addChildComponent(streamingSectionTitle);
 
     streamingDescLabel.setText(juce::String::fromUTF8("DiscNativePro permite buscar, mezclar y reproducir videos de YouTube en vivo directamente en las bandejas.\nPor defecto se utiliza Scraping Público para buscar sin necesidad de API Key."), juce::dontSendNotification);
@@ -1377,7 +1378,7 @@ void SettingsModalComponent::setupTransmitTab()
 
     transmitTitleLabel.setText(juce::String::fromUTF8("Transmitir — Emisiones en vivo y podcasts"), juce::dontSendNotification);
     transmitTitleLabel.setFont(juce::FontOptions(UiType::heading, juce::Font::bold));
-    transmitTitleLabel.setColour(juce::Label::textColourId, juce::Colour::fromRGB(0, 180, 216));
+    transmitTitleLabel.setColour(juce::Label::textColourId, UiPalette::accentBright);
     bodyContent.addChildComponent(transmitTitleLabel);
 
     transmitDescLabel.setText(juce::String::fromUTF8("Emite la mezcla master en vivo a tu radio propia o a tus redes (YouTube, Facebook, Twitch). Los oyentes se conectan a la plataforma, no a tu app."), juce::dontSendNotification);
@@ -1422,7 +1423,7 @@ void SettingsModalComponent::setupTransmitTab()
     // --- Radio propia (Icecast) ---
     broadcastSectionTitle.setText(juce::String::fromUTF8("Servidor de radio (Icecast/Shoutcast)"), juce::dontSendNotification);
     broadcastSectionTitle.setFont(juce::FontOptions(UiType::section, juce::Font::bold));
-    broadcastSectionTitle.setColour(juce::Label::textColourId, juce::Colour::fromRGB(0, 180, 216));
+    broadcastSectionTitle.setColour(juce::Label::textColourId, UiPalette::accentBright);
     bodyContent.addChildComponent(broadcastSectionTitle);
 
     broadcastDescLabel.setText(juce::String::fromUTF8("Datos de tu servidor propio de streaming."), juce::dontSendNotification);
@@ -1504,8 +1505,8 @@ void SettingsModalComponent::setupTransmitTab()
     installFfmpegBtn.setFontSize(UiType::caption);
     installFfmpegBtn.setCornerRadius(3.0f);
     installFfmpegBtn.setCustomColours(juce::Colour::fromRGB(32, 35, 48),
-                                      juce::Colour::fromRGB(0, 180, 216),
-                                      juce::Colour::fromRGB(0, 180, 216),
+                                      UiPalette::accentBright,
+                                      UiPalette::accentBright,
                                       juce::Colour::fromRGB(45, 50, 65));
     installFfmpegBtn.onClick = [this]() {
         installFfmpegBtn.setEnabled(false);
@@ -1539,7 +1540,7 @@ void SettingsModalComponent::setupTransmitTab()
     // --- Podcast: exportar grabación a MP3 ---
     podcastSectionLabel.setText(juce::String::fromUTF8("Podcast (exportar grabación a MP3)"), juce::dontSendNotification);
     podcastSectionLabel.setFont(juce::FontOptions(UiType::section, juce::Font::bold));
-    podcastSectionLabel.setColour(juce::Label::textColourId, juce::Colour::fromRGB(0, 180, 216));
+    podcastSectionLabel.setColour(juce::Label::textColourId, UiPalette::accentBright);
     bodyContent.addChildComponent(podcastSectionLabel);
 
     podcastDescLabel.setText(juce::String::fromUTF8("Convierte una grabación de sesión (WAV) a MP3 listo para publicar."), juce::dontSendNotification);
@@ -1555,8 +1556,8 @@ void SettingsModalComponent::setupTransmitTab()
     podcastRefreshBtn.setFontSize(UiType::caption);
     podcastRefreshBtn.setCornerRadius(3.0f);
     podcastRefreshBtn.setCustomColours(juce::Colour::fromRGB(32, 35, 48),
-                                       juce::Colour::fromRGB(0, 180, 216),
-                                       juce::Colour::fromRGB(0, 180, 216),
+                                       UiPalette::accentBright,
+                                       UiPalette::accentBright,
                                        juce::Colour::fromRGB(45, 50, 65));
     podcastRefreshBtn.onClick = [this]() { refreshPodcastRecordings(); };
     bodyContent.addChildComponent(podcastRefreshBtn);
@@ -1758,7 +1759,7 @@ void SettingsModalComponent::exportPodcastMp3()
     podcastExportBtn.setEnabled(false);
     podcastStatusBadge.setText(LanguageManager::trUtf8("Exportando a MP3...", "Exporting to MP3..."),
                                juce::dontSendNotification);
-    podcastStatusBadge.setColour(juce::Label::textColourId, juce::Colour::fromRGB(0, 229, 255));
+    podcastStatusBadge.setColour(juce::Label::textColourId, UiPalette::accentBright);
 
     juce::Thread::launch([this, wav, outMp3, bitrate]() {
         const auto error = Mp3Exporter::encodeWavToMp3(wav, outMp3, bitrate);
@@ -1954,7 +1955,7 @@ void SettingsModalComponent::setupSearchIndex()
     add(8, "Color de los medios de la onda", "Waveform mid color", &waveMidSwatch);
     add(8, "Color de los agudos de la onda", "Waveform high color", &waveHighSwatch);
     add(8, "Preset RGB multicolor", "RGB multicolor preset", &presetRgbBtn);
-    add(8, "Preset azul neon", "Neon blue preset", &presetNeonBtn);
+    add(8, "Preset azul acero", "Steel blue preset", &presetNeonBtn);
     add(8, "Preset plata mono", "Mono silver preset", &presetSilverBtn);
 
     // Tab 9: Version
@@ -2197,7 +2198,7 @@ void SettingsModalComponent::setupDesignTab()
 {
     designTitleLabel.setText(juce::String::fromUTF8("Personalización de Waveforms"), juce::dontSendNotification);
     designTitleLabel.setFont(juce::FontOptions(UiType::heading, juce::Font::bold));
-    designTitleLabel.setColour(juce::Label::textColourId, juce::Colour::fromRGB(0, 180, 216));
+    designTitleLabel.setColour(juce::Label::textColourId, UiPalette::accentBright);
     bodyContent.addChildComponent(designTitleLabel);
 
     designDescLabel.setText(juce::String::fromUTF8("Elige los colores de Graves, Medios y Agudos. Se aplican en vivo al wave de la bandeja seleccionada y se guardan automáticamente."), juce::dontSendNotification);
@@ -2255,7 +2256,7 @@ void SettingsModalComponent::setupDesignTab()
         btn.setCornerRadius(3.0f);
         btn.setCustomColours(juce::Colour::fromRGB(32, 35, 48),
                              juce::Colour::fromRGB(200, 205, 220),
-                             juce::Colour::fromRGB(0, 180, 216),
+                             UiPalette::accentBright,
                              juce::Colour::fromRGB(45, 50, 68));
         btn.onClick = [this, preset]() {
             WaveformTheme::applyPreset(designDeckIndex, preset);
@@ -2265,7 +2266,7 @@ void SettingsModalComponent::setupDesignTab()
     };
 
     setupPreset(presetRgbBtn, WaveformTheme::RgbMulticolor);
-    setupPreset(presetNeonBtn, WaveformTheme::NeonBlue);
+    setupPreset(presetNeonBtn, WaveformTheme::BlueSteel);
     setupPreset(presetSilverBtn, WaveformTheme::SilverMono);
 
     refreshDesignSwatches();
@@ -2375,7 +2376,7 @@ void SettingsModalComponent::setupVersionTab()
         downloadProgressBar.setVisible(true);
         downloadStatusLabel.setVisible(true);
         downloadStatusLabel.setText(LanguageManager::trUtf8("Iniciando descarga...", "Starting download..."), juce::dontSendNotification);
-        downloadStatusLabel.setColour(juce::Label::textColourId, juce::Colour::fromRGB(56, 189, 248));
+        downloadStatusLabel.setColour(juce::Label::textColourId, UiPalette::accentBright);
         resized();
 
         juce::Component::SafePointer<SettingsModalComponent> safeThis(this);
@@ -2431,7 +2432,7 @@ void SettingsModalComponent::setupVersionTab()
     bodyContent.addChildComponent(installVersionBtn);
 
     downloadStatusLabel.setFont(juce::FontOptions(UiType::body));
-    downloadStatusLabel.setColour(juce::Label::textColourId, juce::Colour::fromRGB(56, 189, 248));
+    downloadStatusLabel.setColour(juce::Label::textColourId, UiPalette::accentBright);
     bodyContent.addChildComponent(downloadStatusLabel);
 
     downloadProgressBar.setPercentageDisplay(false);
@@ -2510,10 +2511,10 @@ void SettingsModalComponent::refreshDesignSwatches()
     auto styleDeckToggle = [](DjButton& btn, bool isActive) {
         if (isActive)
         {
-            btn.setCustomColours(juce::Colour::fromRGB(0, 180, 216).withAlpha(0.22f),
-                                 juce::Colour::fromRGB(0, 229, 255),
-                                 juce::Colour::fromRGB(0, 229, 255),
-                                 juce::Colour::fromRGB(0, 180, 216));
+            btn.setCustomColours(UiPalette::accent.withAlpha(0.22f),
+                                 UiPalette::accentBright,
+                                 UiPalette::accentBright,
+                                 UiPalette::accentBright);
         }
         else
         {
@@ -2898,7 +2899,7 @@ void SettingsModalComponent::updateTabVisibility()
         {
             apiStatusBadge.setText(LanguageManager::trUtf8("● Scraping Público Activo (Sin Clave API)",
                                                           "● Public Scraping Active (No API Key)"), juce::dontSendNotification);
-            apiStatusBadge.setColour(juce::Label::textColourId, juce::Colour::fromRGB(0, 229, 255));
+            apiStatusBadge.setColour(juce::Label::textColourId, UiPalette::accentBright);
         }
     }
 
@@ -2993,9 +2994,9 @@ void SettingsModalComponent::updateTabVisibility()
         if (active)
         {
             btn.setCustomColours(juce::Colour::fromRGB(34, 40, 56),
-                                 juce::Colour::fromRGB(0, 180, 216),
-                                 juce::Colour::fromRGB(0, 180, 216),
-                                 juce::Colour::fromRGB(0, 180, 216).withAlpha(0.6f));
+                                 UiPalette::accentBright,
+                                 UiPalette::accentBright,
+                                 UiPalette::accent.withAlpha(0.6f));
         }
         else
         {
@@ -3180,7 +3181,7 @@ void SettingsModalComponent::paint(juce::Graphics& g)
             }
         };
 
-        drawCard(d1Card, LanguageManager::trUtf8("Deck 1 (Canal Izquierdo):", "Deck 1 (Left Channel):"), juce::Colour::fromRGB(0, 180, 216), {
+        drawCard(d1Card, LanguageManager::trUtf8("Deck 1 (Canal Izquierdo):", "Deck 1 (Left Channel):"), UiPalette::accentBright, {
             { "Q", "Play / Pause" },
             { "W", LanguageManager::trUtf8("CUE (Pre-escucha)", "CUE (Cueing)") },
             { "E", LanguageManager::trUtf8("SYNC (Sincronizar BPM)", "SYNC (Sync BPM)") },

@@ -1,6 +1,7 @@
 #include "DeckComponent.h"
 #include "BpmFormat.h"
 #include "LucideIcons.h"
+#include "UiPalette.h"
 #include "YouTubeVideoComponent.h"
 #include "../services/YouTubeService.h"
 #include "../services/YouTubeAudioDownloader.h"
@@ -1248,10 +1249,10 @@ void DeckComponent::refreshPerformanceButtons()
     {
         slipShown = slipState;
         if (slipState)
-            slipToggleButton.setCustomColours(juce::Colour::fromRGB(8, 66, 76),
-                                              juce::Colour::fromRGB(34, 211, 238),
-                                              juce::Colour::fromRGB(34, 211, 238),
-                                              juce::Colour::fromRGB(34, 211, 238).withAlpha(0.5f));
+            slipToggleButton.setCustomColours(UiPalette::accentDim,
+                                              UiPalette::accentBright,
+                                              UiPalette::accentBright,
+                                              UiPalette::accent.withAlpha(0.5f));
         else
             slipToggleButton.setCustomColours(juce::Colour::fromRGB(20, 23, 30),
                                               juce::Colour::fromRGB(142, 149, 165),

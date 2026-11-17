@@ -201,6 +201,7 @@ target_sources(DiscNativePro
         src/ui/SettingsModalComponent.h
         src/ui/SettingsModalComponent.cpp
         src/ui/UiTypeScale.h
+        src/ui/UiPalette.h
         src/ui/WelcomeModalComponent.h
         src/ui/WelcomeModalComponent.cpp
         src/ui/FxSlotComponent.h

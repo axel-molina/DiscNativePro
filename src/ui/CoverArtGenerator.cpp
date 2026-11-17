@@ -1,4 +1,5 @@
 #include "CoverArtGenerator.h"
+#include "UiPalette.h"
 
 static std::map<juce::String, juce::Image>& getCache()
 {
@@ -70,7 +71,7 @@ juce::Image CoverArtGenerator::createOceanTechCover(int size)
     wave1.lineTo(sz, sz);
     wave1.lineTo(0.0f, sz);
     wave1.closeSubPath();
-    g.setColour(juce::Colour::fromRGB(0, 210, 255).withAlpha(0.35f));
+    g.setColour(UiPalette::accent.withAlpha(0.35f));
     g.fillPath(wave1);
 
     juce::Path wave2;
@@ -79,11 +80,11 @@ juce::Image CoverArtGenerator::createOceanTechCover(int size)
     wave2.lineTo(sz, sz);
     wave2.lineTo(0.0f, sz);
     wave2.closeSubPath();
-    g.setColour(juce::Colour::fromRGB(34, 211, 238).withAlpha(0.25f));
+    g.setColour(UiPalette::accent.withAlpha(0.25f));
     g.fillPath(wave2);
 
     // Glowing cyan radial core
-    juce::ColourGradient core(juce::Colour::fromRGB(56, 189, 248).withAlpha(0.6f), sz * 0.45f, sz * 0.45f,
+    juce::ColourGradient core(UiPalette::accent.withAlpha(0.6f), sz * 0.45f, sz * 0.45f,
                               juce::Colours::transparentBlack, sz * 0.45f + sz * 0.4f, sz * 0.45f, true);
     g.setGradientFill(core);
     g.fillEllipse(sz * 0.1f, sz * 0.1f, sz * 0.7f, sz * 0.7f);
@@ -159,7 +160,7 @@ juce::Image CoverArtGenerator::createPiratasCover(int size)
     g.setGradientFill(bg);
     g.fillAll();
 
-    juce::ColourGradient star(juce::Colour::fromRGB(96, 165, 250).withAlpha(0.6f), sz * 0.4f, sz * 0.4f,
+    juce::ColourGradient star(UiPalette::accent.withAlpha(0.6f), sz * 0.4f, sz * 0.4f,
                               juce::Colours::transparentBlack, sz * 0.4f, 0.0f, true);
     g.setGradientFill(star);
     g.fillEllipse(sz * 0.1f, sz * 0.1f, sz * 0.6f, sz * 0.6f);
@@ -198,7 +199,7 @@ juce::Image CoverArtGenerator::createDefaultCover(const juce::String& title, int
     g.setGradientFill(bg);
     g.fillAll();
 
-    g.setColour(juce::Colour::fromRGB(56, 189, 248).withAlpha(0.3f));
+    g.setColour(UiPalette::accent.withAlpha(0.3f));
     g.drawEllipse(sz * 0.2f, sz * 0.2f, sz * 0.6f, sz * 0.6f, 2.0f);
 
     g.setColour(juce::Colours::white.withAlpha(0.8f));

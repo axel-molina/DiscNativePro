@@ -1,5 +1,6 @@
 #include "MidiMappingTableComponent.h"
 #include "UiTypeScale.h"
+#include "UiPalette.h"
 
 namespace
 {
@@ -39,10 +40,10 @@ public:
         else
         {
             learnBtn.setText(LanguageManager::trUtf8("Aprender", "Learn"));
-            learnBtn.setCustomColours(juce::Colour::fromRGB(0, 180, 216).withAlpha(0.18f),
-                                     juce::Colour::fromRGB(0, 229, 255),
-                                     juce::Colour::fromRGB(0, 229, 255),
-                                     juce::Colour::fromRGB(0, 180, 216).withAlpha(0.4f));
+            learnBtn.setCustomColours(UiPalette::accent.withAlpha(0.18f),
+                                     UiPalette::accentBright,
+                                     UiPalette::accentBright,
+                                     UiPalette::accent.withAlpha(0.4f));
             clearBtn.setVisible(true);
         }
     }
@@ -105,8 +106,8 @@ MidiMappingTableComponent::MidiMappingTableComponent(MidiManager& midiMgr)
     exportBtn.setFontSize(UiType::caption);
     exportBtn.setCornerRadius(3.0f);
     exportBtn.setCustomColours(juce::Colour::fromRGB(24, 27, 36),
-                              juce::Colour::fromRGB(0, 180, 216),
-                              juce::Colour::fromRGB(0, 180, 216),
+                              UiPalette::accentBright,
+                              UiPalette::accentBright,
                               juce::Colour::fromRGB(36, 40, 54));
     exportBtn.onClick = [this]() { exportMapping(); };
     exportBtn.setTooltip(LanguageManager::trUtf8("Guarda la tabla de mapeo MIDI en un archivo", "Save the MIDI mapping table to a file"));
@@ -269,7 +270,7 @@ void MidiMappingTableComponent::paintRowBackground(juce::Graphics& g, int rowNum
 {
     if (rowIsSelected)
     {
-        g.setColour(juce::Colour::fromRGB(0, 180, 216).withAlpha(0.12f));
+        g.setColour(UiPalette::accent.withAlpha(0.12f));
         g.fillAll();
     }
     else if (rowNumber % 2 == 1)
@@ -304,7 +305,7 @@ void MidiMappingTableComponent::paintCell(juce::Graphics& g, int rowNumber, int 
             if (action.deckIndex == 0)
             {
                 groupName = "DECK 1";
-                groupCol = juce::Colour::fromRGB(0, 180, 216); // Cyan
+                groupCol = UiPalette::accentBright; // Cyan
             }
             else if (action.deckIndex == 1)
             {
@@ -364,7 +365,7 @@ void MidiMappingTableComponent::paintCell(juce::Graphics& g, int rowNumber, int 
             {
                 bool hasBinding = action.binding.isValid();
                 juce::Colour bgCol = hasBinding ? juce::Colour::fromRGB(24, 28, 40) : juce::Colour::fromRGB(18, 20, 26);
-                juce::Colour textCol = hasBinding ? juce::Colour::fromRGB(0, 229, 255) : juce::Colour::fromRGB(100, 108, 125);
+                juce::Colour textCol = hasBinding ? UiPalette::accentBright : juce::Colour::fromRGB(100, 108, 125);
 
                 g.setColour(bgCol);
                 g.fillRoundedRectangle(pill, 3.0f);

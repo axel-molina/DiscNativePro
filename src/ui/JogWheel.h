@@ -2,11 +2,12 @@
 
 #include <juce_gui_basics/juce_gui_basics.h>
 #include "../audio/DeckPlayer.h"
+#include "UiPalette.h"
 
 class JogWheel : public juce::Component
 {
 public:
-    JogWheel(DeckPlayer& player, juce::Colour accentColour = juce::Colour::fromRGB(0, 210, 255));
+    JogWheel(DeckPlayer& player, juce::Colour accentColour = UiPalette::accentBright);
     ~JogWheel() override;
 
     void setTrackInfo(const juce::String& title, double bpm, juce::Colour deckColor);

@@ -2857,3 +2857,26 @@ El usuario confirmó: **«funciona bien»** (clic derecho sin cargar → editor 
 ## Verificación
 - `cmake --build build` → 0 errores, sin warnings propios. App Release relanzada.
 - Cache real verificado: `~/Library/DiscNativePro/library_cache.json` — descargas de YouTube con duración y BPM persistidos correctamente. Los únicos 20 registros con duración 0 son `Placeholder.m4a` de 1 byte ya inexistentes (no son canciones).
+---
+
+# P47: paleta rojiza por defecto para el Deck 2 + botones de carga (Notion #22)
+
+> Ticket: Notion **#22** (FB-19) · continuación del trabajo del agente anterior (DNP-TK-8, paleta sobria sin commitear).
+
+## Decisiones (confirmadas por entrevista previa, en el ticket)
+1. Terracota/ladrillo apagado: `#5C3230` / `#A05A4E` / `#D9A093`.
+2. Solo onda default del Deck 2 + botones de carga; el acento general del Deck 2 (jog, key badge, cover art) sigue gris azulado `#94A3B8`.
+3. Botones «1» azul acero / «2» terracota en las 4 vistas (Biblioteca, YouTube, USB, SoundCloud).
+4. Limpieza de los restos de cian neón (`0,210,255`, `34,211,238`).
+
+## Cambios
+- `src/ui/UiPalette.h`: tokens terracota (`waveLow/Mid/HighDeckTwo`, `deckTwoLoadFill/Text/Border`).
+- `src/services/WaveformTheme.cpp`: `defaultsForDeck(1)` usa terracota (el preset Azul Acero y los colores guardados no se tocan).
+- 4 vistas: Botones de carga «1» azul acero / «2» terracota; en SoundCloud se reemplaza el naranja previo.
+- Restos neón: `JogWheel.h`, `DjKnob.h`, `CoverArtGenerator.cpp`, `OverviewWaveform.cpp`, `DeckComponent.cpp`, `YouTubeLibraryView.cpp` → tokens UiPalette. Grep final: cero ocurrencias de `0,210,255` / `34,211,238`.
+
+## Verificación
+- `cmake --build build` → 0 errores, sin warnings propios (incluye el trabajo pendiente de DNP-TK-8 del otro agente).
+- Relanzamiento obligatorio: pkill + open Release → proceso activo (pgrep OK).
+- `settings.json` tenía preset SilverMono guardado para onda del Deck 2 (mtime 16:18) que tapaba el default → respaldado como `settings.json.bak-P47` y eliminadas las 6 claves de onda para que apliquen los defaults nuevos. Restaurable copiando el backup encima.
+- **Pendiente de validación humana**: onda Deck 2 terracota vs Deck 1 azul acero; botones 1/2 en las 4 vistas; jog/key badge del Deck 2 sin cambios; sin cian neón.

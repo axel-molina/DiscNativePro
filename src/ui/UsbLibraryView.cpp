@@ -2,6 +2,7 @@
 #include "../services/AsyncFolderScanner.h"
 #include <algorithm>
 #include <set>
+#include "UiPalette.h"
 
 namespace
 {
@@ -13,20 +14,20 @@ namespace
             btnDeck1.setText("1");
             btnDeck1.setFontSize(10.5f);
             btnDeck1.setCornerRadius(3.0f);
-            btnDeck1.setCustomColours(juce::Colour::fromRGB(0, 180, 216).withAlpha(0.25f),
-                                     juce::Colour::fromRGB(0, 229, 255),
-                                     juce::Colour::fromRGB(0, 229, 255),
-                                     juce::Colour::fromRGB(0, 180, 216).withAlpha(0.45f));
+            btnDeck1.setCustomColours(UiPalette::accent.withAlpha(0.25f),
+                                     UiPalette::accentBright,
+                                     UiPalette::accentBright,
+                                     UiPalette::accent.withAlpha(0.45f));
             btnDeck1.onClick = [this]() { if (onDeckLoad) onDeckLoad(0); };
             addAndMakeVisible(btnDeck1);
 
             btnDeck2.setText("2");
             btnDeck2.setFontSize(10.5f);
             btnDeck2.setCornerRadius(3.0f);
-            btnDeck2.setCustomColours(juce::Colour::fromRGB(0, 180, 216).withAlpha(0.25f),
-                                     juce::Colour::fromRGB(0, 229, 255),
-                                     juce::Colour::fromRGB(0, 229, 255),
-                                     juce::Colour::fromRGB(0, 180, 216).withAlpha(0.45f));
+            btnDeck2.setCustomColours(UiPalette::deckTwoLoadFill,
+                                      UiPalette::deckTwoLoadText,
+                                      UiPalette::deckTwoLoadText,
+                                      UiPalette::deckTwoLoadBorder);
             btnDeck2.onClick = [this]() { if (onDeckLoad) onDeckLoad(1); };
             addAndMakeVisible(btnDeck2);
         }
@@ -70,7 +71,7 @@ UsbLibraryView::UsbLibraryView(juce::AudioFormatManager& fm)
     refreshBtn.setCornerRadius(3.0f);
     refreshBtn.setCustomColours(juce::Colour::fromRGB(24, 27, 36),
                                 juce::Colour::fromRGB(160, 165, 180),
-                                juce::Colour::fromRGB(0, 229, 255),
+                                UiPalette::accentBright,
                                 juce::Colour::fromRGB(36, 40, 52));
     refreshBtn.onClick = [this]() { refreshDrives(); };
     addAndMakeVisible(refreshBtn);
@@ -80,7 +81,7 @@ UsbLibraryView::UsbLibraryView(juce::AudioFormatManager& fm)
     addFolderBtn.setCornerRadius(3.0f);
     addFolderBtn.setCustomColours(juce::Colour::fromRGB(24, 27, 36),
                                  juce::Colour::fromRGB(160, 165, 180),
-                                 juce::Colour::fromRGB(0, 229, 255),
+                                 UiPalette::accentBright,
                                  juce::Colour::fromRGB(36, 40, 52));
     addFolderBtn.onClick = [this]() { openManualFolder(); };
     addAndMakeVisible(addFolderBtn);
@@ -136,10 +137,10 @@ UsbLibraryView::UsbLibraryView(juce::AudioFormatManager& fm)
     manualExploreBtn.setIcon(LucideIcons::IconType::Folder, 14.0f);
     manualExploreBtn.setFontSize(12.5f);
     manualExploreBtn.setCornerRadius(3.0f);
-    manualExploreBtn.setCustomColours(juce::Colour::fromRGB(0, 180, 216).withAlpha(0.22f),
-                                      juce::Colour::fromRGB(0, 229, 255),
-                                      juce::Colour::fromRGB(0, 229, 255),
-                                      juce::Colour::fromRGB(0, 180, 216).withAlpha(0.4f));
+    manualExploreBtn.setCustomColours(UiPalette::accent.withAlpha(0.22f),
+                                      UiPalette::accentBright,
+                                      UiPalette::accentBright,
+                                      UiPalette::accent.withAlpha(0.4f));
     manualExploreBtn.onClick = [this]() { openManualFolder(); };
     manualExploreBtn.setTooltip(LanguageManager::trUtf8("Elige una unidad o carpeta para explorar", "Choose a drive or folder to browse"));
     addChildComponent(manualExploreBtn);
@@ -291,10 +292,10 @@ void UsbLibraryView::refreshDrives()
         btn->setCornerRadius(3.0f);
 
         bool isSel = (i == selectedDriveIndex);
-        btn->setCustomColours(isSel ? juce::Colour::fromRGB(0, 180, 216).withAlpha(0.2f) : juce::Colour::fromRGB(18, 20, 28),
-                              isSel ? juce::Colour::fromRGB(0, 229, 255) : juce::Colour::fromRGB(200, 205, 220),
-                              isSel ? juce::Colour::fromRGB(0, 229, 255) : juce::Colour::fromRGB(200, 205, 220),
-                              isSel ? juce::Colour::fromRGB(0, 180, 216).withAlpha(0.35f) : juce::Colour::fromRGB(28, 32, 44));
+        btn->setCustomColours(isSel ? UiPalette::accent.withAlpha(0.2f) : juce::Colour::fromRGB(18, 20, 28),
+                              isSel ? UiPalette::accentBright : juce::Colour::fromRGB(200, 205, 220),
+                              isSel ? UiPalette::accentBright : juce::Colour::fromRGB(200, 205, 220),
+                              isSel ? UiPalette::accent.withAlpha(0.35f) : juce::Colour::fromRGB(28, 32, 44));
         btn->onClick = [this, i]() { selectDrive(i); };
 
         btn->setBounds(4, y, 196, 28);
@@ -313,10 +314,10 @@ void UsbLibraryView::refreshDrives()
             allBtn->setCornerRadius(3.0f);
 
             bool isAllSel = (selectedFolderName == "Todas las pistas");
-            allBtn->setCustomColours(isAllSel ? juce::Colour::fromRGB(0, 180, 216).withAlpha(0.18f) : juce::Colour::fromRGB(14, 16, 22),
-                                     isAllSel ? juce::Colour::fromRGB(0, 229, 255) : juce::Colour::fromRGB(160, 165, 180),
-                                     isAllSel ? juce::Colour::fromRGB(0, 229, 255) : juce::Colour::fromRGB(160, 165, 180),
-                                     isAllSel ? juce::Colour::fromRGB(0, 180, 216).withAlpha(0.3f) : juce::Colour::fromRGB(22, 25, 34));
+            allBtn->setCustomColours(isAllSel ? UiPalette::accent.withAlpha(0.18f) : juce::Colour::fromRGB(14, 16, 22),
+                                     isAllSel ? UiPalette::accentBright : juce::Colour::fromRGB(160, 165, 180),
+                                     isAllSel ? UiPalette::accentBright : juce::Colour::fromRGB(160, 165, 180),
+                                     isAllSel ? UiPalette::accent.withAlpha(0.3f) : juce::Colour::fromRGB(22, 25, 34));
             allBtn->onClick = [this]() { selectFolder("Todas las pistas"); };
             allBtn->setBounds(18, y, 182, 24);
             sidebarContent.addAndMakeVisible(allBtn.get());
@@ -332,10 +333,10 @@ void UsbLibraryView::refreshDrives()
                 fBtn->setCornerRadius(3.0f);
 
                 bool isFolderSel = (selectedFolderName == fName);
-                fBtn->setCustomColours(isFolderSel ? juce::Colour::fromRGB(0, 180, 216).withAlpha(0.18f) : juce::Colour::fromRGB(14, 16, 22),
-                                       isFolderSel ? juce::Colour::fromRGB(0, 229, 255) : juce::Colour::fromRGB(160, 165, 180),
-                                       isFolderSel ? juce::Colour::fromRGB(0, 229, 255) : juce::Colour::fromRGB(160, 165, 180),
-                                       isFolderSel ? juce::Colour::fromRGB(0, 180, 216).withAlpha(0.3f) : juce::Colour::fromRGB(22, 25, 34));
+                fBtn->setCustomColours(isFolderSel ? UiPalette::accent.withAlpha(0.18f) : juce::Colour::fromRGB(14, 16, 22),
+                                       isFolderSel ? UiPalette::accentBright : juce::Colour::fromRGB(160, 165, 180),
+                                       isFolderSel ? UiPalette::accentBright : juce::Colour::fromRGB(160, 165, 180),
+                                       isFolderSel ? UiPalette::accent.withAlpha(0.3f) : juce::Colour::fromRGB(22, 25, 34));
                 fBtn->onClick = [this, fName]() { selectFolder(fName); };
                 fBtn->setBounds(18, y, 182, 24);
                 sidebarContent.addAndMakeVisible(fBtn.get());
@@ -364,7 +365,7 @@ void UsbLibraryView::updateSyncStatusLabel(int count, bool isScanningNow, const 
     isSyncing = isScanningNow;
     if (isScanningNow)
     {
-        trackCountLabel.setColour(juce::Label::textColourId, juce::Colour::fromRGB(0, 229, 255));
+        trackCountLabel.setColour(juce::Label::textColourId, UiPalette::accentBright);
         juce::String text = LanguageManager::trUtf8("Sincronizando: ", "Syncing: ") + juce::String(count) + " " + LanguageManager::trUtf8("pistas...", "tracks...");
         if (currentFolder.isNotEmpty())
             text += " (" + currentFolder + ")";
@@ -537,11 +538,11 @@ void UsbLibraryView::paintCell(juce::Graphics& g, int rowNumber, int columnId, i
         case 5: // KEY
         {
             auto pill = bounds.reduced(4, 7).toFloat();
-            g.setColour(juce::Colour::fromRGB(0, 180, 216).withAlpha(0.15f));
+            g.setColour(UiPalette::accent.withAlpha(0.15f));
             g.fillRoundedRectangle(pill, 3.0f);
-            g.setColour(juce::Colour::fromRGB(0, 180, 216).withAlpha(0.35f));
+            g.setColour(UiPalette::accent.withAlpha(0.35f));
             g.drawRoundedRectangle(pill, 3.0f, 1.0f);
-            g.setColour(juce::Colour::fromRGB(0, 229, 255));
+            g.setColour(UiPalette::accentBright);
             g.setFont(juce::FontOptions(10.5f, juce::Font::bold));
             g.drawText(track.key, pill, juce::Justification::centred, false);
             break;

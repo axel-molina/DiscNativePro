@@ -1,4 +1,5 @@
 #include "SamplerPanelComponent.h"
+#include "UiPalette.h"
 
 SamplerPanelComponent::SamplerPanelComponent(SamplerBank& bank,
                                              juce::AudioFormatManager& formatManager,
@@ -78,8 +79,8 @@ void SamplerPanelComponent::refreshPad(int index)
         btn.setTooltip(nm + " (" + juce::String(sampler.getDurationSeconds(index), 1) + "s)");
         btn.setCustomColours(juce::Colour::fromRGB(30, 41, 59),
                              juce::Colours::white,
-                             juce::Colour::fromRGB(56, 189, 248),
-                             juce::Colour::fromRGB(56, 189, 248).withAlpha(0.5f));
+                             UiPalette::accentBright,
+                             UiPalette::accent.withAlpha(0.5f));
     }
     else
     {
