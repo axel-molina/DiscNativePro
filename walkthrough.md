@@ -2880,3 +2880,6 @@ El usuario confirmó: **«funciona bien»** (clic derecho sin cargar → editor 
 - Relanzamiento obligatorio: pkill + open Release → proceso activo (pgrep OK).
 - `settings.json` tenía preset SilverMono guardado para onda del Deck 2 (mtime 16:18) que tapaba el default → respaldado como `settings.json.bak-P47` y eliminadas las 6 claves de onda para que apliquen los defaults nuevos. Restaurable copiando el backup encima.
 - **Pendiente de validación humana**: onda Deck 2 terracota vs Deck 1 azul acero; botones 1/2 en las 4 vistas; jog/key badge del Deck 2 sin cambios; sin cian neón.
+
+## Validación humana (2026-11-17)
+El usuario confirmó: **«perfecto y validado»** — onda del Deck 2 terracota, botones 1 azul / 2 rojo en las 4 vistas, acento general del Deck 2 intacto y sin cian neón. Ticket Notion #22 → Finalizado / Progreso 100 / Validación Aprobada / Fecha de finalización 2026-11-17.
