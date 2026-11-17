@@ -61,7 +61,8 @@ if [ -n "$ORT_PROVIDERS" ]; then
 fi
 
 cp install/linux/discnativepro.desktop "$APPDIR/usr/share/applications/discnativepro.desktop"
-cp assets/icon.png "$APPDIR/usr/share/icons/hicolor/256x256/apps/discnativepro.png"
+# linuxdeploy exige resoluciones de icono estándar (la fuente es 1024x1024).
+cp assets/icon-256.png "$APPDIR/usr/share/icons/hicolor/256x256/apps/discnativepro.png"
 
 echo "==> Descargando linuxdeploy y el plugin gtk"
 curl -fsSL -o "$LINUXDEPLOY" \
@@ -83,7 +84,7 @@ echo "==> Generando AppImage"
   --plugin gtk \
   --output appimage \
   --desktop-file install/linux/discnativepro.desktop \
-  --icon-file assets/icon.png
+  --icon-file assets/icon-256.png
 
 GENERATED="$(find . -maxdepth 1 -type f -name "${APP_NAME}*-x86_64.AppImage" | head -1)"
 if [ -z "$GENERATED" ]; then

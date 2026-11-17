@@ -2965,3 +2965,6 @@ El job Linux x64 **sí compiló** (CMake, build, .tar.gz y .deb pasaron); falló
 
 ## Fix CI v1.4.2 (2ª iteración): GTK version auto-detect
 El nuevo run 44175657436 volvió a fallar solo en AppImage: `linuxdeploy-plugin-gtk.sh: failed to auto-detect GTK version — Please set DEPLOY_GTK_VERSION`. Causa: JUCE carga GTK en runtime (no es DT_NEEDED), así que el `ldd` del plugin no detecta `libgtk-3.so`. Fix en `installer/linux/build-appimage.sh`: `export DEPLOY_GTK_VERSION="${DEPLOY_GTK_VERSION:-3}"` antes de linuxdeploy. Windows volvió a dar success.
+
+## Fix CI v1.4.2 (3ª iteración): icono 1024px
+Run 44177177299 volvió a fallar SOLO en AppImage, esta vez al final: `ERROR: Icon assets/icon.png has invalid x resolution: 1024` (linuxdeploy solo acepta resoluciones estándar hasta 512). Fix: nuevo `assets/icon-256.png` (redimensionado con sips desde el original 1024) y `build-appimage.sh` usa ese archivo tanto para el AppDir como para `--icon-file`. Nota: el plugin GTK ya pasó (DEPLOY_GTK_VERSION=3 funcionó).
