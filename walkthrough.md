@@ -2935,3 +2935,6 @@ De 129 llamadas a `setTooltip` en `src/ui`, solo ~48 se reasignan en `refreshLan
 ## Verificación
 - `cmake --build build` → 0 errores, sin warnings propios; app Release relanzada (pgrep OK).
 - **Pendiente de validación humana**: con la app en inglés, cambiar a español y volver desde Ajustes → General sin reiniciar; los tooltips de decks, biblioteca, FX, grid y barra superior deben seguir el idioma. Nota: al relanzar con `language=en`, los tooltips de los constructores ya salen en inglés; el fix cubre el cambio en caliente.
+
+## Validación humana (2026-11-17) — P49 + P50
+El usuario confirmó: **«funciona»**. Verificado el cambio de idioma en cal desde Ajustes → General: el botón de actualización dice «ACTUALIZAR»/«UPDATE» según el idioma y los tooltips de la app siguen el idioma seleccionado sin reiniciar. P49 y P50 quedan validados; todo commiteado en `axel-molina/v1.4.2`.
