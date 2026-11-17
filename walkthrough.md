@@ -2901,3 +2901,6 @@ El usuario confirmó: **«perfecto y validado»** — onda del Deck 2 terracota,
 
 ## P48 (fix 2): separar el logo Disc del título
 El usuario describió el problema: «el icono del círculo está muy pegado a la D de DiscNativePro». Causa: `TopBarComponent::paint()` dibujaba el logo Lucide::Disc en una posición fija (`centro - 48 px`), independiente del título, que al centrarse quedaba justo sobre la «D». Fix: `resized()` calcula `discLogoBounds` midiendo el texto con la misma fuente y centra el conjunto [logo de 16 px + separación de 12 px + texto] como una sola unidad (con clamp para ventanas angostas); `paint()` solo dibuja en ese rect. Build 0 errores / sin warnings propios; app relanzada. Pendiente validación visual.
+
+## P48 (fix 3): reduce separación logo Disc ↔ título
+El usuario indicó que con 12 px de gap el logo quedaba «demasiado lejos». Se reduce la separación a 4 px en `TopBarComponent::resized()` (mantiene el conjunto logo+texto centrado, sin solape). Build 0 errores / sin warnings propios; app relanzada. Pendiente validación visual.

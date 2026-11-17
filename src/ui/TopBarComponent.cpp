@@ -325,7 +325,7 @@ void TopBarComponent::resized()
     // de los clusters (UPDATE aparece/desaparece y movía el título).
     juce::Font brandFont(juce::FontOptions(15.0f, juce::Font::bold));
     constexpr float iconSize = 16.0f;
-    constexpr float gap = 12.0f;
+    constexpr float gap = 4.0f;
     float textWidth = brandFont.getStringWidthFloat(brandLabel.getText());
     float groupWidth = iconSize + gap + textWidth;
     float groupX = static_cast<float>(getWidth()) * 0.5f - groupWidth * 0.5f;
