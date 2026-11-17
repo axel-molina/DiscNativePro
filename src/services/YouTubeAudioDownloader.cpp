@@ -235,14 +235,33 @@ void YouTubeAudioDownloader::downloadAudioAsync(const juce::String& videoId,
                 });
             }
 
-            juce::String installCmd = "curl -sL \"https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp_macos\" -o \""
-                                    + targetFile.getFullPathName() + "\" && chmod +x \"" + targetFile.getFullPathName() + "\"";
-            juce::ChildProcess setupProc;
-            if (setupProc.start(installCmd))
+            // P43: el auto-instalador NO pasa por shell — ChildProcess en POSIX
+            // llama execvp directo, así que un comando con comillas/&& queda
+            // roto (curl recibía la URL con las comillas y chmod nunca
+            // corría). Se instalan en pasos discretos con argumentos sueltos.
+            juce::StringArray curlArgs { "curl", "-sL",
+                                         "https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp_macos",
+                                         "-o", targetFile.getFullPathName() };
+            juce::ChildProcess curlProc;
+            bool installed = curlProc.start(curlArgs)
+                             && curlProc.waitForProcessToFinish(60000)
+                             && curlProc.getExitCode() == 0
+                             && targetFile.existsAsFile()
+                             && targetFile.getSize() > 0;
+            if (installed)
+                installed = targetFile.setExecutePermission(true);
+
+            // Sanity check: el binario descargado debe poder arrancar en esta
+            // máquina (arquitectura/daño). Si falla, caemos al error con el
+            // mensaje bilingüe existente.
+            if (installed)
             {
-                setupProc.waitForProcessToFinish(60000);
+                juce::ChildProcess verProc;
+                installed = verProc.start(juce::StringArray { targetFile.getFullPathName(), "--version" })
+                           && verProc.waitForProcessToFinish(15000)
+                           && verProc.getExitCode() == 0;
             }
-            binPath = getBinaryPath();
+            binPath = getBinaryPath(); // re-evalúa tras la instalación
         }
 
         if (binPath.isEmpty())
