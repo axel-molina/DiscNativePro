@@ -1,6 +1,45 @@
 #include "LanguageManager.h"
 #include "../audio/AudioEngine.h"
 
+juce::StringPairArray LanguageManager::translations;
+
+void LanguageManager::rememberTranslation(const juce::String& es, const juce::String& en)
+{
+    if (es.isNotEmpty() && en.isNotEmpty() && es != en)
+    {
+        translations.set(es, en);
+        translations.set(en, es);
+    }
+}
+
+void LanguageManager::refreshTooltips()
+{
+    // P50: los tooltips se asignan una sola vez en los constructores; al cambiar
+    // de idioma no se retraducen solos. Recorremos el árbol de componentes y
+    // cambiamos cada texto por su par del idioma contrario.
+    struct Visitor
+    {
+        static void walk(juce::Component* c)
+        {
+            if (c == nullptr)
+                return;
+            // En JUCE 8 los tooltips viven en SettableTooltipClient, no en Component.
+            if (auto* tc = dynamic_cast<juce::SettableTooltipClient*>(c))
+            {
+                auto tip = tc->getTooltip();
+                if (tip.isNotEmpty() && translations.containsKey(tip))
+                    tc->setTooltip(translations[tip]);
+            }
+            for (int i = 0; i < c->getNumChildComponents(); ++i)
+                walk(c->getChildComponent(i));
+        }
+    };
+
+    auto& desktop = juce::Desktop::getInstance();
+    for (int i = 0; i < desktop.getNumComponents(); ++i)
+        Visitor::walk(desktop.getComponent(i));
+}
+
 LanguageManager::LanguageManager()
 {
     loadFromSettings();
@@ -102,4 +141,6 @@ void LanguageManager::notifyListeners()
         if (l != nullptr)
             l->languageChanged();
     }
+    // Después de las refreshes propias, cubrimos los tooltips que nadie reasigna.
+    refreshTooltips();
 }

@@ -2919,3 +2919,19 @@ El usuario confirmó: **«perfecto»** tras el ajuste final de 4 px. P48 validad
 ## Verificación
 - `cmake --build build` → 0 errores, sin warnings propios; app Release relanzada (pgrep OK).
 - **Pendiente de validación humana**: el botón solo aparece cuando hay una actualización disponible.
+
+# P50: tooltips que no cambiaban de idioma en caliente (reporte del usuario)
+
+> Usuario (2026-11-17): «cuando pongo la app en inglés, los tooltips siguen viéndose en español».
+
+## Causa
+De 129 llamadas a `setTooltip` en `src/ui`, solo ~48 se reasignan en `refreshLanguage()`; el resto se resuelve una vez en el constructor y queda congelado en el idioma de arranque (aunque el literal pase por `trUtf8`).
+
+## Fix centralizado (sin tocar los 129 call sites)
+- `src/services/LanguageManager.h/.cpp`: `tr()`/`trUtf8()` registran el par ES↔EN en un `StringPairArray` global.
+- Nuevo `refreshTooltips()`: recorre `Desktop::getNumComponents()/getComponent(i)` y los hijos, y reasigna el tooltip de todo `juce::SettableTooltipClient` (en JUCE 8 `setTooltip/getTooltip` ya no están en `Component`) buscando su traducción en el registro.
+- `notifyListeners()` invoca `refreshTooltips()` al final, después de las refreshes propias de cada componente.
+
+## Verificación
+- `cmake --build build` → 0 errores, sin warnings propios; app Release relanzada (pgrep OK).
+- **Pendiente de validación humana**: con la app en inglés, cambiar a español y volver desde Ajustes → General sin reiniciar; los tooltips de decks, biblioteca, FX, grid y barra superior deben seguir el idioma. Nota: al relanzar con `language=en`, los tooltips de los constructores ya salen en inglés; el fix cubre el cambio en caliente.

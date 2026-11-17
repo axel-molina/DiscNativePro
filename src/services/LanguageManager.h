@@ -2,6 +2,7 @@
 
 #include <juce_core/juce_core.h>
 #include <vector>
+#include <juce_gui_basics/juce_gui_basics.h>
 
 enum class Language { Spanish, English };
 enum class LanguageSetting { System, Spanish, English };
@@ -29,16 +30,24 @@ public:
 
     void setLanguageSetting(LanguageSetting setting);
 
-    // Core translation helper: returns es or en depending on current language
+    // Core translation helper: returns es or en depending on current language.
+    // También registra el par para poder retraducir tooltips ya asignados.
     static juce::String tr(const juce::String& es, const juce::String& en)
     {
+        rememberTranslation(es, en);
         return getInstance().isSpanish() ? es : en;
     }
 
     static juce::String trUtf8(const char* es, const char* en)
     {
-        return getInstance().isSpanish() ? juce::String::fromUTF8(es) : juce::String::fromUTF8(en);
+        juce::String s = juce::String::fromUTF8(es);
+        juce::String e = juce::String::fromUTF8(en);
+        rememberTranslation(s, e);
+        return getInstance().isSpanish() ? s : e;
     }
+
+    // P50: reasigna todos los tooltips visibles con el idioma actual.
+    static void refreshTooltips();
 
     void addListener(Listener* listener);
     void removeListener(Listener* listener);
@@ -51,6 +60,11 @@ private:
     void loadFromSettings();
     void saveToSettings();
     void notifyListeners();
+    static void rememberTranslation(const juce::String& es, const juce::String& en);
+
+    // pares ES↔EN vistos por tr/trUtf8; la última entrada gana si el mismo
+    // texto se tradujo de dos formas distintas (ponytail: suficiente para tooltips).
+    static juce::StringPairArray translations;
 
     Language currentLang { Language::Spanish };
     LanguageSetting langSetting { LanguageSetting::System };
