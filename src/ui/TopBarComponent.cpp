@@ -94,7 +94,7 @@ TopBarComponent::TopBarComponent()
     addAndMakeVisible(fullscreenButton);
 
     updateButton.setIcon(LucideIcons::IconType::ChevronDown, 12.0f);
-    updateButton.setText("UPDATE");
+    updateButton.setText(LanguageManager::trUtf8("ACTUALIZAR", "UPDATE"));
     updateButton.setFontSize(10.5f);
     updateButton.setCornerRadius(6.0f);
     updateButton.setCustomColours(juce::Colour::fromRGB(245, 158, 11),
@@ -130,6 +130,7 @@ void TopBarComponent::refreshLanguage()
     recButton.setTooltip(LanguageManager::trUtf8("Grabar Sesión (⌘R / Ctrl+R)", "Record Session (⌘R / Ctrl+R)"));
     fxButton.setTooltip(LanguageManager::trUtf8("Panel de Efectos (FX)", "Effects Panel (FX)"));
     layoutBadge.setText(LanguageManager::trUtf8("2 Bandejas", "2 Decks"));
+    updateButton.setText(LanguageManager::trUtf8("ACTUALIZAR", "UPDATE"));
     updateButton.setTooltip(LanguageManager::trUtf8("Nueva versión disponible — clic para ver", "New version available — click to view"));
 }
 
@@ -313,7 +314,7 @@ void TopBarComponent::resized()
     area.removeFromRight(6);
     if (updateButton.isVisible())
     {
-        updateButton.setBounds(area.removeFromRight(92).reduced(0, 2));
+        updateButton.setBounds(area.removeFromRight(112).reduced(0, 2));
         area.removeFromRight(6);
     }
     clockLabel.setBounds(area.removeFromRight(80).reduced(0, 3));

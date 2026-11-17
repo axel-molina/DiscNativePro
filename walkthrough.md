@@ -2907,3 +2907,15 @@ El usuario indicó que con 12 px de gap el logo quedaba «demasiado lejos». Se 
 
 ## Validación humana (2026-11-17) — P48
 El usuario confirmó: **«perfecto»** tras el ajuste final de 4 px. P48 validado: badge «2 Bandejas» en el cluster izquierdo, título centrado y logo Disc con separación cómoda. Sin ticket de Notion asociado (pedido directo tras desestimar #9).
+
+# P49: traducir el texto del botón UPDATE (reporte del usuario)
+
+> Usuario (2026-11-17): «el botón de update siempre dice UPDATE aunque esté en español».
+
+## Cambios
+- `src/ui/TopBarComponent.cpp`: `updateButton.setText(trUtf8("ACTUALIZAR", "UPDATE"))` en el constructor y en `refreshLanguage()` (traducción en caliente al cambiar de idioma).
+- `resized()`: ancho del botón 92 → 112 px para que «ACTUALIZAR» + chevron no se recorte.
+
+## Verificación
+- `cmake --build build` → 0 errores, sin warnings propios; app Release relanzada (pgrep OK).
+- **Pendiente de validación humana**: el botón solo aparece cuando hay una actualización disponible.
