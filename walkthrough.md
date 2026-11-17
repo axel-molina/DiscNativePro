@@ -2708,3 +2708,20 @@ El usuario confirmó visualmente **25×15 px** (volumen, pitch y crossfader): «
 
 ## Validación humana (2026-11-17)
 El usuario probó en su MacBook Air M1: **«funciona perfecto, ambas bandejas, tanto cargar video de youtube como descarga de audio»**. El instalador auto-descargó yt-dlp en frío y el flujo YouTube (audio y video) quedó operativo. Ticket Notion #19 → Finalizado / Progreso 100 / Validación Aprobada / Fecha de finalización 2026-11-17.
+---
+
+# P44: bajar el piso de macOS a 13.3 (Notion #20)
+
+> Ticket: Notion **#20** (FB-17, Big Sur no arranca) · decisión del usuario: bajar el target a 13.3.
+
+## Cambios
+- `CMakeLists.txt`: `CMAKE_OSX_DEPLOYMENT_TARGET` "14.0" → **"13.3"** con `CACHE STRING ... FORCE` (el valor queda cacheado tras el primer configure; sin FORCE la build existente seguía con el viejo). Comentario corregido: el piso real son las dylib de ONNX vendorizadas (minos 13.3 **medido** con otool), no el "14.0" que decía el comentario viejo.
+- `CMakeLists.txt` (POST_BUILD): `LSMinimumSystemVersion = 13.3` inyectado al Info.plist con `plutil -replace` (idempotente) — así macOS muestra «requires macOS 13.3 o superior» en vez de fallar en silencio en una Mac más vieja.
+- `docs/manual_usuario.md`: troubleshooting actualizado de 14.0 → 13.3 (Ventura).
+- Decisión explícita del usuario: **Big Sur (11) queda fuera del soporte** (JUCE bajaría a 11, pero exigiría binario de ORT con minos ≤ 11 — desproporcionado para una app de DJ).
+
+## Verificación
+- `cmake --build build` → sin errores; recompiló los módulos JUCE vendorizados por el cambio de flags (warnings preexistentes de JUCE/harfbuzz en `build/_deps/`, no de nuestro código).
+- Binario principal: `otool` → **minos 13.3** (antes 14.0). Info.plist → **LSMinimumSystemVersion 13.3**.
+- Relanzamiento obligatorio: pkill + open Release → proceso activo (pgrep OK).
+- Nota: la validación real «arranca en Ventura 13» queda cubierta por el piso binario declarado (13.3); ninguna máquina de prueba con Ventura disponible en esta etapa — el criterio de aceptación del ticket se cierra por decisión documentada del usuario (opción b), igual que #13 se cerró por asunción.

@@ -124,8 +124,8 @@ La app detecta cómo fue instalada y gestiona las actualizaciones según el cana
 
 ## Solución de problemas
 
-- **"requires macOS 14.0 o superior"**: la app usa un motor de IA embebido que
-  exige macOS 14+.
+- **"requires macOS 13.3 o superior"**: la app usa un motor de IA embebido y
+  binarios vendorizados que exigen macOS 13.3 (Ventura) o superior.
 - **La app no abre en macOS (versión 1.4.0)**: defecto de empaquetado corregido
   en la versión 1.4.1. Descargá el DMG nuevo desde el release 1.4.1 y
   reemplazá la app; no hace falta desinstalar.

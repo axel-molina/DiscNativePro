@@ -1,11 +1,15 @@
 cmake_minimum_required(VERSION 3.22)
 
-# Piso de macOS: el dylib vendorizado de ONNX Runtime en uso (libonnxruntime.1.dylib
-# → wheel 1.27.0, minos 14.0) marca el mínimo; si se vuelve a 1.22.0 (minos 13.3),
-# este piso puede bajar. Sin esto el target hereda el macOS de la máquina que
+# P44 (Notion #20): piso de macOS en 13.3 (Ventura). Las dylibs de ONNX Runtime
+# vendorizadas (wheel 1.27.0, libonnxruntime*.dylib) tienen minos 13.3 (medido
+# con otool) y JUCE 8 baja hasta macOS 11, así que 13.3 es el piso real que
+# viaja en el .app. Sin esto el target hereda el macOS de la máquina que
 # compila (CI macos-latest) y el binario queda "requires macOS 26.0".
-if(APPLE AND NOT DEFINED CMAKE_OSX_DEPLOYMENT_TARGET)
-    set(CMAKE_OSX_DEPLOYMENT_TARGET "14.0")
+# FORCE: el valor queda cacheado tras el primer configure; sin FORCE la build
+# existente seguiría pidiendo el valor viejo.
+if(APPLE)
+    set(CMAKE_OSX_DEPLOYMENT_TARGET "13.3" CACHE STRING
+        "Minimum macOS version (floor imposed by vendored ONNX dylibs)" FORCE)
 endif()
 
 project(DiscNativePro VERSION 1.4.2 LANGUAGES C CXX)
@@ -335,6 +339,17 @@ if(APPLE)
             )
         endif()
     endif()
+
+    # P44 (Notion #20): declarar el piso en el Info.plist para que macOS
+    # muestre «… requires macOS 13.3 o superior» en vez de fallar en silencio
+    # en una Mac más vieja. plutil -replace es idempotente.
+    add_custom_command(TARGET DiscNativePro POST_BUILD
+        COMMAND plutil
+            -replace LSMinimumSystemVersion
+            -string "${CMAKE_OSX_DEPLOYMENT_TARGET}"
+            "$<TARGET_BUNDLE_DIR:DiscNativePro>/Contents/Info.plist"
+        COMMENT "Setting LSMinimumSystemVersion in Info.plist"
+    )
 
     if (EXISTS "${STEMS_MODEL}")
         add_custom_command(TARGET DiscNativePro POST_BUILD
