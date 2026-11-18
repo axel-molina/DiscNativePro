@@ -11,6 +11,7 @@
   - Jog wheels interactivos con simulación de vinilo, scratch y pitch bend.
   - Detección precisa de BPM y beat grid en tiempo real.
   - Hot Cues, loops automáticos cuantizados y sincronización inteligente (Sync).
+  - Región de loop marcada en la onda central y el overview; pitch bend momentáneo (+/−) mientras se mantiene apretado.
 
 - **Motor de Audio de Grado Profesional**:
   - Ecualizador de 3 bandas (High, Mid, Low) con respuesta suave y curvas Kill.
@@ -28,12 +29,21 @@
 - **Biblioteca y Gestión de Archivos**:
   - Árbol jerárquico de carpetas con navegación de subdirectorios del sistema de archivos.
   - Soporte de metadatos, duración, BPM y tonalidad musical en notación Camelot.
+  - Editor de BPM / beat grid por clic derecho, con audición por preview sin necesidad de cargar la pista a una bandeja.
   - Generador procedural de carátulas para pistas sin arte de tapa.
 
 - **Soporte MIDI y Rendimiento**:
-  - Detección y mapeo MIDI plug-and-play.
+  - Detección y mapeo MIDI plug-and-play con perfiles por controladora (Pioneer DDJ, Denon MC, genérica), autodetectados o manuales.
+  - Detección de conflictos de mapeo con contador ⚠ y diálogo Reemplazar / Cancelar al aprender.
+  - Importación de presets de la comunidad Mixxx y mappings de VirtualDJ.
   - Medidor de uso de memoria RAM en tiempo real en la barra superior.
   - Selector de dispositivos de audio y configuración de frecuencias de muestreo / tamaño de búfer.
+
+- **Interfaz y Usabilidad**:
+  - Tipografía unificada embebida (Sora + JetBrains Mono), idéntica en macOS, Windows y Linux.
+  - Tooltips bilingües (ES/EN) en los controles, con cambio de idioma en caliente sin reiniciar.
+  - Buscador de Ajustes con salto a la pestaña y resaltado de la opción.
+  - Marquesina para títulos y artistas largos en los decks.
 
 - **Actualizaciones Automáticas**:
   - Auto-update "instalar al reiniciar" según canal de instalación: Sparkle en macOS, staging + instalador silencioso al reiniciar en Windows (Setup.exe) y auto-reemplazo con backup en Linux portable.
@@ -44,7 +54,7 @@
 ## Requisitos del Sistema
 
 ### macOS
-- **Sistema Operativo**: macOS 11.0 (Big Sur) o superior (optimizado nativamente para Apple Silicon M1/M2/M3/M4 e Intel x86_64).
+- **Sistema Operativo**: macOS 13.3 (Ventura) o superior (optimizado nativamente para Apple Silicon M1/M2/M3/M4 e Intel x86_64). El motor de IA embebido (ONNX Runtime) exige 13.3 como mínimo.
 - **Compilador**: Clang con soporte C++20 (Xcode Command Line Tools).
 - **CMake**: Versión 3.22 o superior.
 
@@ -172,6 +182,22 @@ Tienes dos alternativas para obtener el binario ejecutable en Linux:
    tar -xzvf DiscNativePro-Linux-x64.tar.gz
    ./DiscNativePro
    ```
+
+**Alternativa: AppImage** (`DiscNativePro-Linux-x86_64.AppImage`, también en el
+release). Un solo archivo ejecutable, sin descomprimir:
+```bash
+chmod +x DiscNativePro-Linux-x86_64.AppImage
+./DiscNativePro-Linux-x86_64.AppImage
+```
+> Limitaciones del AppImage: los binarios precompilados exigen **glibc 2.43**
+> (Ubuntu 26.04) en v1.4.2 por un cambio de imagen del runner de CI; la
+> corrección llega en **1.4.3** con el build pineado a Ubuntu 24.04
+> (**glibc ≥ 2.39**: Ubuntu 24.04+, Debian 13+, Fedora 40+; no funciona en
+> Debian 11 ni Ubuntu 20.04). **No** incluye
+> WebKitGTK ni los plugins de GStreamer: para el vídeo de YouTube instalá los
+> paquetes de sistema listados abajo. `yt-dlp`/`ffmpeg` se descargan en
+> tiempo de ejecución y los modelos de stems no van incluidos (igual que en
+> el portable).
 
 > **Dependencias de runtime del binario ya compilado.** El `.tar.gz` no las incluye:
 > ```bash
