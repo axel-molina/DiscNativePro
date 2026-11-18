@@ -2968,3 +2968,22 @@ El nuevo run 44175657436 volvió a fallar solo en AppImage: `linuxdeploy-plugin-
 
 ## Fix CI v1.4.2 (3ª iteración): icono 1024px
 Run 44177177299 volvió a fallar SOLO en AppImage, esta vez al final: `ERROR: Icon assets/icon.png has invalid x resolution: 1024` (linuxdeploy solo acepta resoluciones estándar hasta 512). Fix: nuevo `assets/icon-256.png` (redimensionado con sips desde el original 1024) y `build-appimage.sh` usa ese archivo tanto para el AppDir como para `--icon-file`. Nota: el plugin GTK ya pasó (DEPLOY_GTK_VERSION=3 funcionó).
+
+---
+
+# Hotfix v1.4.3: binarios Linux incompatibles con glibc < 2.43
+
+## Diagnóstico
+Los precompilados Linux de v1.4.2 (tarball, `.deb` y AppImage) no abren en Ubuntu 24.04 LTS, Debian 13 ni Fedora ≤ 43: `objdump -T` sobre el ejecutable publicado muestra símbolos `(GLIBC_2.43) sqrtf / atan2f / log10f` y `__isoc23_*` de `GLIBC_2.38`. Causa raíz: GitHub migró `ubuntu-latest` a **ubuntu-26.04** (glibc 2.43) entre v1.4.1 y v1.4.2; el log del job Linux de v1.4.2 imprime `Image: ubuntu-26.04`. v1.4.1 se compiló en ubuntu-24.04 (glibc 2.39) y funciona. `libonnxruntime.so` no es el problema (máximo `GLIBC_2.28`).
+
+## Fix (aprobado por el usuario: «okey hagamoslo sisi»)
+- `.github/workflows/build-linux.yml` y job `build-linux` de `.github/workflows/release.yml`: `runs-on: ubuntu-latest` → `ubuntu-24.04` con comentario explicando el pineado. El job `publish-release` no se toca (solo mueve artefactos, no compila).
+- `CMakeLists.txt`: bump `VERSION 1.4.3`.
+- Docs con nota interina honesta (commit 852c605): README (blockquote AppImage) y `docs/manual_usuario.md` (troubleshooting) documentan el problema de v1.4.2 y la corrección prevista en 1.4.3. La web lleva el mismo aviso interino en `DownloadSection.tsx` (se retira al publicar 1.4.3).
+- Commits 852c605 + 9915871 en `axel-molina/v1.4.3`, pusheados con tracking propio.
+
+## Verificación
+- Build local macOS Release: exit 0 (solo warnings de harfbuzz vendored en JUCE y el ld conocido de ORT; nada de código del proyecto). Relanzamiento OK.
+- CI de rama: `gh workflow run build-linux.yml --ref axel-molina/v1.4.3` → run **44226105443** = **success**. Log del job: `Image: ubuntu-24.04` ✓.
+- Símbolos del artefacto `DiscNativePro-Linux-x64` (tarball extraído): versión máxima **GLIBC_2.38** (≤ 2.39 exigido) ✓ → compatible con Ubuntu 24.04+ / Debian 13+ / Fedora 40+.
+- Pendiente: visto bueno del usuario para merge a `main` + tag `v1.4.3`; tras publicar, verificar los 3 assets Linux del release y finalizar el wording de docs/web (retirar notas interinas).
