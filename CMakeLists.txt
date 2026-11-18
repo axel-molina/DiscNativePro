@@ -12,7 +12,7 @@ if(APPLE)
         "Minimum macOS version (floor imposed by vendored ONNX dylibs)" FORCE)
 endif()
 
-project(DiscNativePro VERSION 1.4.2 LANGUAGES C CXX)
+project(DiscNativePro VERSION 1.4.3 LANGUAGES C CXX)
 
 if(APPLE)
     enable_language(OBJCXX)
