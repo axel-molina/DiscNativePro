@@ -12,57 +12,6 @@
 #include <cmath>
 #include "UiPalette.h"
 
-namespace
-{
-// Modo dia sin reescribir la paleta: se invierten los colores del render de todo
-// el arbol de componentes (JUCE pasa la raiz por un ImageEffectFilter).
-class InvertEffect : public juce::ImageEffectFilter
-{
-public:
-    void applyEffect (juce::Image& source, juce::Graphics& dest, float, float) override
-    {
-        juce::Image::BitmapData d (source, juce::Image::BitmapData::readWrite);
-
-        for (int y = 0; y < d.height; ++y)
-        {
-            auto* line = d.getLinePointer (y);
-            for (int x = 0; x < d.width; ++x)
-            {
-                auto* px = line + x * d.pixelStride;
-                px[0] = (juce::uint8) (255 - px[0]);
-                px[1] = (juce::uint8) (255 - px[1]);
-                px[2] = (juce::uint8) (255 - px[2]);
-            }
-        }
-
-        dest.drawImageAt (source, 0, 0);
-    }
-};
-
-juce::File dayModeSettingsFile()
-{
-    return juce::File::getSpecialLocation (juce::File::userApplicationDataDirectory)
-               .getChildFile ("DiscNativePro").getChildFile ("settings.json");
-}
-
-bool readDayMode()
-{
-    auto f = dayModeSettingsFile();
-    if (! f.existsAsFile()) return false;
-    auto j = juce::JSON::parse (f);
-    return j.isObject() && (bool) j["dayMode"];
-}
-
-void writeDayMode (bool on)
-{
-    auto f = dayModeSettingsFile();
-    juce::var j;
-    if (f.existsAsFile()) j = juce::JSON::parse (f);
-    if (! j.isObject()) j = juce::var (new juce::DynamicObject());
-    if (auto* o = j.getDynamicObject()) o->setProperty ("dayMode", on);
-    f.replaceWithText (juce::JSON::toString (j));
-}
-} // namespace
 MainComponent::MainComponent()
     : midiManager(audioEngine),
       fxPanel(audioEngine.getMixer()),
@@ -437,13 +386,6 @@ void MainComponent::timerCallback()
 
 bool MainComponent::keyPressed(const juce::KeyPress& key)
 {
-    // Modo dia (invertir colores): Cmd/Ctrl+D.
-    if (key.getModifiers().isCommandDown() && (key.getKeyCode() == 'd' || key.getKeyCode() == 'D'))
-    {
-        setDayMode(! dayMode);
-        return true;
-    }
-
     // Pantalla completa: F11 y el boton de la barra usan el mismo camino.
     if (key.getKeyCode() == juce::KeyPress::F11Key)
     {
@@ -510,15 +452,6 @@ void MainComponent::paint(juce::Graphics& g)
 
 void MainComponent::resized()
 {
-    // Aplicar una sola vez el modo dia guardado (despues de existir los hijos).
-    static bool dayModeApplied = false;
-    if (! dayModeApplied)
-    {
-        dayModeApplied = true;
-        if (readDayMode())
-            setDayMode(true);
-    }
-
     auto area = getLocalBounds();
 
     // 1. Top Bar header (40px)
@@ -1183,25 +1116,10 @@ void MainComponent::toggleFullScreenMode()
         desktop.setKioskModeComponent (nullptr);
 }
 
-void MainComponent::setDayMode (bool on)
-{
-    // El filtro vive en el propio metodo: setComponentEffect no toma propiedad.
-    static InvertEffect invertEffect;
-
-    dayMode = on;
-
-    // juce no aplica ImageEffectFilter a componentes opacos: hay que soltar la
-    // opacidad mientras el modo dia esta activo.
-    setOpaque(! on);
-    setComponentEffect (on ? &invertEffect : nullptr);
-    writeDayMode (on);
-    repaint();
-}
-
 void MainComponent::parentHierarchyChanged()
 {
-    // Sin esto el componente no tenia el foco de teclado y los atajos
-    // (q/w/p/o/x/c/v, Ctrl+D, F11) no llegaban nunca a keyPressed().
+    // Sin esto el componente no tomaba el foco de teclado y keyPressed() no
+    // recibia nada: ni F11 ni los atajos q/w/p/o/x/c/v.
     if (isShowing())
         grabKeyboardFocus();
 }
