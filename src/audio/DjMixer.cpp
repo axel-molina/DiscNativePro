@@ -250,6 +250,7 @@ DjMixer::~DjMixer()
 void DjMixer::prepare(double sampleRate, int blockSize)
 {
     currentSampleRate = sampleRate;
+    prepared = true;
     ch1.prepare(sampleRate, blockSize);
     ch2.prepare(sampleRate, blockSize);
     fxChain1.prepare(sampleRate, blockSize);
@@ -315,6 +316,15 @@ void DjMixer::process(juce::AudioBuffer<float>& deck1Buffer,
                       juce::AudioBuffer<float>& cueOutBuffer,
                       int numSamples)
 {
+    if (! prepared || currentSampleRate <= 0.0)
+    {
+        // Antes de prepare() no hay coeficientes de filtro: silencio en vez de crash.
+        masterOutBuffer.clear();
+        if (cueOutBuffer.getNumChannels() > 0)
+            cueOutBuffer.clear (0, numSamples);
+        return;
+    }
+
     if (cueOutBuffer.getNumChannels() > 0)
         cueOutBuffer.clear(0, numSamples);
 

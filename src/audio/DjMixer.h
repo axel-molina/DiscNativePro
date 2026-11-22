@@ -138,6 +138,10 @@ public:
 
 private:
     double currentSampleRate { 44100.0 };
+    // El callback no debe procesar antes de prepare(): los filtros de los FX y
+    // del canal quedarian sin coeficientes y juce::dsp haria un getFilterOrder()
+    // sobre un puntero nulo (crash 0xC0000005 al arrancar).
+    bool prepared { false };
     ChannelStrip ch1;
     ChannelStrip ch2;
 
