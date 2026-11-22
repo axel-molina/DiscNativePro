@@ -1189,7 +1189,19 @@ void MainComponent::setDayMode (bool on)
     static InvertEffect invertEffect;
 
     dayMode = on;
+
+    // juce no aplica ImageEffectFilter a componentes opacos: hay que soltar la
+    // opacidad mientras el modo dia esta activo.
+    setOpaque(! on);
     setComponentEffect (on ? &invertEffect : nullptr);
     writeDayMode (on);
     repaint();
+}
+
+void MainComponent::parentHierarchyChanged()
+{
+    // Sin esto el componente no tenia el foco de teclado y los atajos
+    // (q/w/p/o/x/c/v, Ctrl+D, F11) no llegaban nunca a keyPressed().
+    if (isShowing())
+        grabKeyboardFocus();
 }

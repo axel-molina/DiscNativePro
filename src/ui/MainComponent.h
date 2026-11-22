@@ -76,6 +76,7 @@ private:
     void scheduleUpdateCheck();
     // Pantalla completa por modo kiosco: mismo camino para F11 y para el boton.
     void toggleFullScreenMode();
+    void parentHierarchyChanged() override;
     // Modo dia: invierte los colores de toda la UI (filtro sobre la raiz).
     void setDayMode(bool on);
     bool dayMode { false };
