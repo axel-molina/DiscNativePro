@@ -782,9 +782,16 @@ void DeckPlayer::getNextAudioBlock(const juce::AudioSourceChannelInfo& bufferToF
         auto rp = bufferingSource->getNextReadPosition();
         playbackPosSamples.store(rp);
 
-        if (bufferToFill.numSamples > 0)
-            samplesPerOutput = juce::jlimit (0.02, 4.0,
-                (double) (rp - rpBefore) / (double) bufferToFill.numSamples);
+        if (bufferToFill.numSamples > 0 && ! seekJustApplied)
+        {
+            const double measured = (double) (rp - rpBefore) / (double) bufferToFill.numSamples;
+
+            // Solo medidas plausibles (un seek o un salto dan valores absurdos).
+            if (measured > 0.5 && measured < 2.0)
+                samplesPerOutput = measured;
+        }
+
+        seekJustApplied = false;
 
         // Slip (P15): durante loop, la posicion virtual avanza con el delta
         // real del cursor (respeta keylock y resample). Al terminar el loop o
@@ -972,6 +979,11 @@ void DeckPlayer::applyPendingSeek(double targetSec)
 {
     if (bufferingSource == nullptr || currentSampleRate <= 0.0 || stretcher == nullptr)
         return;
+
+    // El cursor de lectura va a saltar: el avance de este bloque no sirve para
+    // medir samplesPerOutput (salia ~0.02 y el tramo del loop se estimaba mal,
+    // de ahi que el loop siguiera desplazandose).
+    seekJustApplied = true;
     // P26: el cursor vive en muestras de archivo — la conversión usa file-rate.
     double sr = origFileSampleRate > 0.0 ? origFileSampleRate : currentSampleRate;
     double dur = trackDurationSeconds.load();

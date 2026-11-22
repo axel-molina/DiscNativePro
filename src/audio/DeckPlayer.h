@@ -277,6 +277,8 @@ private:
     // Muestras de archivo consumidas por muestra de salida (medida en el bloque
     // anterior): sirve para trocear el render justo en el borde del loop.
     double samplesPerOutput { 1.0 };
+    // Un bloque que contiene un seek no sirve para medir el ratio: el cursor salta.
+    bool seekJustApplied { false };
 
     // Slip mode (P15): atómicos UI<>audio; el resto es solo hilo de audio.
     std::atomic<bool> slipEnabled { false };
