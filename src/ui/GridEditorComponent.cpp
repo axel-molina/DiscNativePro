@@ -152,66 +152,6 @@ GridEditorComponent::GridEditorComponent(DeckPlayer& player, AudioEngine& engine
     };
     addAndMakeVisible(closeButton);
 
-    // ALINEAR: busca el desfase que maximiza la energia de la banda grave sobre
-    // los tiempos del grid (no se fia del primer pico, que es donde fallaba la
-    // deteccion) y coloca el offset solo.
-    neutral(alignButton, 10.5f);
-    alignButton.setText("ALINEAR");
-    alignButton.setTooltip(LanguageManager::trUtf8(
-        "Ajusta el offset para que las lineas caigan sobre los golpes (aprox. +-5 ms)",
-        "Snap the offset so the lines land on the hits (approx. +-5 ms)"));
-    alignButton.setCustomColours(juce::Colour::fromRGB(18, 52, 42),
-                                 juce::Colour::fromRGB(52, 211, 153),
-                                 juce::Colour::fromRGB(52, 211, 153),
-                                 juce::Colour::fromRGB(52, 211, 153).withAlpha(0.4f));
-    alignButton.onClick = [this]() {
-        const double bpm = deck.getOriginalBpm();
-        const double dur = deck.getLengthInSeconds();
-        if (!(bpm > 30.0) || !(dur > 0.0))
-            return;
-
-        // COPIA: el deck puede republicar sus peaks mientras estamos aqui; una
-        // referencia al vector acababa en corrupcion de heap al pulsar ALINEAR.
-        const std::vector<float> low = deck.getPeaksLow();
-        if (low.size() < 8)
-            return;
-
-        const double beat = 60.0 / bpm;
-        const double perPoint = dur / (double) low.size();
-
-        auto ampAt = [&low, perPoint](double tSec) -> double {
-            const double x = tSec / perPoint;
-            const int i = (int) std::floor(x);
-            if (i < 0 || i + 1 >= (int) low.size())
-                return 0.0;
-            const double f = x - (double) i;
-            return (double) low[(size_t) i] * (1.0 - f) + (double) low[(size_t) (i + 1)] * f;
-        };
-
-        const double current = deck.getFirstBeatOffset();
-        double best = current, bestScore = -1.0;
-
-        for (int step = -200; step <= 200; ++step)   // +-200 ms, paso 1 ms
-        {
-            const double off = current + step * 0.001;
-            if (off < 0.0) continue;
-
-            double score = 0.0;
-            int n = 0;
-            for (double t = off; t < dur && n < 200000; t += beat) { score += ampAt(t); ++n; }
-            if (n < 4) continue;
-
-            const double avg = score / (double) n;
-            if (avg > bestScore) { bestScore = avg; best = off; }
-        }
-
-        deck.setFirstBeatOffset(best);
-        persistGrid();
-        refreshLabels();
-        repaint();
-    };
-    addAndMakeVisible(alignButton);
-
     offsetValueLabel.setFont(juce::FontOptions(11.5f, juce::Font::bold));
     offsetValueLabel.setColour(juce::Label::textColourId, juce::Colours::white);
     offsetValueLabel.setJustificationType(juce::Justification::centredLeft);
@@ -489,7 +429,6 @@ void GridEditorComponent::resized()
     nudgeFwdButton.setBounds(row1.removeFromRight(56).reduced(3, 0));
     nudgeBackButton.setBounds(row1.removeFromRight(56).reduced(3, 0));
     nudgeBackFarButton.setBounds(row1.removeFromRight(52).reduced(3, 0));
-    alignButton.setBounds(row1.reduced(6, 0));
 
     area.removeFromBottom(6);
     // El resto es el canvas (pintado en paint(), sin hijo).
