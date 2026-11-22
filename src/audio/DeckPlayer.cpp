@@ -463,8 +463,14 @@ void DeckPlayer::getNextAudioBlock(const juce::AudioSourceChannelInfo& bufferToF
                     continue;
                 }
 
-                const double toEndOut = ((endSec - posSec) * deviceRate)
-                                            / juce::jmax (0.02, samplesPerOutput);
+                // OJO con las unidades: samplesPerOutput son MUESTRAS DE ARCHIVO
+                // por muestra de salida, asi que el numerador va en muestras de
+                // archivo (fileSr), no del dispositivo. Con deviceRate, un MP3 de
+                // 44,1 kHz en un dispositivo de 48 kHz sobreestimaba el tramo un
+                // 8,8 % en cada vuelta: el loop derivaba.
+                const double fileSr = origFileSampleRate > 0.0 ? origFileSampleRate : deviceRate;
+                const double toEndOut = ((endSec - posSec) * fileSr)
+                                            / juce::jmax (0.2, samplesPerOutput);
                 const int chunk = juce::jlimit (1, total - written,
                                    juce::jmin (total - written, (int) std::lround (toEndOut)));
 
