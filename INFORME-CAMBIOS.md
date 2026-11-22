@@ -19,7 +19,7 @@ Lo cambié para trocear el render justo en el borde del loop. Pero me equivoqué
 1. La primera versión seguía derivando porque medía cuánto faltaba para el final del loop con la frecuencia del **dispositivo** en vez de la del **archivo**. Un MP3 a 44,1 kHz en una tarjeta a 48 kHz daba un 8,8 % de error en cada vuelta.
 2. Y antes de eso, el bloque donde se reajusta el loop incluye un seek, así que la medida del avance de ese bloque salía casi cero y el tramo se calculaba fatal.
 
-Al final lo medí en tu máquina con una sonda que apuntaba el error de cada vuelta: 103 vueltas, 0,4 muestras de error constante, o sea 0,009 ms por vuelta. Inaudible.
+Al final lo medí en mi máquina con una sonda que apuntaba el error de cada vuelta: 103 vueltas, 0,4 muestras de error constante, o sea 0,009 ms por vuelta. Inaudible.
 
 También hice que el inicio del loop se cuantice a la rejilla cuando el desvío es menor de un cuarto de beat, para no tener que adelantarlo a mano cada vez.
 
@@ -84,4 +84,4 @@ El banco de audio de JUCE confirmó que en mi máquina el dispositivo abre a 48 
 - **Modo día invirtiendo colores**: en JUCE 8 `ImageEffectFilter` solo lo aplica `ShapeButton`; el camino de pintado normal ya no lo ejecuta. El filtro se instalaba y no hacía nada. Para un modo claro de verdad hay que centralizar la paleta.
 - **Un botón ALINEAR en el grid**: cerraba la app por corrupción de heap al pulsarlo. Lo quité. El grid se sigue pudiendo ajustar a mano.
 
-Una nota sobre esto último: las dos veces que rompí algo fue por no poder probarlo yo. No puedo pulsar botones ni oír el resultado desde aquí, así que lo que no puedo verificar no debería haber entrado. El resto de lo que está en la rama sí está medido.
+Una nota sobre esto último: las dos veces que rompí algo fue por no poder probarlo yo. No lo puedo probar de oído ni a golpe de clic, así que lo que no puedo verificar no debería haber entrado. El resto de lo que está en la rama sí está medido.
