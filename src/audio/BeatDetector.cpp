@@ -106,67 +106,63 @@ BeatAnalysisResult BeatDetector::analyze(juce::AudioFormatReader* reader)
     if (peaks.size() < 2)
         return defaultRes;
 
-    // Calculate BPM intervals
-    std::map<long long, int> bpmHistogram;
-    for (size_t i = 0; i + 1 < peaks.size(); ++i)
+    // --- Tempo por contraste on-beat / off-beat sobre la envolvente ---
+    // El histograma de intervalos entre picos fallaba en musica real: el
+    // detector de picos se deja la mayoria de los golpes, y los huecos de varios
+    // segundos contaminaban los votos (daba ~119 BPM tanto para 127 como para
+    // 155). Aqui se mide, por cada tempo candidato, la energia que cae EN el
+    // pulso menos la que cae ENTRE pulsos: el tempo correcto maximiza eso.
+    const double dbgRate = effectiveRate;
+
+    auto meanEnergyAt = [&energyC, dbgRate] (double periodSec) -> double
     {
-        for (size_t j = 1; j <= 4 && (i + j) < peaks.size(); ++j)
+        const double period = periodSec * dbgRate; // en muestras
+        if (period < 2.0) return 0.0;
+
+        double sum = 0.0;
+        int n = 0;
+        for (double p = 0.0; p + 1.0 < (double) energyC.size(); p += period)
         {
-            double diffSec = (peaks[i + j] - peaks[i]) / effectiveRate / (double)j;
-            if (diffSec > 0.0)
-            {
-                double candidate = 60.0 / diffSec;
-                // Normalize candidate tempo into canonical DJ dance range [70.0, 180.0]
-                while (candidate > 0.0 && candidate < 70.0)
-                    candidate *= 2.0;
-                while (candidate > 180.0)
-                    candidate /= 2.0;
-
-                if (candidate >= 70.0 && candidate <= 180.0)
-                {
-                    long long bucket = std::llround(candidate * 10.0);
-                    if (bucket >= 700 && bucket <= 1800)
-                        bpmHistogram[bucket]++;
-                }
-            }
+            sum += (double) energyC[(size_t) p];
+            ++n;
         }
-    }
-
-    if (bpmHistogram.empty())
-        return defaultRes;
-
-    long long bestBucket = 1240;
-    int maxCount = 0;
-    for (const auto& [bucketVal, count] : bpmHistogram)
-    {
-        if (count > maxCount)
-        {
-            maxCount = count;
-            bestBucket = bucketVal;
-        }
-    }
-
-    if (maxCount < 4)
-        return defaultRes;
-
-    // Parabolic refinement over neighbors
-    auto getCount = [&bpmHistogram](long long b) -> int {
-        auto it = bpmHistogram.find(b);
-        if (it == bpmHistogram.end()) return 0;
-        return it->second;
+        return n > 0 ? sum / (double) n : 0.0;
     };
-    int cM1 = getCount(bestBucket - 1);
-    int c0  = getCount(bestBucket);
-    int cP1 = getCount(bestBucket + 1);
-    double refinedBpm = (double) bestBucket / 10.0;
-    if (cM1 + cP1 - 2 * c0 != 0)
+
+    auto contrastAt = [&meanEnergyAt] (double bpm) -> double
     {
-        // p = 0.5*(cM1 - cP1)/(cM1 - 2*c0 + cP1)
-        double p = 0.5 * ((double)cM1 - (double)cP1) / ((double)cM1 - 2.0 * (double)c0 + (double)cP1);
-        if (p >= -0.5 && p <= 0.5)
-            refinedBpm = ((double) bestBucket + p) / 10.0;
+        const double period = 60.0 / bpm;
+        const double on = meanEnergyAt (period);
+        const double half = meanEnergyAt (period * 0.5);   // mezcla on y off
+        return on - (2.0 * half - on);                     // on - off real
+    };
+
+    double bestBpm = 0.0, bestContrast = -1.0e30;
+    for (double bpm = 60.0; bpm <= 200.0; bpm += 0.25)
+    {
+        const double c = contrastAt (bpm);
+        if (c > bestContrast) { bestContrast = c; bestBpm = bpm; }
     }
 
+    if (bestBpm <= 0.0)
+        return defaultRes;
+
+    // Refinamiento fino alrededor del maximo.
+    double refinedBpm = bestBpm;
+    double fineBest = -1.0e30;
+    for (double bpm = juce::jmax (60.0, bestBpm - 0.6); bpm <= juce::jmin (200.0, bestBpm + 0.6); bpm += 0.01)
+    {
+        const double c = contrastAt (bpm);
+        if (c > fineBest) { fineBest = c; refinedBpm = bpm; }
+    }
+
+#if defined (DNP_BPM_DEBUG)
+    std::fprintf (stderr, "  [dbg] picos=%d  rate=%.0f Hz\n", (int) peaks.size(), effectiveRate);
+    std::fprintf (stderr, "  [dbg] mejor contraste: %.2f BPM (%.3f)\n", refinedBpm, fineBest);
+    for (double b = refinedBpm * 0.5; b <= refinedBpm * 2.0; b *= 2.0)
+        if (b >= 60.0 && b <= 200.0)
+            std::fprintf (stderr, "  [dbg]   %.2f BPM -> contraste %.3f\n", b, contrastAt (b));
+#endif
     BeatAnalysisResult result;
     result.bpm = refinedBpm;
     if (result.bpm <= 0.0)
