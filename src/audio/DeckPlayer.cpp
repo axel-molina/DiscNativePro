@@ -1604,7 +1604,25 @@ void DeckPlayer::setLoop(double startSeconds, double lengthSeconds, bool enabled
         return;
     }
 
-    loopStartSeconds.store(startSeconds);
+    // Cuantizacion del INICIO del loop a la rejilla: si se pulsa el loop unas
+    // decimas tarde, el loop nacia desplazado y habia que adelantarlo a mano en
+    // cada pista. Se ajusta al beat mas cercano cuando hay grid fiable.
+    double start = startSeconds;
+    const double bpm = originalBpm.load();
+    if (enabled && bpm > 30.0 && trackDurationSeconds.load() > 0.0)
+    {
+        const double beat = 60.0 / bpm;
+        const double gridOffset = firstBeatOffsetSeconds.load();
+        const double k = std::round((start - gridOffset) / beat);
+        const double snapped = gridOffset + k * beat;
+
+        // Solo si el ajuste es pequeno (menos de 1/4 de beat): una pulsacion
+        // tardia. Asi no se mueve un loop puesto a proposito fuera del grid.
+        if (std::abs(snapped - start) <= beat * 0.25 && snapped >= 0.0)
+            start = snapped;
+    }
+
+    loopStartSeconds.store(start);
     loopLengthSeconds.store(lengthSeconds);
     loopActive.store(enabled);
 }
