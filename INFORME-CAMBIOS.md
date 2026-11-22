@@ -2,7 +2,7 @@
 
 Resumen de una auditoría externa del proyecto con los arreglos aplicados, verificados
 en lo posible sin depender de una máquina con Visual Studio. Todo está en 12 commits
-sobre `main` (`4f5886f`), en 20 archivos, **+742 / −114** líneas.
+sobre `main` (`4f5886f`), en 22 archivos, **+841 / −114** líneas.
 
 Para reproduciros el binario: `cmake -B build -DAPP_VERSION=<v>` + `cmake --build build`.
 La verificación de audio se hizo con un banco propio (`bench/`, fuera del repo) que
