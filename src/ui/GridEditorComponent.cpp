@@ -167,8 +167,13 @@ GridEditorComponent::GridEditorComponent(DeckPlayer& player, AudioEngine& engine
     alignButton.onClick = [this]() {
         const double bpm = deck.getOriginalBpm();
         const double dur = deck.getLengthInSeconds();
-        const auto& low = deck.getPeaksLow();
-        if (bpm <= 30.0 || dur <= 0.0 || low.size() < 8)
+        if (!(bpm > 30.0) || !(dur > 0.0))
+            return;
+
+        // COPIA: el deck puede republicar sus peaks mientras estamos aqui; una
+        // referencia al vector acababa en corrupcion de heap al pulsar ALINEAR.
+        const std::vector<float> low = deck.getPeaksLow();
+        if (low.size() < 8)
             return;
 
         const double beat = 60.0 / bpm;
@@ -193,7 +198,7 @@ GridEditorComponent::GridEditorComponent(DeckPlayer& player, AudioEngine& engine
 
             double score = 0.0;
             int n = 0;
-            for (double t = off; t < dur; t += beat) { score += ampAt(t); ++n; }
+            for (double t = off; t < dur && n < 200000; t += beat) { score += ampAt(t); ++n; }
             if (n < 4) continue;
 
             const double avg = score / (double) n;
