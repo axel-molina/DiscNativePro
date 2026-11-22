@@ -74,6 +74,8 @@ private:
     // Update notification (GitHub Releases, once per launch)
     UpdateInfo pendingUpdate;
     void scheduleUpdateCheck();
+    // Pantalla completa por modo kiosco: mismo camino para F11 y para el boton.
+    void toggleFullScreenMode();
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(MainComponent)
 };

@@ -80,16 +80,10 @@ MainComponent::MainComponent()
         resized();
     };
 
-    // Fullscreen toggle
-    topBar.onFullscreenClicked = [this]() {
-        if (auto* top = getTopLevelComponent())
-        {
-            if (auto* win = dynamic_cast<juce::DocumentWindow*>(top))
-            {
-                win->setFullScreen(!win->isFullScreen());
-            }
-        }
-    };
+    // Fullscreen toggle: mismo comportamiento que F11 (modo kiosco, que es el
+    // que tapa la barra de tareas). Antes el boton usaba DocumentWindow::
+    // setFullScreen() y por eso no se comportaba igual que la tecla.
+    topBar.onFullscreenClicked = [this]() { toggleFullScreenMode(); };
 
     // Preferences modal
     topBar.onSettingsClicked = [this]() {
@@ -392,27 +386,18 @@ void MainComponent::timerCallback()
 
 bool MainComponent::keyPressed(const juce::KeyPress& key)
 {
-    // Pantalla completa: F11 la activa/desactiva y ESC la desactiva.
-    // Se usa el modo kiosco de JUCE (no solo setFullScreen): es el que ademas
-    // tapa la barra de tareas de Windows.
+    // Pantalla completa: F11 y el boton de la barra usan el mismo camino.
     if (key.getKeyCode() == juce::KeyPress::F11Key)
     {
-        auto& desktop = juce::Desktop::getInstance();
-
-        if (desktop.getKioskModeComponent() == nullptr)
-            desktop.setKioskModeComponent (getTopLevelComponent(), false);
-        else
-            desktop.setKioskModeComponent (nullptr);
-
+        toggleFullScreenMode();
         return true;
     }
 
     if (key.getKeyCode() == juce::KeyPress::escapeKey)
     {
-        auto& desktop = juce::Desktop::getInstance();
-        if (desktop.getKioskModeComponent() != nullptr)
+        if (juce::Desktop::getInstance().getKioskModeComponent() != nullptr)
         {
-            desktop.setKioskModeComponent (nullptr);
+            juce::Desktop::getInstance().setKioskModeComponent (nullptr);
             return true;
         }
     }
@@ -1109,4 +1094,14 @@ void MainComponent::scheduleUpdateCheck()
             safeThis->topBar.setUpdateAvailable(true);
         });
     });
+}
+
+void MainComponent::toggleFullScreenMode()
+{
+    auto& desktop = juce::Desktop::getInstance();
+
+    if (desktop.getKioskModeComponent() == nullptr)
+        desktop.setKioskModeComponent (getTopLevelComponent(), false);
+    else
+        desktop.setKioskModeComponent (nullptr);
 }
