@@ -393,25 +393,29 @@ void MainComponent::timerCallback()
 bool MainComponent::keyPressed(const juce::KeyPress& key)
 {
     // Pantalla completa: F11 la activa/desactiva y ESC la desactiva.
+    // Se usa el modo kiosco de JUCE (no solo setFullScreen): es el que ademas
+    // tapa la barra de tareas de Windows.
     if (key.getKeyCode() == juce::KeyPress::F11Key)
     {
-        if (auto* peer = getPeer())
-            peer->setFullScreen(! peer->isFullScreen());
+        auto& desktop = juce::Desktop::getInstance();
+
+        if (desktop.getKioskModeComponent() == nullptr)
+            desktop.setKioskModeComponent (getTopLevelComponent(), false);
+        else
+            desktop.setKioskModeComponent (nullptr);
+
         return true;
     }
 
     if (key.getKeyCode() == juce::KeyPress::escapeKey)
     {
-        if (auto* peer = getPeer())
+        auto& desktop = juce::Desktop::getInstance();
+        if (desktop.getKioskModeComponent() != nullptr)
         {
-            if (peer->isFullScreen())
-            {
-                peer->setFullScreen(false);
-                return true;
-            }
+            desktop.setKioskModeComponent (nullptr);
+            return true;
         }
     }
-
     // Recording toggle shortcut: Cmd+R (macOS) / Ctrl+R (Windows/Linux)
     if (key.getModifiers().isCommandDown() && (key.getKeyCode() == 'r' || key.getKeyCode() == 'R'))
     {

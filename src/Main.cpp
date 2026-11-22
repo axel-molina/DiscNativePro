@@ -106,6 +106,10 @@ public:
         SparkleBridge::startup();
        #endif
 
+        // Arrancar en pantalla completa (modo kiosco): tapa la barra de tareas.
+        if (commandLineParameters.contains("--fullscreen"))
+            juce::Desktop::getInstance().setKioskModeComponent (mainWindow.get(), false);
+
         if (commandLineParameters.contains("--snapshot"))
         {
             auto path = commandLineParameters.fromFirstOccurrenceOf("--snapshot", false, false).trim();
