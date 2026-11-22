@@ -274,6 +274,9 @@ private:
     // bandera para que la re-entrada no vuelva a corregir).
     juce::AudioBuffer<float> loopScratch;
     bool inLoopCorrection { false };
+    // Muestras de archivo consumidas por muestra de salida (medida en el bloque
+    // anterior): sirve para trocear el render justo en el borde del loop.
+    double samplesPerOutput { 1.0 };
 
     // Slip mode (P15): atómicos UI<>audio; el resto es solo hilo de audio.
     std::atomic<bool> slipEnabled { false };

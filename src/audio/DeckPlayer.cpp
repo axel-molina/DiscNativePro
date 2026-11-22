@@ -435,6 +435,57 @@ void DeckPlayer::getNextAudioBlock(const juce::AudioSourceChannelInfo& bufferToF
         return;
     }
 
+    // Loop exacto por tramos. Se renderiza hasta el borde del loop, se reancla
+    // al inicio y se sigue rellenando el MISMO bloque. Antes se renderizaba el
+    // bloque entero y se corregia despues: eso dejaba el cursor en start+exceso
+    // y el inicio del loop rotaba ~2,3 ms en cada pasada (se iba de mezcla).
+    if (loopActive.load() && ! scratchTouch.load() && bufferingSource != nullptr
+        && ! inLoopCorrection && ! seekPending.load())
+    {
+        const double startSec   = loopStartSeconds.load();
+        const double lengthSec  = loopLengthSeconds.load();
+        const double deviceRate = currentSampleRate > 0.0 ? currentSampleRate : 44100.0;
+
+        if (lengthSec > 0.0 && lengthSec * deviceRate > 2.0 * (double) bufferToFill.numSamples)
+        {
+            const double endSec = startSec + lengthSec;
+            const int total = bufferToFill.numSamples;
+            int written = 0;
+            int guard = 0;
+
+            while (written < total && guard++ < 512)
+            {
+                const double posSec = getPosition();
+
+                if (posSec >= endSec - 0.5 / deviceRate)
+                {
+                    applyPendingSeek (startSec); // reancla al inicio del loop
+                    continue;
+                }
+
+                const double toEndOut = ((endSec - posSec) * deviceRate)
+                                            / juce::jmax (0.02, samplesPerOutput);
+                const int chunk = juce::jlimit (1, total - written,
+                                   juce::jmin (total - written, (int) std::lround (toEndOut)));
+
+                juce::AudioSourceChannelInfo part (bufferToFill.buffer,
+                                                   bufferToFill.startSample + written, chunk);
+                inLoopCorrection = true;
+                getNextAudioBlock (part);
+                inLoopCorrection = false;
+                written += chunk;
+
+                if (! playing.load())
+                {
+                    bufferToFill.clearActiveBufferRegion();
+                    return;
+                }
+            }
+
+            return;
+        }
+    }
+
     // Scratch v3: pitch sigue a la mano. Adelante = resampler existente con
     // ratio dinámico (barrido de pitch real). Atrás = render invertido real
     // con pitch-tracking. Transiciones con crossfade; transporte congelado.
@@ -731,6 +782,10 @@ void DeckPlayer::getNextAudioBlock(const juce::AudioSourceChannelInfo& bufferToF
         auto rp = bufferingSource->getNextReadPosition();
         playbackPosSamples.store(rp);
 
+        if (bufferToFill.numSamples > 0)
+            samplesPerOutput = juce::jlimit (0.02, 4.0,
+                (double) (rp - rpBefore) / (double) bufferToFill.numSamples);
+
         // Slip (P15): durante loop, la posicion virtual avanza con el delta
         // real del cursor (respeta keylock y resample). Al terminar el loop o
         // el scratch (condicion falsa), retoma en la posicion virtual.
@@ -769,60 +824,19 @@ void DeckPlayer::getNextAudioBlock(const juce::AudioSourceChannelInfo& bufferToF
         }
     }
 
-    // Loop exacto. El bloque ya esta renderizado y puede haberse pasado del
-    // final del loop hasta N-1 muestras; si se reproducian, el loop duraba
-    // length+exceso y derrapaba en cada pasada (medido: 2,33 ms por pasada con
-    // 4 beats y bloque 512, 140 ms en 60 pasadas). Aqui esas muestras se
-    // SUSTITUYEN por las primeras del loop, re-renderizadas desde `start`: el
-    // cursor queda en start+exceso, asi que el bloque siguiente continua sin
-    // hueco y el loop mide exactamente `length`.
-    if (loopActive.load() && ! scratchTouch.load() && bufferingSource != nullptr
-        && ! inLoopCorrection && ! seekPending.load())
+    // Fallback para loops mas cortos que un bloque (no se trocean): se pide el
+    // seek al inicio y se aplica en el bloque siguiente.
+    if (loopActive.load() && ! scratchTouch.load() && bufferingSource != nullptr)
     {
         const double startSec  = loopStartSeconds.load();
         const double lengthSec = loopLengthSeconds.load();
-        const double endSec    = startSec + lengthSec;
-        const double posSec    = getPosition();
-        const int    N         = bufferToFill.numSamples;
 
-        // Solo tiene sentido si el loop es mas largo que un bloque (los loops
-        // sub-bloque siguen usando el camino anterior).
-        const double deviceRate = currentSampleRate > 0.0 ? currentSampleRate : 44100.0;
-        const bool loopSpansBlock = lengthSec * deviceRate > 2.0 * (double) N;
-
-        if (lengthSec > 0.0 && loopSpansBlock && posSec >= endSec)
+        if (lengthSec > 0.0 && getPosition() >= startSec + lengthSec)
         {
-            const double fileSr = origFileSampleRate > 0.0 ? origFileSampleRate : deviceRate;
-            const double overshootFile = (posSec - endSec) * fileSr;
-            const juce::int64 rpAfter = bufferingSource->getNextReadPosition();
-            const double advance = (double) (rpAfter - rpBefore);
-            const double perOutput = (N > 0 && advance > 0.0) ? advance / (double) N : 1.0;
-            const int overshootOut = juce::jlimit (0, N,
-                (int) std::lround (overshootFile / juce::jmax (0.01, perOutput)));
-
-            if (overshootOut > 0 && loopScratch.getNumSamples() >= overshootOut)
-            {
-                juce::AudioSourceChannelInfo info (&loopScratch, 0, overshootOut);
-
-                applyPendingSeek (startSec);
-                inLoopCorrection = true;
-                getNextAudioBlock (info);
-                inLoopCorrection = false;
-
-                const int outCh  = juce::jmin (bufferToFill.buffer->getNumChannels(),
-                                               loopScratch.getNumChannels());
-                const int dstStart = bufferToFill.startSample + N - overshootOut;
-                for (int ch = 0; ch < outCh; ++ch)
-                    bufferToFill.buffer->copyFrom (ch, dstStart, loopScratch, ch, 0, overshootOut);
-                return;
-            }
-
-            // Sin exceso medible o sin scratch disponible: camino anterior.
             seekPending.store (true);
             seekTargetSec.store (startSec);
         }
     }
-
     // Check End of Track
     if (!scratchTouch.load() && trackDurationSeconds.load() > 0.0 && getPosition() >= trackDurationSeconds.load())
     {

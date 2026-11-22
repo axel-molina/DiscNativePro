@@ -3046,3 +3046,23 @@ Nota de entorno: `%TEMP%` dejó de ser escribible a mitad de sesión y g++ falla
   (loops de 1/4, 1/2, 1, 4 y 16 beats) y con keylock ON.
 - El detector de BPM se validó con material sintético; conviene probarlo con 20-30 pistas
   reales de géneros distintos antes de dar por bueno el cambio de comportamiento.
+## 2026-11-22 (2) — Correccion del loop: el primer arreglo estaba mal
+
+El primer intento sustituia la cola del bloque por el inicio del loop y dejaba el
+cursor en start + exceso. Eso quita el clic, pero **cada pasada empieza unas
+muestras mas adelante** y el loop rota: en un loop de 4 beats a 128 BPM y bloque
+512 son 112 muestras (2,33 ms) por vuelta. Reportado en pruebas: "el loop se va de
+mezcla". Analisis confirmado: la longitud audible era length + exceso en cada
+pasada (90112 muestras en vez de 90000).
+
+Ahora DeckPlayer::getNextAudioBlock renderiza **por tramos que terminan justo en
+el borde del loop**: se calcula cuantas muestras de salida faltan hasta el final
+con samplesPerOutput (medido en el bloque anterior), se renderiza ese tramo, se
+reancla a start con pplyPendingSeek y se sigue rellenando el mismo bloque.
+El borde cae dentro de +-1 muestra por pasada (0,02 ms), no 2,33 ms.
+
+Los loops mas cortos que un bloque siguen por el camino anterior (seek pendiente).
+
+Verificado: compila (
+make, exit 0) y la app arranca. **Falta la escucha**: es el
+unico cambio que no se puede validar sin oir el deck.
