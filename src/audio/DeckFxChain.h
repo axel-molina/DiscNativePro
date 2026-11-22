@@ -58,6 +58,13 @@ struct FxSlot
     float crushHeldL { 0.0f };
     float crushHeldR { 0.0f };
 
+    // Gate: la fase vivia en una variable local y se reiniciaba en cada bloque
+    // (solo funcionaba porque DjMixer publica la fase del deck). Ahora tiene
+    // estado propio, y gateEnv suaviza los flancos del pulso cuadrado: sin el,
+    // el cambio 0.05 <-> 1.00 es un clic medido de 0.475 en una muestra.
+    double gatePhasePos { 0.0 };
+    float  gateEnv { 1.0f };
+
     void prepare(double sampleRate, int blockSize);
     void reset();
     void process(juce::AudioBuffer<float>& buffer,

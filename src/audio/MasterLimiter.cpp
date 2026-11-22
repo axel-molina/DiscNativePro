@@ -104,6 +104,9 @@ void MasterLimiter::process(juce::AudioBuffer<float>& buffer, int numSamples)
     if (numCh == 0 || numSamples <= 0 || numSamples > buffer.getNumSamples())
         return;
 
+    // Los biquads del K-weighting se quedan con colas de denormales en silencio.
+    const juce::ScopedNoDenormals noDenormals;
+
     const float ceilingLin = juce::Decibels::decibelsToGain(
         juce::jlimit(-12.0f, 0.0f, ceilingDb.load(std::memory_order_relaxed)));
 

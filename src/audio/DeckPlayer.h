@@ -268,6 +268,13 @@ private:
     std::atomic<double> loopStartSeconds { 0.0 };
     std::atomic<double> loopLengthSeconds { 0.0 };
 
+    // Correccion de loop: el bloque se renderiza entero y puede pasarse del
+    // final del loop; esas muestras se sustituyen por las primeras del loop
+    // re-renderizadas desde `start` (buffer preasignado en prepareToPlay, y
+    // bandera para que la re-entrada no vuelva a corregir).
+    juce::AudioBuffer<float> loopScratch;
+    bool inLoopCorrection { false };
+
     // Slip mode (P15): atómicos UI<>audio; el resto es solo hilo de audio.
     std::atomic<bool> slipEnabled { false };
     std::atomic<double> slipVirtualSec { 0.0 };

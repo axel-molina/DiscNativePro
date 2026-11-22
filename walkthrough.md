@@ -2987,3 +2987,62 @@ Los precompilados Linux de v1.4.2 (tarball, `.deb` y AppImage) no abren en Ubunt
 - CI de rama: `gh workflow run build-linux.yml --ref axel-molina/v1.4.3` → run **44226105443** = **success**. Log del job: `Image: ubuntu-24.04` ✓.
 - Símbolos del artefacto `DiscNativePro-Linux-x64` (tarball extraído): versión máxima **GLIBC_2.38** (≤ 2.39 exigido) ✓ → compatible con Ubuntu 24.04+ / Debian 13+ / Fedora 40+.
 - Pendiente: visto bueno del usuario para merge a `main` + tag `v1.4.3`; tras publicar, verificar los 3 assets Linux del release y finalizar el wording de docs/web (retirar notas interinas).
+
+---
+
+# 2026-11-22 — Arreglos P0 de audio y de servicios (verificados con banco offline)
+
+Auditoría externa. Plan: `implementation_plan.md`. Informe: `discnativepro-auditoria.md`.
+
+## Cambios (10 archivos)
+
+**Audio**
+- `SamplerBank.cpp`: `ratio = fileRate / deviceRate` y `outLen = ceil(srcLen / ratio) + 64`
+  (`setResamplingRatio` es *samplesInPerOutputSample*).
+- `DjMixer.h/.cpp`: `SmoothedValue` de 20 ms en trim, fader, master y auriculares; crossfader
+  interpolado por muestra (`lastGain1/lastGain2`, re-anclados en `prepare` y `reset`).
+- `DeckFxChain.h/.cpp`: `gatePhasePos` y `gateEnv` en `FxSlot`; flancos del Gate con exponencial
+  de ~1,5 ms.
+- `AudioEngine.cpp`, `DjMixer.cpp`, `MasterLimiter.cpp`: `juce::ScopedNoDenormals`.
+- `DeckPlayer.cpp/.h`: `ScopedTryLock` en `getNextAudioBlock`; `setLoop` rechaza longitud <= 0;
+  **loop exacto**: el exceso del bloque se sustituye por el inicio del loop re-renderizado
+  desde `start` (buffer `loopScratch` preasignado, bandera `inLoopCorrection` anti-recursión).
+- `BeatDetector.cpp`: envolvente centrada media ventana, picos tolerantes a mesetas, offset por
+  rejilla de ataque + corrección por mediana de la energía cruda en +-60 ms.
+
+**Servicios**
+- `LibraryCacheManager.cpp`: `clear()` ya no llama a `saveCache()` con el mutex tomado (deadlock).
+- `YouTubeAudioDownloader.cpp` (issue #4): asset por plataforma (`yt-dlp.exe` / `_macos` / `_linux`),
+  nombre local correcto, ruta sin el "Application Support" duplicado, `where` en Windows y `which`
+  en POSIX (sin shell), validación con `--version` y borrado si el binario no arranca.
+
+## Verificación
+
+Banco offline (`bench/`) con los `.cpp` reales contra JUCE 8.0.6:
+
+| Prueba | Antes | Después |
+|---|---|---|
+| Sampler 48 kHz -> device 44,1 kHz | 844,6 Hz (-2,92 st), 84,6 % | 1000,4 Hz (+0,01 st), 100,2 % |
+| Master 1,0 -> 0,5 | salto 0,5000 en 1 muestra | salto 0,0000 |
+| Gate, 2 s | 8 discontinuidades, mayor 0,4750 | mayor 0,0066, rango 0,025-0,500 |
+| BPM 87 / 128 / 174 (transitorio 90 ms) | 0,00 BPM | 87,00 / 128,00 / 174,00 |
+| Offset 128 BPM (real 0,03125 s) | 0,1306 s (+99 ms) | 0,0376 s (+6 ms) |
+| Crossfader al centro (control) | +3,01 dB | +3,01 dB |
+| Limiter (control) | 240 muestras, techo -0,300 | igual |
+
+Compilación (`g++ -c`, sin errores) de los 9 `.cpp` tocados: `DeckPlayer`, `AudioEngine`,
+`DjMixer`, `DeckFxChain`, `MasterLimiter`, `SamplerBank`, `BeatDetector`,
+`YouTubeAudioDownloader`, `LibraryCacheManager`.
+
+Nota de entorno: `%TEMP%` dejó de ser escribible a mitad de sesión y g++ fallaba con
+"Permission denied"; se fijaron `TMP`/`TEMP` en `bench/tmp` y se reconstruyó todo desde cero.
+
+## Límites
+
+- **No se compiló el proyecto completo**: JUCE 8 aborta con MinGW (`#error "MinGW is not
+  supported"`, `juce_TargetPlatform.h:112`) y MSVC exige administrador. Sin `cmake --build`,
+  sin relanzar la app (la regla de AGENTS.md es de macOS) y sin escucha real.
+- El loop exacto está **compilado y razonado, no escuchado**: falta probarlo en un deck real
+  (loops de 1/4, 1/2, 1, 4 y 16 beats) y con keylock ON.
+- El detector de BPM se validó con material sintético; conviene probarlo con 20-30 pistas
+  reales de géneros distintos antes de dar por bueno el cambio de comportamiento.

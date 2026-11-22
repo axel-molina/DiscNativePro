@@ -71,18 +71,30 @@ BeatAnalysisResult BeatDetector::analyze(juce::AudioFormatReader* reader)
         energy[i] = movingSum / (float)windowSize;
     }
 
+    // La media movil es de ARRASTRE: su maximo cae medio ventana (~50 ms)
+    // despues del transitorio. Se desplaza media ventana hacia atras para que
+    // energyC[i] corresponda al tiempo i (antes el pico salia ~99 ms tarde).
+    const size_t halfWindow = (size_t) (windowSize / 2);
+    std::vector<float> energyC(energy.size(), 0.0f);
+    for (size_t i = 0; i + halfWindow < energy.size(); ++i)
+        energyC[i] = energy[i + halfWindow];
+
     // Dynamic threshold calculation
-    float sumEnergy = std::accumulate(energy.begin(), energy.end(), 0.0f);
-    float meanEnergy = sumEnergy / (float)energy.size();
+    float sumEnergy = std::accumulate(energyC.begin(), energyC.end(), 0.0f);
+    float meanEnergy = sumEnergy / (float)energyC.size();
     float threshold = meanEnergy * 1.35f;
 
     // Detect peaks with minimum distance (200 BPM -> min interval ~0.25s)
     std::vector<int> peaks;
     int minPeakDistance = std::max(1, (int)(effectiveRate * 0.25));
 
-    for (size_t i = 1; i + 1 < energy.size(); ++i)
+    // Un transitorio mas corto que la ventana deja una meseta con valores
+    // identicos; con un maximo ESTRICTO no se detectaba ningun pico (0 BPM en
+    // material con kicks de 90 ms). Con ">=" a la izquierda y ">" a la derecha
+    // se detecta el final de la meseta.
+    for (size_t i = 1; i + 1 < energyC.size(); ++i)
     {
-        if (energy[i] > threshold && energy[i] > energy[i - 1] && energy[i] > energy[i + 1])
+        if (energyC[i] > threshold && energyC[i] >= energyC[i - 1] && energyC[i] > energyC[i + 1])
         {
             if (peaks.empty() || (static_cast<int>(i) - peaks.back() > minPeakDistance))
             {
@@ -160,9 +172,77 @@ BeatAnalysisResult BeatDetector::analyze(juce::AudioFormatReader* reader)
     if (result.bpm <= 0.0)
         return defaultRes;
     result.beatInterval = 60.0 / result.bpm;
-    double firstPeakSec = peaks[0] / effectiveRate;
-    result.offset = std::fmod(firstPeakSec, result.beatInterval);
-    if (result.offset < 0.0) result.offset += result.beatInterval;
 
+    // Fase del grid por busqueda en rejilla: se elige el desfase que maximiza
+    // la energia en los tiempos de beat. Antes se usaba el primer pico (con su
+    // retraso y pudiendo caer en un snare), que dejaba el offset ~99 ms tarde.
+    // Se maximiza la ENVOLVENTE DE ATAQUE (primera diferencia positiva) y no la
+    // energia: el maximo de energia cae en el centro del golpe (~45 ms tarde en
+    // material con cuerpo), mientras que la subida maxima esta en el ataque.
+    auto riseAt = [&energyC] (int idx) -> float
+    {
+        if (idx <= 0) return 0.0f;
+        return juce::jmax (0.0f, energyC[(size_t) idx] - energyC[(size_t) idx - 1]);
+    };
+
+    const int intervalBuckets = juce::jmax (1, (int) std::lround (result.beatInterval * effectiveRate));
+    double bestScore = -1.0;
+    int bestPhase = 0;
+    for (int ph = 0; ph < intervalBuckets; ++ph)
+    {
+        double score = 0.0;
+        for (int idx = ph; idx < (int) energyC.size(); idx += intervalBuckets)
+            score += (double) riseAt (idx);
+
+        if (score > bestScore)
+        {
+            bestScore = score;
+            bestPhase = ph;
+        }
+    }
+
+    // Correccion de sesgo: para cada pulso del grid se busca el maximo de la
+    // energia CRUDA (buckets de ~2.7 ms, que en un golpe con caida esta en el
+    // ataque) en +-60 ms, y se aplica la MEDIANA del desplazamiento. Sin esto
+    // el offset heredaba el retraso de la ventana de 100 ms.
+    const int reach = juce::jmax (1, (int) std::lround (0.060 * effectiveRate));
+    std::vector<double> corrections;
+
+    for (int k = 0; k < 256; ++k)
+    {
+        const int base = bestPhase + k * intervalBuckets;
+        if (base >= (int) downsampled.size())
+            break;
+
+        int bestIdx = base;
+        double bestValue = -1.0;
+        for (int j = -reach; j <= reach; ++j)
+        {
+            const int idx = base + j;
+            if (idx < 0 || idx >= (int) downsampled.size())
+                continue;
+            const double v = (double) downsampled[(size_t) idx];
+            if (v > bestValue)
+            {
+                bestValue = v;
+                bestIdx = idx;
+            }
+        }
+
+        corrections.push_back ((double) (bestIdx - base));
+    }
+
+    double bias = 0.0;
+    if (! corrections.empty())
+    {
+        std::sort (corrections.begin(), corrections.end());
+        bias = corrections[corrections.size() / 2];
+    }
+
+    double offsetSec = ((double) bestPhase + bias) / effectiveRate;
+    offsetSec = std::fmod (offsetSec, result.beatInterval);
+    if (offsetSec < 0.0)
+        offsetSec += result.beatInterval;
+    result.offset = offsetSec;
     return result;
 }

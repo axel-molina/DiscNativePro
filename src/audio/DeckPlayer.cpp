@@ -370,6 +370,10 @@ void DeckPlayer::prepareToPlay(int samplesPerBlockExpected, double sampleRate)
 
     updateRateFactor();
 
+    // Buffer para sustituir el exceso del loop (fuera del hilo de audio).
+    if (loopScratch.getNumSamples() < juce::jmax (1, samplesPerBlockExpected))
+        loopScratch.setSize (2, juce::jmax (1, samplesPerBlockExpected), false, true, true);
+
     if (bufferingSource != nullptr)
         bufferingSource->prepareToPlay(samplesPerBlockExpected, sampleRate);
 
@@ -402,7 +406,18 @@ void DeckPlayer::getNextAudioBlock(const juce::AudioSourceChannelInfo& bufferToF
         return;
     }
 
-    const juce::ScopedLock sl(lock);
+    // Nunca bloquear el hilo de audio: loadFile() retiene este mismo lock
+    // mientras hace la busqueda en LibraryCacheManager y construye el
+    // BufferingAudioSource (~1 MB). Bloqueando ahi se produce un dropout por
+    // inversion de prioridad; con try-lock el peor caso es un bloque de silencio
+    // mientras carga la pista.
+    const juce::ScopedTryLock stl(lock);
+    if (! stl.isLocked())
+    {
+        bufferToFill.clearActiveBufferRegion();
+        return;
+    }
+
     if (resamplingSource == nullptr || bufferingSource == nullptr)
     {
         bufferToFill.clearActiveBufferRegion();
@@ -754,17 +769,57 @@ void DeckPlayer::getNextAudioBlock(const juce::AudioSourceChannelInfo& bufferToF
         }
     }
 
-    // Handle Active Loop
-    if (loopActive.load() && !scratchTouch.load() && bufferingSource != nullptr)
+    // Loop exacto. El bloque ya esta renderizado y puede haberse pasado del
+    // final del loop hasta N-1 muestras; si se reproducian, el loop duraba
+    // length+exceso y derrapaba en cada pasada (medido: 2,33 ms por pasada con
+    // 4 beats y bloque 512, 140 ms en 60 pasadas). Aqui esas muestras se
+    // SUSTITUYEN por las primeras del loop, re-renderizadas desde `start`: el
+    // cursor queda en start+exceso, asi que el bloque siguiente continua sin
+    // hueco y el loop mide exactamente `length`.
+    if (loopActive.load() && ! scratchTouch.load() && bufferingSource != nullptr
+        && ! inLoopCorrection && ! seekPending.load())
     {
-        double currentPos = getPosition();
-        double start = loopStartSeconds.load();
-        double length = loopLengthSeconds.load();
+        const double startSec  = loopStartSeconds.load();
+        const double lengthSec = loopLengthSeconds.load();
+        const double endSec    = startSec + lengthSec;
+        const double posSec    = getPosition();
+        const int    N         = bufferToFill.numSamples;
 
-        if (currentPos >= (start + length))
+        // Solo tiene sentido si el loop es mas largo que un bloque (los loops
+        // sub-bloque siguen usando el camino anterior).
+        const double deviceRate = currentSampleRate > 0.0 ? currentSampleRate : 44100.0;
+        const bool loopSpansBlock = lengthSec * deviceRate > 2.0 * (double) N;
+
+        if (lengthSec > 0.0 && loopSpansBlock && posSec >= endSec)
         {
-            seekPending.store(true);
-            seekTargetSec.store(start);
+            const double fileSr = origFileSampleRate > 0.0 ? origFileSampleRate : deviceRate;
+            const double overshootFile = (posSec - endSec) * fileSr;
+            const juce::int64 rpAfter = bufferingSource->getNextReadPosition();
+            const double advance = (double) (rpAfter - rpBefore);
+            const double perOutput = (N > 0 && advance > 0.0) ? advance / (double) N : 1.0;
+            const int overshootOut = juce::jlimit (0, N,
+                (int) std::lround (overshootFile / juce::jmax (0.01, perOutput)));
+
+            if (overshootOut > 0 && loopScratch.getNumSamples() >= overshootOut)
+            {
+                juce::AudioSourceChannelInfo info (&loopScratch, 0, overshootOut);
+
+                applyPendingSeek (startSec);
+                inLoopCorrection = true;
+                getNextAudioBlock (info);
+                inLoopCorrection = false;
+
+                const int outCh  = juce::jmin (bufferToFill.buffer->getNumChannels(),
+                                               loopScratch.getNumChannels());
+                const int dstStart = bufferToFill.startSample + N - overshootOut;
+                for (int ch = 0; ch < outCh; ++ch)
+                    bufferToFill.buffer->copyFrom (ch, dstStart, loopScratch, ch, 0, overshootOut);
+                return;
+            }
+
+            // Sin exceso medible o sin scratch disponible: camino anterior.
+            seekPending.store (true);
+            seekTargetSec.store (startSec);
         }
     }
 
@@ -1508,6 +1563,15 @@ double DeckPlayer::getHotCue(int index) const
 
 void DeckPlayer::setLoop(double startSeconds, double lengthSeconds, bool enabled)
 {
+    // Una longitud <= 0 haria que la comprobacion de fin de loop
+    // (currentPos >= start + length) fuese siempre cierta y el deck re-seekearia
+    // en cada bloque. Se rechaza el loop y se desactiva.
+    if (lengthSeconds <= 0.0 || startSeconds < 0.0)
+    {
+        loopActive.store(false);
+        return;
+    }
+
     loopStartSeconds.store(startSeconds);
     loopLengthSeconds.store(lengthSeconds);
     loopActive.store(enabled);

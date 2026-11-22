@@ -423,6 +423,11 @@ void AudioEngine::audioDeviceIOCallbackWithContext(const float* const* inputChan
     if (outputChannelData == nullptr || numOutputChannels == 0 || numSamples <= 0)
         return;
 
+    // Los IIR del EQ y el limiter dejan denormales en pasajes silenciosos; en x86
+    // eso multiplica el coste de un bloque por 10-100x. Los filtros de color ya
+    // hacen snapToZero, pero el resto del camino no.
+    const juce::ScopedNoDenormals noDenormals;
+
     // Ensure our internal buffers match current block samples
     deck1Buffer.clear(0, numSamples);
     deck2Buffer.clear(0, numSamples);

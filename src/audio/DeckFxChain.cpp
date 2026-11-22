@@ -21,6 +21,9 @@ void FxSlot::prepare(double sampleRate, int blockSize)
     crushHoldCount = 0;
     crushHeldL = 0.0f;
     crushHeldR = 0.0f;
+
+    gatePhasePos = 0.0;
+    gateEnv = 1.0f;
 }
 
 void FxSlot::reset()
@@ -183,7 +186,14 @@ void FxSlot::process(juce::AudioBuffer<float>& buffer,
 
             double phase = beatPhase.load();
             bool anchored = (phase >= 0.0 && phase < 1.0);
-            double gatePhase = anchored ? phase / div : 0.0;
+            double gatePhase = anchored ? phase / div : gatePhasePos;
+
+            // Suavizado de flancos (~1.5 ms): el pulso sigue siendo cuadrado,
+            // pero la envolvente llega al objetivo de forma exponencial, asi que
+            // desaparece el salto de 0.475 en una muestra (medido).
+            const float edgeCoef = (sampleRate > 0.0)
+                                       ? (1.0f - std::exp(-1.0f / (float) (0.0015 * sampleRate)))
+                                       : 1.0f;
 
             auto* l = buffer.getWritePointer(0);
             auto* r = numChannels > 1 ? buffer.getWritePointer(1) : l;
@@ -194,14 +204,19 @@ void FxSlot::process(juce::AudioBuffer<float>& buffer,
                 if (gatePhase >= 1.0)
                     gatePhase -= std::floor(gatePhase);
 
-                // Square pulse with soft cosine transitions to eliminate clicks
+                // Pulso cuadrado con flancos suavizados por la exponencial de abajo
                 float rawPulse = std::sin(gatePhase * juce::MathConstants<double>::twoPi) > 0.0 ? 1.0f : 0.0f;
-                float mod = rawPulse * 0.95f + 0.05f;
+                const float target = rawPulse * 0.95f + 0.05f;
+                gateEnv += (target - gateEnv) * edgeCoef;
 
-                l[i] *= mod;
+                l[i] *= gateEnv;
                 if (numChannels > 1)
-                    r[i] *= mod;
+                    r[i] *= gateEnv;
             }
+
+            // Sin fase publicada, el gate mantiene su propio ciclo entre bloques.
+            if (! anchored)
+                gatePhasePos = gatePhase;
             break;
         }
     }
