@@ -52,6 +52,12 @@ void ChannelStrip::prepare(double sampleRate, int blockSize)
     eqLowSmooth.setCurrentAndTargetValue(juce::jlimit(0.0f, 1.0f, eqLow.load()));
     eqMidSmooth.setCurrentAndTargetValue(juce::jlimit(0.0f, 1.0f, eqMid.load()));
     eqHighSmooth.setCurrentAndTargetValue(juce::jlimit(0.0f, 1.0f, eqHigh.load()));
+
+    // Rampas de 20 ms para trim y fader de canal (sin escalones por bloque).
+    gainSmooth.reset(sampleRate, 0.02);
+    volumeSmooth.reset(sampleRate, 0.02);
+    gainSmooth.setCurrentAndTargetValue(juce::jlimit(0.0f, 4.0f, gain.load()));
+    volumeSmooth.setCurrentAndTargetValue(juce::jlimit(0.0f, 1.0f, volumeFader.load()));
 }
 
 void ChannelStrip::reset()
@@ -70,6 +76,8 @@ void ChannelStrip::reset()
     eqLowSmooth.setCurrentAndTargetValue(eqLowSmooth.getTargetValue());
     eqMidSmooth.setCurrentAndTargetValue(eqMidSmooth.getTargetValue());
     eqHighSmooth.setCurrentAndTargetValue(eqHighSmooth.getTargetValue());
+    gainSmooth.setCurrentAndTargetValue(gainSmooth.getTargetValue());
+    volumeSmooth.setCurrentAndTargetValue(volumeSmooth.getTargetValue());
 
     meterPeakLeft.store(0.0f);
     meterPeakRight.store(0.0f);
@@ -89,6 +97,9 @@ void ChannelStrip::process(juce::AudioBuffer<float>& buffer, juce::AudioBuffer<f
     // The coefficient objects are created in prepare(); without them the strip is silent.
     if (lowEqCoeffs == nullptr || midEqCoeffs == nullptr || highEqCoeffs == nullptr)
         return;
+
+    // Filtros IIR en pasajes silenciosos: sin esto aparecen denormales en x86.
+    const juce::ScopedNoDenormals noDenormals;
 
     // 1. One smoothed value per block (~25 ms ramp): continuous across blocks, no zipper.
     eqLowSmooth.setTargetValue(juce::jlimit(0.0f, 1.0f, eqLow.load()));
@@ -190,9 +201,13 @@ void ChannelStrip::process(juce::AudioBuffer<float>& buffer, juce::AudioBuffer<f
         colorHighFilter[ch].snapToZero();
     }
 
-    // 4. Apply Trim / Gain (PFL Signal)
-    float channelGain = gain.load();
-    buffer.applyGain(channelGain);
+    // 4. Apply Trim / Gain (PFL Signal) — rampa de 20 ms, sin escalon por bloque
+    gainSmooth.setTargetValue(juce::jlimit(0.0f, 4.0f, gain.load()));
+    {
+        const float trimStart = gainSmooth.getCurrentValue();
+        const float trimEnd   = gainSmooth.skip(numSamples);
+        buffer.applyGainRamp(0, numSamples, trimStart, trimEnd);
+    }
 
     // 4. Update VU Meters with smooth decay (monitoring PFL/Gain level)
     float peakL = buffer.getMagnitude(0, 0, numSamples);
@@ -213,8 +228,13 @@ void ChannelStrip::process(juce::AudioBuffer<float>& buffer, juce::AudioBuffer<f
         }
     }
 
-    // 6. Apply Channel Volume Fader for Master Mix
-    buffer.applyGain(volumeFader.load());
+    // 6. Apply Channel Volume Fader for Master Mix — tambien con rampa
+    volumeSmooth.setTargetValue(juce::jlimit(0.0f, 1.0f, volumeFader.load()));
+    {
+        const float fadeStart = volumeSmooth.getCurrentValue();
+        const float fadeEnd   = volumeSmooth.skip(numSamples);
+        buffer.applyGainRamp(0, numSamples, fadeStart, fadeEnd);
+    }
 }
 
 DjMixer::DjMixer()
@@ -230,6 +250,7 @@ DjMixer::~DjMixer()
 void DjMixer::prepare(double sampleRate, int blockSize)
 {
     currentSampleRate = sampleRate;
+    prepared = true;
     ch1.prepare(sampleRate, blockSize);
     ch2.prepare(sampleRate, blockSize);
     fxChain1.prepare(sampleRate, blockSize);
@@ -240,6 +261,17 @@ void DjMixer::prepare(double sampleRate, int blockSize)
     delayWritePos = 0;
 
     reverb.setSampleRate(sampleRate);
+
+    // Master y auriculares con rampa de 20 ms; y las ganancias del crossfader
+    // arrancan en la posicion actual (sin salto en el primer bloque).
+    masterVolSmooth.reset(sampleRate, 0.02);
+    masterVolSmooth.setCurrentAndTargetValue(juce::jlimit(0.0f, 2.0f, masterVolume.load()));
+    phonesVolSmooth.reset(sampleRate, 0.02);
+    phonesVolSmooth.setCurrentAndTargetValue(juce::jlimit(0.0f, 2.0f, phonesVolume.load()));
+
+    const float norm = (crossfader.load() + 1.0f) * 0.5f;
+    lastGain1 = std::cos(norm * juce::MathConstants<float>::halfPi);
+    lastGain2 = std::sin(norm * juce::MathConstants<float>::halfPi);
 }
 
 void DjMixer::reset()
@@ -257,6 +289,16 @@ void DjMixer::reset()
     std::fill(delayBufferR.begin(), delayBufferR.end(), 0.0f);
     delayWritePos = 0;
     reverb.reset();
+
+    // Tras reiniciar el dispositivo, el primer bloque no debe interpolar desde
+    // las ganancias del anterior: se re-anclan a la posicion actual del fader.
+    masterVolSmooth.setCurrentAndTargetValue(masterVolSmooth.getTargetValue());
+    phonesVolSmooth.setCurrentAndTargetValue(phonesVolSmooth.getTargetValue());
+    {
+        const float norm = (crossfader.load() + 1.0f) * 0.5f;
+        lastGain1 = std::cos(norm * juce::MathConstants<float>::halfPi);
+        lastGain2 = std::sin(norm * juce::MathConstants<float>::halfPi);
+    }
 }
 
 void DjMixer::process(juce::AudioBuffer<float>& deck1Buffer,
@@ -274,6 +316,15 @@ void DjMixer::process(juce::AudioBuffer<float>& deck1Buffer,
                       juce::AudioBuffer<float>& cueOutBuffer,
                       int numSamples)
 {
+    if (! prepared || currentSampleRate <= 0.0)
+    {
+        // Antes de prepare() no hay coeficientes de filtro: silencio en vez de crash.
+        masterOutBuffer.clear();
+        if (cueOutBuffer.getNumChannels() > 0)
+            cueOutBuffer.clear (0, numSamples);
+        return;
+    }
+
     if (cueOutBuffer.getNumChannels() > 0)
         cueOutBuffer.clear(0, numSamples);
 
@@ -292,15 +343,19 @@ void DjMixer::process(juce::AudioBuffer<float>& deck1Buffer,
     fxChain1.process(deck1Buffer, numSamples, deck1Bpm.load());
     fxChain2.process(deck2Buffer, numSamples, deck2Bpm.load());
 
-    // Crossfader calculation: constant power curve
+    // Crossfader calculation: constant power curve, interpolada por muestra
+    // entre el bloque anterior y este (sin peldaños de 10 ms al mover el fader).
     float xf = crossfader.load(); // -1.0 to 1.0
     float norm = (xf + 1.0f) * 0.5f; // 0.0 to 1.0
-    float gain1 = std::cos(norm * juce::MathConstants<float>::halfPi);
-    float gain2 = std::sin(norm * juce::MathConstants<float>::halfPi);
+    const float gain1Target = std::cos(norm * juce::MathConstants<float>::halfPi);
+    const float gain2Target = std::sin(norm * juce::MathConstants<float>::halfPi);
+    const float gain1Start = lastGain1;
+    const float gain2Start = lastGain2;
 
     masterOutBuffer.clear();
 
     int numChannels = juce::jmin(2, masterOutBuffer.getNumChannels());
+    const float invN = (numSamples > 1) ? 1.0f / static_cast<float>(numSamples - 1) : 1.0f;
     for (int ch = 0; ch < numChannels; ++ch)
     {
         auto* masterData = masterOutBuffer.getWritePointer(ch);
@@ -309,13 +364,23 @@ void DjMixer::process(juce::AudioBuffer<float>& deck1Buffer,
 
         for (int i = 0; i < numSamples; ++i)
         {
-            masterData[i] = (d1Data[i] * gain1) + (d2Data[i] * gain2);
+            const float t = static_cast<float>(i) * invN;
+            const float g1 = gain1Start + (gain1Target - gain1Start) * t;
+            const float g2 = gain2Start + (gain2Target - gain2Start) * t;
+            masterData[i] = (d1Data[i] * g1) + (d2Data[i] * g2);
         }
     }
 
-    // Apply master volume
-    float masterVol = masterVolume.load();
-    masterOutBuffer.applyGain(masterVol);
+    lastGain1 = gain1Target;
+    lastGain2 = gain2Target;
+
+    // Apply master volume (rampa de 20 ms)
+    masterVolSmooth.setTargetValue(juce::jlimit(0.0f, 2.0f, masterVolume.load()));
+    {
+        const float mvStart = masterVolSmooth.getCurrentValue();
+        const float mvEnd   = masterVolSmooth.skip(numSamples);
+        masterOutBuffer.applyGainRamp(0, numSamples, mvStart, mvEnd);
+    }
 
     // Master FX Processing: Delay
     if (fxEnabled.load() && fxMix.load() > 0.001f)
@@ -387,9 +452,13 @@ void DjMixer::process(juce::AudioBuffer<float>& deck1Buffer,
             }
         }
 
-        // Apply Headphone Volume
-        float pVol = phonesVolume.load();
-        cueOutBuffer.applyGain(pVol);
+        // Apply Headphone Volume (rampa de 20 ms)
+        phonesVolSmooth.setTargetValue(juce::jlimit(0.0f, 2.0f, phonesVolume.load()));
+        {
+            const float pvStart = phonesVolSmooth.getCurrentValue();
+            const float pvEnd   = phonesVolSmooth.skip(numSamples);
+            cueOutBuffer.applyGainRamp(0, numSamples, pvStart, pvEnd);
+        }
 
         // Update CUE meters
         float cPeakL = cueOutBuffer.getMagnitude(0, 0, numSamples);

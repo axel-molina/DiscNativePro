@@ -38,6 +38,11 @@ struct ChannelStrip
     // Per-block smoothing (~25 ms) so knob moves stay continuous across blocks.
     juce::SmoothedValue<float> colorSmooth, eqLowSmooth, eqMidSmooth, eqHighSmooth;
 
+    // Rampas de 20 ms para trim y fader de canal: sin ellas, un cambio de gain
+    // entre bloques es un escalon de 1 muestra (medido: 0,5 de salto en el
+    // master al pasar de 1,0 a 0,5).
+    juce::SmoothedValue<float> gainSmooth, volumeSmooth;
+
     // Persistent EQ coefficients: allocated ONCE in prepare(), then updated in
     // place in process() (no new Ptr / no makeXXX allocation on the audio thread).
     juce::dsp::IIR::Coefficients<float>::Ptr lowEqCoeffs, midEqCoeffs, highEqCoeffs;
@@ -133,6 +138,10 @@ public:
 
 private:
     double currentSampleRate { 44100.0 };
+    // El callback no debe procesar antes de prepare(): los filtros de los FX y
+    // del canal quedarian sin coeficientes y juce::dsp haria un getFilterOrder()
+    // sobre un puntero nulo (crash 0xC0000005 al arrancar).
+    bool prepared { false };
     ChannelStrip ch1;
     ChannelStrip ch2;
 
@@ -146,6 +155,12 @@ private:
     std::atomic<float> crossfader { 0.0f };    // -1.0 = Deck 1 full, 0.0 = Center, +1.0 = Deck 2 full
     std::atomic<float> masterVolume { 1.0f };
     std::atomic<float> phonesVolume { 1.0f };
+
+    // Crossfader interpolado por muestra entre bloques (estado solo del hilo de
+    // audio). Evita los peldaños de 10,7 ms al mover el fader.
+    float lastGain1 { 1.0f };
+    float lastGain2 { 0.0f };
+    juce::SmoothedValue<float> masterVolSmooth, phonesVolSmooth;
 
     std::atomic<float> masterPeakLeft { 0.0f };
     std::atomic<float> masterPeakRight { 0.0f };

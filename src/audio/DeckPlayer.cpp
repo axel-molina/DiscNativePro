@@ -370,6 +370,10 @@ void DeckPlayer::prepareToPlay(int samplesPerBlockExpected, double sampleRate)
 
     updateRateFactor();
 
+    // Buffer para sustituir el exceso del loop (fuera del hilo de audio).
+    if (loopScratch.getNumSamples() < juce::jmax (1, samplesPerBlockExpected))
+        loopScratch.setSize (2, juce::jmax (1, samplesPerBlockExpected), false, true, true);
+
     if (bufferingSource != nullptr)
         bufferingSource->prepareToPlay(samplesPerBlockExpected, sampleRate);
 
@@ -402,7 +406,18 @@ void DeckPlayer::getNextAudioBlock(const juce::AudioSourceChannelInfo& bufferToF
         return;
     }
 
-    const juce::ScopedLock sl(lock);
+    // Nunca bloquear el hilo de audio: loadFile() retiene este mismo lock
+    // mientras hace la busqueda en LibraryCacheManager y construye el
+    // BufferingAudioSource (~1 MB). Bloqueando ahi se produce un dropout por
+    // inversion de prioridad; con try-lock el peor caso es un bloque de silencio
+    // mientras carga la pista.
+    const juce::ScopedTryLock stl(lock);
+    if (! stl.isLocked())
+    {
+        bufferToFill.clearActiveBufferRegion();
+        return;
+    }
+
     if (resamplingSource == nullptr || bufferingSource == nullptr)
     {
         bufferToFill.clearActiveBufferRegion();
@@ -418,6 +433,63 @@ void DeckPlayer::getNextAudioBlock(const juce::AudioSourceChannelInfo& bufferToF
     {
         bufferToFill.clearActiveBufferRegion();
         return;
+    }
+
+    // Loop exacto por tramos. Se renderiza hasta el borde del loop, se reancla
+    // al inicio y se sigue rellenando el MISMO bloque. Antes se renderizaba el
+    // bloque entero y se corregia despues: eso dejaba el cursor en start+exceso
+    // y el inicio del loop rotaba ~2,3 ms en cada pasada (se iba de mezcla).
+    if (loopActive.load() && ! scratchTouch.load() && bufferingSource != nullptr
+        && ! inLoopCorrection && ! seekPending.load())
+    {
+        const double startSec   = loopStartSeconds.load();
+        const double lengthSec  = loopLengthSeconds.load();
+        const double deviceRate = currentSampleRate > 0.0 ? currentSampleRate : 44100.0;
+
+        if (lengthSec > 0.0 && lengthSec * deviceRate > 2.0 * (double) bufferToFill.numSamples)
+        {
+            const double endSec = startSec + lengthSec;
+            const int total = bufferToFill.numSamples;
+            int written = 0;
+            int guard = 0;
+
+            while (written < total && guard++ < 512)
+            {
+                const double posSec = getPosition();
+
+                if (posSec >= endSec - 0.5 / deviceRate)
+                {
+                    applyPendingSeek (startSec); // reancla al inicio del loop
+                    continue;
+                }
+
+                // OJO con las unidades: samplesPerOutput son MUESTRAS DE ARCHIVO
+                // por muestra de salida, asi que el numerador va en muestras de
+                // archivo (fileSr), no del dispositivo. Con deviceRate, un MP3 de
+                // 44,1 kHz en un dispositivo de 48 kHz sobreestimaba el tramo un
+                // 8,8 % en cada vuelta: el loop derivaba.
+                const double fileSr = origFileSampleRate > 0.0 ? origFileSampleRate : deviceRate;
+                const double toEndOut = ((endSec - posSec) * fileSr)
+                                            / juce::jmax (0.2, samplesPerOutput);
+                const int chunk = juce::jlimit (1, total - written,
+                                   juce::jmin (total - written, (int) std::lround (toEndOut)));
+
+                juce::AudioSourceChannelInfo part (bufferToFill.buffer,
+                                                   bufferToFill.startSample + written, chunk);
+                inLoopCorrection = true;
+                getNextAudioBlock (part);
+                inLoopCorrection = false;
+                written += chunk;
+
+                if (! playing.load())
+                {
+                    bufferToFill.clearActiveBufferRegion();
+                    return;
+                }
+            }
+
+            return;
+        }
     }
 
     // Scratch v3: pitch sigue a la mano. Adelante = resampler existente con
@@ -716,6 +788,17 @@ void DeckPlayer::getNextAudioBlock(const juce::AudioSourceChannelInfo& bufferToF
         auto rp = bufferingSource->getNextReadPosition();
         playbackPosSamples.store(rp);
 
+        if (bufferToFill.numSamples > 0 && ! seekJustApplied)
+        {
+            const double measured = (double) (rp - rpBefore) / (double) bufferToFill.numSamples;
+
+            // Solo medidas plausibles (un seek o un salto dan valores absurdos).
+            if (measured > 0.5 && measured < 2.0)
+                samplesPerOutput = measured;
+        }
+
+        seekJustApplied = false;
+
         // Slip (P15): durante loop, la posicion virtual avanza con el delta
         // real del cursor (respeta keylock y resample). Al terminar el loop o
         // el scratch (condicion falsa), retoma en la posicion virtual.
@@ -754,20 +837,19 @@ void DeckPlayer::getNextAudioBlock(const juce::AudioSourceChannelInfo& bufferToF
         }
     }
 
-    // Handle Active Loop
-    if (loopActive.load() && !scratchTouch.load() && bufferingSource != nullptr)
+    // Fallback para loops mas cortos que un bloque (no se trocean): se pide el
+    // seek al inicio y se aplica en el bloque siguiente.
+    if (loopActive.load() && ! scratchTouch.load() && bufferingSource != nullptr)
     {
-        double currentPos = getPosition();
-        double start = loopStartSeconds.load();
-        double length = loopLengthSeconds.load();
+        const double startSec  = loopStartSeconds.load();
+        const double lengthSec = loopLengthSeconds.load();
 
-        if (currentPos >= (start + length))
+        if (lengthSec > 0.0 && getPosition() >= startSec + lengthSec)
         {
-            seekPending.store(true);
-            seekTargetSec.store(start);
+            seekPending.store (true);
+            seekTargetSec.store (startSec);
         }
     }
-
     // Check End of Track
     if (!scratchTouch.load() && trackDurationSeconds.load() > 0.0 && getPosition() >= trackDurationSeconds.load())
     {
@@ -903,6 +985,11 @@ void DeckPlayer::applyPendingSeek(double targetSec)
 {
     if (bufferingSource == nullptr || currentSampleRate <= 0.0 || stretcher == nullptr)
         return;
+
+    // El cursor de lectura va a saltar: el avance de este bloque no sirve para
+    // medir samplesPerOutput (salia ~0.02 y el tramo del loop se estimaba mal,
+    // de ahi que el loop siguiera desplazandose).
+    seekJustApplied = true;
     // P26: el cursor vive en muestras de archivo — la conversión usa file-rate.
     double sr = origFileSampleRate > 0.0 ? origFileSampleRate : currentSampleRate;
     double dur = trackDurationSeconds.load();
@@ -1508,7 +1595,34 @@ double DeckPlayer::getHotCue(int index) const
 
 void DeckPlayer::setLoop(double startSeconds, double lengthSeconds, bool enabled)
 {
-    loopStartSeconds.store(startSeconds);
+    // Una longitud <= 0 haria que la comprobacion de fin de loop
+    // (currentPos >= start + length) fuese siempre cierta y el deck re-seekearia
+    // en cada bloque. Se rechaza el loop y se desactiva.
+    if (lengthSeconds <= 0.0 || startSeconds < 0.0)
+    {
+        loopActive.store(false);
+        return;
+    }
+
+    // Cuantizacion del INICIO del loop a la rejilla: si se pulsa el loop unas
+    // decimas tarde, el loop nacia desplazado y habia que adelantarlo a mano en
+    // cada pista. Se ajusta al beat mas cercano cuando hay grid fiable.
+    double start = startSeconds;
+    const double bpm = originalBpm.load();
+    if (enabled && bpm > 30.0 && trackDurationSeconds.load() > 0.0)
+    {
+        const double beat = 60.0 / bpm;
+        const double gridOffset = firstBeatOffsetSeconds.load();
+        const double k = std::round((start - gridOffset) / beat);
+        const double snapped = gridOffset + k * beat;
+
+        // Solo si el ajuste es pequeno (menos de 1/4 de beat): una pulsacion
+        // tardia. Asi no se mueve un loop puesto a proposito fuera del grid.
+        if (std::abs(snapped - start) <= beat * 0.25 && snapped >= 0.0)
+            start = snapped;
+    }
+
+    loopStartSeconds.store(start);
     loopLengthSeconds.store(lengthSeconds);
     loopActive.store(enabled);
 }

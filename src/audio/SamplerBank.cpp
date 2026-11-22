@@ -18,8 +18,14 @@ bool SamplerBank::loadSlot(int index, const juce::File& file,
         srcLen = maxLen;
 
     const int srcCh = (int)reader->numChannels;
-    const double ratio = deviceSampleRate / reader->sampleRate;
-    const int outLen = juce::jmax(1, (int)((double)srcLen * ratio)) + 64;
+    // JUCE: setResamplingRatio() son muestras de ENTRADA por muestra de SALIDA.
+    // Para reproducir a la velocidad real hay que consumir fileRate/deviceRate
+    // por muestra del dispositivo (misma semantica que
+    // DeckPlayer::updateRateFactor). Con el inverso, un sample de 48 kHz en un
+    // dispositivo de 44.1 kHz salia 2,92 semitonos abajo y solo sonaba el 84,6 %
+    // del material (medido en el banco de pruebas).
+    const double ratio = reader->sampleRate / deviceSampleRate;
+    const int outLen = juce::jmax(1, (int)std::ceil((double)srcLen / ratio)) + 64;
 
     juce::AudioBuffer<float> buf(2, outLen);
     buf.clear();

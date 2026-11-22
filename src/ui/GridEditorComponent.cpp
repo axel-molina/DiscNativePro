@@ -124,10 +124,10 @@ GridEditorComponent::GridEditorComponent(DeckPlayer& player, AudioEngine& engine
         if (playAudition)
         {
             engine.ensureAudioDeviceRunning();
-            // Si el deck ya venía reproduciendo, la audición continúa desde la
-            // posición actual; solo reposiciona si estaba detenido.
-            if (!deck.isPlaying())
-                deck.setPosition(juce::jmax(0.0, deck.getFirstBeatOffset() - 1.0), true);
+            // La audición arranca SIEMPRE desde antes del primer golpe: antes,
+            // si el deck ya sonaba (p.ej. en la mezcla), seguía desde donde
+            // estuviera y "el grid no iba al principio de la canción".
+            deck.setPosition(juce::jmax(0.0, deck.getFirstBeatOffset() - 1.0), true);
             deck.play();
         }
         else
@@ -157,9 +157,29 @@ GridEditorComponent::GridEditorComponent(DeckPlayer& player, AudioEngine& engine
     offsetValueLabel.setJustificationType(juce::Justification::centredLeft);
     addAndMakeVisible(offsetValueLabel);
 
+    bpmTitle.setFont(juce::FontOptions(11.5f));
+    bpmTitle.setColour(juce::Label::textColourId, juce::Colour::fromRGB(142, 149, 165));
+    bpmTitle.setText("Grid BPM", juce::dontSendNotification);
+    addAndMakeVisible(bpmTitle);
+
     bpmValueLabel.setFont(juce::FontOptions(11.5f, juce::Font::bold));
     bpmValueLabel.setColour(juce::Label::textColourId, juce::Colours::white);
+    bpmValueLabel.setColour(juce::Label::backgroundWhenEditingColourId, juce::Colour::fromRGB(24, 27, 35));
+    bpmValueLabel.setColour(juce::Label::textWhenEditingColourId, juce::Colours::white);
     bpmValueLabel.setJustificationType(juce::Justification::centredLeft);
+    // Editable a mano: doble clic y se escribe el BPM del grid directamente.
+    bpmValueLabel.setEditable(true, true, false);
+    bpmValueLabel.setTooltip(LanguageManager::trUtf8("Doble clic para escribir el BPM del grid a mano",
+                                                     "Double-click to type the grid BPM by hand"));
+    bpmValueLabel.onTextChange = [this]() {
+        const double typed = bpmValueLabel.getText().getDoubleValue();
+        if (typed >= 40.0 && typed <= 250.0)
+        {
+            deck.setGridBpm(typed);
+            persistGrid();
+        }
+        refreshLabels();
+    };
     addAndMakeVisible(bpmValueLabel);
 
     helpLabel.setFont(juce::FontOptions(9.5f));
@@ -337,9 +357,9 @@ void GridEditorComponent::refreshLabels()
     offsetValueLabel.setText(juce::String::formatted("Offset: %d ms", (int)std::round(offset * 1000.0)),
                              juce::dontSendNotification);
     const double bpm = deck.getOriginalBpm();
-    bpmValueLabel.setText(bpm > 0.0 ? juce::String::formatted("Grid BPM: %.2f", bpm)
-                                    : "Grid BPM: --",
-                          juce::dontSendNotification);
+    if (! bpmValueLabel.isBeingEdited())
+        bpmValueLabel.setText(bpm > 0.0 ? juce::String(bpm, 2) : juce::String("--"),
+                              juce::dontSendNotification);
 
     // Estado de la audición
     if (playAudition && !deck.isPlaying())
@@ -391,7 +411,8 @@ void GridEditorComponent::resized()
 
     // Fila 2: BPM
     auto row2 = controls.removeFromBottom(30);
-    bpmValueLabel.setBounds(row2.removeFromLeft(120));
+    bpmTitle.setBounds(row2.removeFromLeft(62));
+    bpmValueLabel.setBounds(row2.removeFromLeft(58));
     bpmUpFarButton.setBounds(row2.removeFromRight(52).reduced(3, 0));
     bpmUpButton.setBounds(row2.removeFromRight(56).reduced(3, 0));
     bpmDownButton.setBounds(row2.removeFromRight(56).reduced(3, 0));

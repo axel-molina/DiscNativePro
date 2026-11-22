@@ -157,6 +157,8 @@ private:
     // P5: el BPM se detecta en segundo plano; caché para refrescar el jog wheel
     // una sola vez por pista (setTrackInfo regenera la portada).
     double jogWheelBpmShown { -1.0 };
+    // Ultimo BPM guardado en la cache desde este deck (evita reescrituras).
+    double lastPersistedBpm { -1.0 };
 
     // Lower Transport Controls Bar (3 clean groups matching screenshot)
     DjButton playButton;

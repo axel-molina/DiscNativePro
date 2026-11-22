@@ -34,6 +34,50 @@ bool hasM4aHeader(const juce::File& f)
     const auto n = in.read(head, 8);
     return n >= 8 && head[4] == 'f' && head[5] == 't' && head[6] == 'y' && head[7] == 'p';
 }
+
+// --- Localizacion e instalacion del binario (issue #4) ----------------------
+// El asset de GitHub es distinto por plataforma. Instalar siempre el de macOS
+// dejaba en Windows y Linux un binario que no arranca, y ademas getBinaryPath()
+// lo daba por bueno porque el archivo existia: el fallo era permanente.
+juce::File appYtDlpDir()
+{
+    return juce::File::getSpecialLocation (juce::File::userApplicationDataDirectory)
+               .getChildFile ("DiscNativePro/bin");
+}
+
+const char* ytDlpAssetName()
+{
+   #if JUCE_WINDOWS
+    return "yt-dlp.exe";
+   #elif JUCE_MAC
+    return "yt-dlp_macos";
+   #else
+    return "yt-dlp_linux";
+   #endif
+}
+
+const char* ytDlpLocalName()
+{
+   #if JUCE_WINDOWS
+    return "yt-dlp.exe";
+   #else
+    return "yt-dlp";
+   #endif
+}
+
+// Un binario inservible (arquitectura equivocada, descarga a medias, sin permiso
+// de ejecucion) se detecta arrancandolo, no comprobando que el archivo exista.
+bool ytDlpBinaryRuns (const juce::File& f)
+{
+    if (! f.existsAsFile() || f.getSize() < 100000)
+        return false;
+
+    juce::ChildProcess p;
+    if (! p.start (juce::StringArray { f.getFullPathName(), "--version" }))
+        return false;
+
+    return p.waitForProcessToFinish (20000) && p.getExitCode() == 0;
+}
 } // namespace
 
 juce::File YouTubeAudioDownloader::getCachedAudioFile(const juce::String& videoId) const
@@ -70,36 +114,61 @@ bool YouTubeAudioDownloader::isDownloading(const juce::String& videoId) const
 
 juce::String YouTubeAudioDownloader::getBinaryPath() const
 {
-    // 1. User Application Support bin directory
-    auto userAppDir = juce::File::getSpecialLocation(juce::File::userApplicationDataDirectory);
-    auto appSupportBin = userAppDir.getChildFile("Application Support/DiscNativePro/bin/yt-dlp");
-    if (appSupportBin.existsAsFile() && appSupportBin.hasWriteAccess())
-        return appSupportBin.getFullPathName();
+    const juce::String localName (ytDlpLocalName());
 
-    // 2. DiscNativePro.app/Contents/Resources/yt-dlp (bundled)
-    auto exeFile = juce::File::getSpecialLocation(juce::File::currentExecutableFile);
-    auto bundleRes = exeFile.getParentDirectory().getParentDirectory().getChildFile("Resources/yt-dlp");
-    if (bundleRes.existsAsFile())
-        return bundleRes.getFullPathName();
+    // 1. Instalacion propia, y la ruta heredada de versiones anteriores (que en
+    //    macOS duplicaba "Application Support" y nunca coincidia).
+    juce::Array<juce::File> candidates;
+    candidates.add (appYtDlpDir().getChildFile (localName));
+    candidates.add (juce::File::getSpecialLocation (juce::File::userApplicationDataDirectory)
+                        .getChildFile ("Application Support/DiscNativePro/bin")
+                        .getChildFile (localName));
 
-    // 3. Homebrew Apple Silicon
-    juce::File brewArm("/opt/homebrew/bin/yt-dlp");
-    if (brewArm.existsAsFile())
-        return brewArm.getFullPathName();
+    for (const auto& f : candidates)
+        if (f.existsAsFile() && f.hasWriteAccess())
+            return f.getFullPathName();
 
-    // 4. Homebrew Intel
-    juce::File brewIntel("/usr/local/bin/yt-dlp");
-    if (brewIntel.existsAsFile())
-        return brewIntel.getFullPathName();
+    // 2. Empaquetado con la app (Contents/Resources en macOS, junto al .exe en
+    //    Windows/Linux).
+    auto exeFile = juce::File::getSpecialLocation (juce::File::currentExecutableFile);
+    juce::Array<juce::File> bundled;
+    bundled.add (exeFile.getParentDirectory().getParentDirectory()
+                     .getChildFile ("Resources").getChildFile (localName));
+    bundled.add (exeFile.getParentDirectory().getChildFile (localName));
 
-    // 5. Check PATH using which
-    juce::ChildProcess whichProc;
-    if (whichProc.start("which yt-dlp"))
+    for (const auto& f : bundled)
+        if (f.existsAsFile())
+            return f.getFullPathName();
+
+   #if JUCE_MAC
+    // 3. Homebrew Apple Silicon y 4. Homebrew Intel
+    for (const auto& f : { juce::File ("/opt/homebrew/bin/yt-dlp"), juce::File ("/usr/local/bin/yt-dlp") })
+        if (f.existsAsFile())
+            return f.getFullPathName();
+   #endif
+
+    // 5. PATH: "where" en Windows, "which" en POSIX (siempre con argumentos
+    //    sueltos, sin pasar por un shell).
+   #if JUCE_WINDOWS
+    juce::ChildProcess finder;
+    if (finder.start (juce::StringArray { "where", "yt-dlp" }))
     {
-        auto out = whichProc.readAllProcessOutput().trim();
-        if (out.isNotEmpty() && juce::File(out).existsAsFile())
+        for (const auto& line : juce::StringArray::fromLines (finder.readAllProcessOutput()))
+        {
+            const auto path = line.trim();
+            if (path.isNotEmpty() && juce::File (path).existsAsFile())
+                return juce::File (path).getFullPathName();
+        }
+    }
+   #else
+    juce::ChildProcess finder;
+    if (finder.start (juce::StringArray { "which", "yt-dlp" }))
+    {
+        const auto out = finder.readAllProcessOutput().trim();
+        if (out.isNotEmpty() && juce::File (out).existsAsFile())
             return out;
     }
+   #endif
 
     return {};
 }
@@ -115,21 +184,28 @@ void YouTubeAudioDownloader::ensureBinaryInstalledAsync(std::function<void(bool 
             return;
         }
 
-        auto userAppDir = juce::File::getSpecialLocation(juce::File::userApplicationDataDirectory);
-        auto targetDir = userAppDir.getChildFile("Application Support/DiscNativePro/bin");
+        auto targetDir = appYtDlpDir();
         targetDir.createDirectory();
 
-        auto targetFile = targetDir.getChildFile("yt-dlp");
-        juce::String downloadCmd = "curl -sL \"https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp_macos\" -o \""
-                                 + targetFile.getFullPathName() + "\" && chmod +x \"" + targetFile.getFullPathName() + "\"";
+        auto targetFile = targetDir.getChildFile (juce::String (ytDlpLocalName()));
+        targetFile.deleteFile();
 
+        // Sin shell y con el asset de esta plataforma.
+        juce::StringArray curlArgs { "curl", "-sL",
+                                     "https://github.com/yt-dlp/yt-dlp/releases/latest/download/"
+                                         + juce::String (ytDlpAssetName()),
+                                     "-o", targetFile.getFullPathName() };
         juce::ChildProcess proc;
-        bool ok = proc.start(downloadCmd);
+        bool ok = proc.start (curlArgs)
+                  && proc.waitForProcessToFinish (120000)
+                  && proc.getExitCode() == 0;
+
         if (ok)
-        {
-            proc.waitForProcessToFinish(60000);
-            ok = (proc.getExitCode() == 0 && targetFile.existsAsFile() && targetFile.getSize() > 1000000);
-        }
+            ok = targetFile.setExecutePermission (true);
+
+        ok = ok && ytDlpBinaryRuns (targetFile);
+        if (! ok)
+            targetFile.deleteFile();
 
         if (onDone)
             juce::MessageManager::callAsync([onDone, ok]() { onDone(ok); });
@@ -220,13 +296,23 @@ void YouTubeAudioDownloader::downloadAudioAsync(const juce::String& videoId,
     juce::Thread::launch([this, videoId, title, artist, cancelFlag, onProgress, onComplete]() {
         // Ensure binary path is resolved
         auto binPath = getBinaryPath();
+
+        // Un binario presente pero inservible (p. ej. el yt-dlp_macos que
+        // instalaban versiones anteriores en Windows/Linux) se borra y se
+        // reinstala, en vez de fallar para siempre (issue #4).
+        if (binPath.isNotEmpty() && ! ytDlpBinaryRuns (juce::File (binPath)))
+        {
+            juce::File (binPath).deleteFile();
+            binPath.clear();
+        }
+
         if (binPath.isEmpty())
         {
             // Auto-install binary if missing
-            auto userAppDir = juce::File::getSpecialLocation(juce::File::userApplicationDataDirectory);
-            auto targetDir = userAppDir.getChildFile("Application Support/DiscNativePro/bin");
+            auto targetDir = appYtDlpDir();
             targetDir.createDirectory();
-            auto targetFile = targetDir.getChildFile("yt-dlp");
+            auto targetFile = targetDir.getChildFile (juce::String (ytDlpLocalName()));
+            targetFile.deleteFile();
 
             if (onProgress)
             {
@@ -240,7 +326,8 @@ void YouTubeAudioDownloader::downloadAudioAsync(const juce::String& videoId,
             // roto (curl recibía la URL con las comillas y chmod nunca
             // corría). Se instalan en pasos discretos con argumentos sueltos.
             juce::StringArray curlArgs { "curl", "-sL",
-                                         "https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp_macos",
+                                         "https://github.com/yt-dlp/yt-dlp/releases/latest/download/"
+                                             + juce::String (ytDlpAssetName()),
                                          "-o", targetFile.getFullPathName() };
             juce::ChildProcess curlProc;
             bool installed = curlProc.start(curlArgs)
@@ -251,16 +338,13 @@ void YouTubeAudioDownloader::downloadAudioAsync(const juce::String& videoId,
             if (installed)
                 installed = targetFile.setExecutePermission(true);
 
-            // Sanity check: el binario descargado debe poder arrancar en esta
-            // máquina (arquitectura/daño). Si falla, caemos al error con el
-            // mensaje bilingüe existente.
+            // El binario debe arrancar en esta maquina; si no, se borra. Dejarlo
+            // hacia que getBinaryPath() lo devolviese para siempre (issue #4).
             if (installed)
-            {
-                juce::ChildProcess verProc;
-                installed = verProc.start(juce::StringArray { targetFile.getFullPathName(), "--version" })
-                           && verProc.waitForProcessToFinish(15000)
-                           && verProc.getExitCode() == 0;
-            }
+                installed = ytDlpBinaryRuns (targetFile);
+            if (! installed)
+                targetFile.deleteFile();
+
             binPath = getBinaryPath(); // re-evalúa tras la instalación
         }
 

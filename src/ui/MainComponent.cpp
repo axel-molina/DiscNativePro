@@ -80,16 +80,10 @@ MainComponent::MainComponent()
         resized();
     };
 
-    // Fullscreen toggle
-    topBar.onFullscreenClicked = [this]() {
-        if (auto* top = getTopLevelComponent())
-        {
-            if (auto* win = dynamic_cast<juce::DocumentWindow*>(top))
-            {
-                win->setFullScreen(!win->isFullScreen());
-            }
-        }
-    };
+    // Fullscreen toggle: mismo comportamiento que F11 (modo kiosco, que es el
+    // que tapa la barra de tareas). Antes el boton usaba DocumentWindow::
+    // setFullScreen() y por eso no se comportaba igual que la tecla.
+    topBar.onFullscreenClicked = [this]() { toggleFullScreenMode(); };
 
     // Preferences modal
     topBar.onSettingsClicked = [this]() {
@@ -392,6 +386,21 @@ void MainComponent::timerCallback()
 
 bool MainComponent::keyPressed(const juce::KeyPress& key)
 {
+    // Pantalla completa: F11 y el boton de la barra usan el mismo camino.
+    if (key.getKeyCode() == juce::KeyPress::F11Key)
+    {
+        toggleFullScreenMode();
+        return true;
+    }
+
+    if (key.getKeyCode() == juce::KeyPress::escapeKey)
+    {
+        if (juce::Desktop::getInstance().getKioskModeComponent() != nullptr)
+        {
+            juce::Desktop::getInstance().setKioskModeComponent (nullptr);
+            return true;
+        }
+    }
     // Recording toggle shortcut: Cmd+R (macOS) / Ctrl+R (Windows/Linux)
     if (key.getModifiers().isCommandDown() && (key.getKeyCode() == 'r' || key.getKeyCode() == 'R'))
     {
@@ -1085,4 +1094,32 @@ void MainComponent::scheduleUpdateCheck()
             safeThis->topBar.setUpdateAvailable(true);
         });
     });
+}
+
+void MainComponent::toggleFullScreenMode()
+{
+    // Debounce: F11 con auto-repeticion (o doble clic rapido en el boton)
+    // encadenaba entradas/salidas de kiosco y dejaba la ventana en un estado
+    // raro, ademas de disparar el tooltip "Cerrar" de Windows al cambiar la
+    // ventana bajo el cursor.
+    static juce::uint32 lastToggleMs = 0;
+    const juce::uint32 now = juce::Time::getMillisecondCounter();
+    if (lastToggleMs != 0 && now - lastToggleMs < 500)
+        return;
+    lastToggleMs = now;
+
+    auto& desktop = juce::Desktop::getInstance();
+
+    if (desktop.getKioskModeComponent() == nullptr)
+        desktop.setKioskModeComponent (getTopLevelComponent(), false);
+    else
+        desktop.setKioskModeComponent (nullptr);
+}
+
+void MainComponent::parentHierarchyChanged()
+{
+    // Sin esto el componente no tomaba el foco de teclado y keyPressed() no
+    // recibia nada: ni F11 ni los atajos q/w/p/o/x/c/v.
+    if (isShowing())
+        grabKeyboardFocus();
 }

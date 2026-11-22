@@ -38,7 +38,20 @@ void PlaylistStore::load()
 
     auto parsed = juce::JSON::parse(jsonContent);
     if (!parsed.isArray())
+    {
+        // No pisar un archivo corrupto. Antes se seguia con la lista vacia y la
+        // primera edicion sobrescribia el fichero: se perdian todas las
+        // playlists sin aviso. Ahora se conserva una copia fechada antes de
+        // empezar de cero.
+        auto backup = file.getSiblingFile (
+            file.getFileNameWithoutExtension()
+            + ".corrupto-" + juce::Time::getCurrentTime().formatted ("%Y%m%d-%H%M%S") + ".json");
+
+        if (file.copyFileTo (backup))
+            DBG ("playlists.json ilegible; copia conservada en " << backup.getFullPathName());
+
         return;
+    }
 
     std::lock_guard<std::mutex> lock(mutex);
     playlists.clear();

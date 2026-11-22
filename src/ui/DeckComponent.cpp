@@ -536,6 +536,7 @@ void DeckComponent::loadAudioFile(const juce::File& file, LoadOrigin origin)
 void DeckComponent::loadAudioFileNow(const juce::File& file, LoadOrigin origin)
 {
     loadErrorVisible = false;
+    lastPersistedBpm = -1.0;
     if (deck.loadFile(file))
     {
         isVideoMode = false;
@@ -1547,6 +1548,20 @@ void DeckComponent::updateLabels()
         {
             jogWheelBpmShown = detectedBpm;
             jogWheel.setTrackInfo(titleLabel.getText(), deck.getBpm(), accent);
+        }
+
+        // El deck analiza por su cuenta y ese BPM es el que se ve y se usa, pero
+        // NO se guardaba: solo lo hacia el scanner de la biblioteca. Al reabrir
+        // la pista volvia el valor viejo (o 0). Se persiste una vez por carga.
+        if (detectedBpm > 0.0 && std::abs (lastPersistedBpm - detectedBpm) > 0.01 && deck.isLoaded())
+        {
+            const auto fileNow = deck.getCurrentFile();
+            if (fileNow.existsAsFile())
+            {
+                lastPersistedBpm = detectedBpm;
+                LibraryCacheManager::getInstance().updateBpmAndKey (
+                    fileNow, detectedBpm, deck.getTrackKey(), deck.getLengthInSeconds());
+            }
         }
     }
     else

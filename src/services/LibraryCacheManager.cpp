@@ -43,9 +43,13 @@ std::vector<juce::File> LibraryCacheManager::getCachedTracks()
 
 void LibraryCacheManager::clear()
 {
-    std::lock_guard<std::mutex> lock(cacheMutex);
-    cache.clear();
-    isDirty = true;
+    {
+        std::lock_guard<std::mutex> lock(cacheMutex);
+        cache.clear();
+        isDirty = true;
+    }
+    // saveCache() vuelve a tomar cacheMutex: llamarlo con el lock ya tomado
+    // bloqueaba el hilo para siempre (std::mutex no es recursivo).
     saveCache();
 }
 
