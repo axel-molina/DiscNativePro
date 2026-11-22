@@ -76,6 +76,9 @@ private:
     void scheduleUpdateCheck();
     // Pantalla completa por modo kiosco: mismo camino para F11 y para el boton.
     void toggleFullScreenMode();
+    // Modo dia: invierte los colores de toda la UI (filtro sobre la raiz).
+    void setDayMode(bool on);
+    bool dayMode { false };
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(MainComponent)
 };
