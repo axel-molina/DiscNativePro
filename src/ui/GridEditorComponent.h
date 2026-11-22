@@ -51,6 +51,7 @@ private:
     DjButton resetButton;
     DjButton playButton;
     DjButton closeButton;
+    DjButton alignButton;   // alinear el offset al beat
 
     juce::Label offsetValueLabel;
     juce::Label bpmTitle;
