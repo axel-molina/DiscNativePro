@@ -3066,3 +3066,21 @@ Los loops mas cortos que un bloque siguen por el camino anterior (seek pendiente
 Verificado: compila (
 make, exit 0) y la app arranca. **Falta la escucha**: es el
 unico cambio que no se puede validar sin oir el deck.
+## 2026-11-22 (3) — Crash intermitente al arrancar (3 de cada 5) y version 1.4.4
+
+Sintoma reportado al probar: "no se escucha, no se ven las ondas, el grid no se va al
+principio". El motor estaba bien (la sonda de audio abre WASAPI a 48 kHz, bloque 480,
+2 canales) y una pista cargada daba peaks=8000, masterPeak=0.279: audio y ondas correctos.
+
+Con el .map del enlazado se localizo el fallo real: la app moria con 0xC0000005 en
+juce::dsp::IIR::Coefficients<float>::getFilterOrder(). Causa: el mixer podia procesar
+el primer bloque ANTES de que DjMixer::prepare() creara los coeficientes de los filtros,
+y juce::dsp llamaba a getFilterOrder() sobre un puntero nulo. Intermitente: 3 de cada 5
+arranques.
+
+Arreglo: DjMixer gana el flag prepared; process() devuelve silencio hasta que
+prepare() lo activa. Verificado: 5/5 arranques estables.
+
+Version: pasa a 1.4.4. El bump por project(VERSION) no bastaba porque APP_VERSION se
+deriva de git describe (v1.4.3-2-g...) y el regex lo recortaba a 1.4.3; ahora se pasa
+-DAPP_VERSION=1.4.4 al configurar.

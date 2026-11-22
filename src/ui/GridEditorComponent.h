@@ -53,7 +53,8 @@ private:
     DjButton closeButton;
 
     juce::Label offsetValueLabel;
-    juce::Label bpmValueLabel;
+    juce::Label bpmTitle;
+    juce::Label bpmValueLabel;   // editable a mano
     juce::Label helpLabel;
 
     bool playAudition { false };

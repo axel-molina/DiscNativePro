@@ -44,6 +44,30 @@ namespace
 }
 #endif
 
+namespace
+{
+// P27-bis: el layout pide ~1800 px logicos (2 decks + mixer de 508 + margenes).
+// Si el area util es menor (pantallas pequenas o escalado de Windows alto), se
+// reduce TODA la UI de forma uniforme con la escala global de JUCE: asi no se
+// recorta la bandeja 2 ni los hot cues. En pantallas grandes no hace nada.
+void applyCompactUiScaleIfNeeded()
+{
+    constexpr float designWidth  = 1800.0f;
+    constexpr float designHeight = 860.0f;
+
+    if (auto* disp = juce::Desktop::getInstance().getDisplays().getPrimaryDisplay())
+    {
+        const auto area = disp->userArea.toFloat();
+        const float scale = juce::jmin (1.0f,
+                                        area.getWidth()  / designWidth,
+                                        area.getHeight() / designHeight);
+
+        if (scale < 0.99f)
+            juce::Desktop::getInstance().setGlobalScaleFactor (juce::jmax (0.6f, scale));
+    }
+}
+} // namespace
+
 class DiscNativeProApplication : public juce::JUCEApplication
 {
 public:
@@ -68,6 +92,11 @@ public:
         // LookAndFeel global antes de crear cualquier componente.
         AppFonts::initialise();
         juce::LookAndFeel::setDefaultLookAndFeel (&appLookAndFeel);
+
+        // Antes de crear la ventana: si el layout no cabe, escalar la UI.
+       #if ! (JUCE_IOS || JUCE_ANDROID)
+        applyCompactUiScaleIfNeeded();
+       #endif
 
         mainWindow.reset(new MainWindow(getApplicationName()));
 
@@ -160,8 +189,11 @@ public:
             juce::Rectangle<int> workArea(0, 0, 1360, 860);
             if (auto* disp = juce::Desktop::getInstance().getDisplays().getPrimaryDisplay())
                 workArea = disp->userArea;
-            const int w = juce::jmax(900, juce::jmin(1360, (int)(static_cast<float>(workArea.getWidth()) * 0.92f)));
-            const int h = juce::jmax(600, juce::jmin(860, (int)(static_cast<float>(workArea.getHeight()) * 0.92f)));
+            // P27-bis: arrancar ocupando toda el area util (antes se limitaba a
+            // 1360x860 y en pantallas grandes quedaba una ventana pequena con
+            // franjas negras alrededor). F11 sigue dando pantalla completa real.
+            const int w = juce::jlimit(900, 3840, workArea.getWidth());
+            const int h = juce::jlimit(600, 2160, workArea.getHeight());
             centreWithSize(w, h);
            #endif
 

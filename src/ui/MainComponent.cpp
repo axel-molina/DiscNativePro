@@ -392,6 +392,26 @@ void MainComponent::timerCallback()
 
 bool MainComponent::keyPressed(const juce::KeyPress& key)
 {
+    // Pantalla completa: F11 la activa/desactiva y ESC la desactiva.
+    if (key.getKeyCode() == juce::KeyPress::F11Key)
+    {
+        if (auto* peer = getPeer())
+            peer->setFullScreen(! peer->isFullScreen());
+        return true;
+    }
+
+    if (key.getKeyCode() == juce::KeyPress::escapeKey)
+    {
+        if (auto* peer = getPeer())
+        {
+            if (peer->isFullScreen())
+            {
+                peer->setFullScreen(false);
+                return true;
+            }
+        }
+    }
+
     // Recording toggle shortcut: Cmd+R (macOS) / Ctrl+R (Windows/Linux)
     if (key.getModifiers().isCommandDown() && (key.getKeyCode() == 'r' || key.getKeyCode() == 'R'))
     {
