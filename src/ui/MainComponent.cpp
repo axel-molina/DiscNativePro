@@ -1098,6 +1098,16 @@ void MainComponent::scheduleUpdateCheck()
 
 void MainComponent::toggleFullScreenMode()
 {
+    // Debounce: F11 con auto-repeticion (o doble clic rapido en el boton)
+    // encadenaba entradas/salidas de kiosco y dejaba la ventana en un estado
+    // raro, ademas de disparar el tooltip "Cerrar" de Windows al cambiar la
+    // ventana bajo el cursor.
+    static juce::uint32 lastToggleMs = 0;
+    const juce::uint32 now = juce::Time::getMillisecondCounter();
+    if (lastToggleMs != 0 && now - lastToggleMs < 500)
+        return;
+    lastToggleMs = now;
+
     auto& desktop = juce::Desktop::getInstance();
 
     if (desktop.getKioskModeComponent() == nullptr)
